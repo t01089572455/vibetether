@@ -1,0 +1,4 @@
+interface:
+  display_name: "VibeTether"
+  short_description: "Keep long-running coding agents aligned"
+  default_prompt: "Use $vibe-tether to re-anchor this task to project truth before the next consequential action."

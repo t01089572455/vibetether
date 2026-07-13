@@ -1,0 +1,224 @@
+---
+name: vibe-tether
+description: Use when a coding task is long-running, spans multiple phases or agents, resumes after context compaction, risks drifting from project instructions, has ambiguous product direction, or needs controlled autonomy before consequential actions.
+---
+
+# VibeTether
+
+## Overview
+
+Keep capable coding agents tethered to project truth. Re-anchor intent before consequential actions, route the current phase to one focused specialist capability, and require evidence before advancing.
+
+Do not replace the coding agent's implementation ability. Control direction, authority, phase transitions, risk, recovery, and proof.
+
+## Start Here
+
+1. Read the nearest project instruction file and `.vibetether/project.yaml` when present.
+2. Identify the approved goal, current lifecycle state, active task slice, and last checkpoint.
+3. Decide whether the next action needs a lightweight preflight or full re-anchor.
+4. Resolve applicable project sources and conflicts before choosing an implementation action.
+5. Classify uncertainty as directional, local technical, or structural technical.
+6. Select one primary workflow provider for the current phase.
+7. State the next gate, act within the approved slice, collect evidence, and checkpoint the result.
+
+If no project manifest exists, run `vibetether init` or create one using [project-manifest.md](references/project-manifest.md) before long-running product work.
+
+## Lifecycle
+
+```text
+DISCOVER -> ALIGN -> DESIGN -> PLAN -> EXECUTE_ONE -> VERIFY -> REVIEW
+                                                           |-> SHIP
+                                                           |-> NEXT
+                                                           |-> STOP
+
+Any state may enter DIAGNOSE, BLOCKED, ROLLBACK_PROPOSAL, or DISCOVER.
+```
+
+Do not advance because a document, test, or implementation exists. Advance only when the state's exit contract has current evidence.
+
+| State | Entry signal | Exit contract |
+| --- | --- | --- |
+| `DISCOVER` | Goal, user, scope, or success is unclear | Approved lightweight Intent Contract |
+| `ALIGN` | Sources exist or may conflict | Applicable authority and conflicts resolved |
+| `DESIGN` | Direction is known; solution is not | User approves product, architecture, or UI direction |
+| `PLAN` | Design is approved | Small, testable slices with evidence and stop conditions |
+| `EXECUTE_ONE` | One slice is ready | Only that slice changed; fresh local evidence exists |
+| `VERIFY` | Implementation claims readiness | Required functional, visual, safety, and scope evidence exists |
+| `REVIEW` | Evidence is complete | Review uses request, sources, diff, and raw evidence |
+| `SHIP` | All applicable gates pass | Explicit release authorization and reproducible release evidence |
+
+Use `DIAGNOSE` for unexpected behavior. Use `BLOCKED` for unresolved direction, authority, permission, or verification gaps. Use `ROLLBACK_PROPOSAL` to present options; never perform destructive rollback automatically.
+
+## Lightweight Preflight
+
+Before every consequential action, answer compactly:
+
+```text
+Goal: What approved outcome am I preserving?
+State: Which lifecycle state and slice am I in?
+Sources: Which project facts govern this action?
+Alignment: Does the action preserve approved capabilities and constraints?
+Decision: Directional, local technical, or structural technical?
+Risk: Authorized, reversible, scoped, and supported by evidence?
+Verdict: PROCEED, INVESTIGATE, ASK, STOP, or PROPOSE_ROLLBACK?
+```
+
+Do not reload the entire repository for a lightweight preflight. Read only the manifest routes and sources needed for the proposed action.
+
+## Full Re-Anchor
+
+Perform a full re-anchor when:
+
+- the lifecycle phase changes;
+- context is compacted or summarized;
+- work resumes after interruption;
+- responsibility moves to another agent;
+- the user changes goal, scope, or direction;
+- the proposed action conflicts with a project source;
+- the same failure or correction repeats;
+- a UI direction will be selected or propagated;
+- architecture, public contracts, data, security, or production dependencies change;
+- a large refactor, merge, release, deployment, or publication is proposed;
+- the checkpoint is missing, stale, or inconsistent with the working tree.
+
+During a full re-anchor:
+
+1. Reload the manifest and applicable sources in declared order.
+2. Compare the current request, durable decisions, checkpoint, working tree, and runtime evidence.
+3. List unresolved conflicts and high-impact assumptions.
+4. Reconstruct the current goal, protected capabilities, approved slice, and evidence gap.
+5. Write a fresh checkpoint before continuing.
+
+Read [checkpoint-and-drift.md](references/checkpoint-and-drift.md) for the checkpoint schema, recovery rules, and drift response.
+
+## Decision Ownership
+
+### Directional uncertainty: always ask
+
+Ask when uncertainty affects product goals, users, scope, capabilities, workflows, reference meaning, visual direction, acceptance criteria, or product trade-offs. Give a recommended answer and impact; do not hide direction behind an agent assumption.
+
+### Local technical uncertainty: decide after investigation
+
+Decide autonomously when the choice is local, reversible, within approved architecture, not externally visible, and not security-, data-, dependency-, or release-sensitive. Record important assumptions in the checkpoint.
+
+### Structural technical uncertainty: investigate, recommend, then ask
+
+Gate architecture, public APIs, durable data models, migrations, permissions, security, privacy, production dependencies, major reliability/cost trade-offs, and difficult-to-reverse refactors.
+
+Read [authority-and-conflicts.md](references/authority-and-conflicts.md) whenever direction is unclear, sources disagree, or a structural gate applies.
+
+## Capability Routing
+
+Keep the control kernel stable and use replaceable specialist Skills for execution methods.
+
+- Select one primary workflow provider for the current phase.
+- Add a domain provider only when responsibilities do not overlap.
+- Prefer installed, approved, compatible, and evaluated providers.
+- Require structured outputs and phase exit evidence.
+- Do not let a provider override project authority.
+- Do not silently download an unplanned provider during an active task.
+- Use the minimal safe built-in path when an optional provider is absent.
+- Stop when a required safety, migration, UI-validation, or release capability is unavailable.
+
+Read [capability-routing.md](references/capability-routing.md) before selecting or changing a provider.
+
+## UI Branch
+
+Treat UI direction as product direction, not a cosmetic implementation detail.
+
+Do not propagate a visual pattern until one representative direction or golden screen is approved. Separate functional acceptance from visual acceptance. Never remove or hide product capabilities merely to make the interface look cleaner.
+
+Read [ui-control-loop.md](references/ui-control-loop.md) for any user-visible interface, screenshot reference, redesign, dashboard, workbench, responsive state, or visual acceptance claim.
+
+## Universal Gates
+
+Stop and ask before:
+
+- changing goals, users, scope, workflows, or public behavior;
+- adding, removing, hiding, or weakening a product capability;
+- changing architecture, public APIs, or durable data contracts;
+- running migrations, bulk data changes, or destructive operations;
+- changing permissions, security, privacy, or external service configuration;
+- adding a production dependency or remote execution path;
+- choosing or changing UI direction, design tokens, or a golden screen;
+- starting a large cross-module refactor;
+- merging, deploying, releasing, publishing, or transmitting project data;
+- overriding a project source;
+- acting on an unconfirmed high-impact assumption.
+
+Project-defined gates may add restrictions. They may not weaken platform safety or the universal protections above.
+
+## Evidence Ladder
+
+Use the narrowest truthful verdict:
+
+```text
+INTENT_ALIGNED
+DESIGN_APPROVED
+PLAN_READY
+LOCAL_VERIFICATION_PASS
+FUNCTIONAL_ACCEPTANCE_PASS
+VISUAL_ACCEPTANCE_PASS
+REVIEW_PASS
+RELEASE_READY
+VERIFIED_DELIVERY
+```
+
+Never promote:
+
+- a plan into implementation evidence;
+- type checking into runtime evidence;
+- unit tests into browser acceptance;
+- screenshots into functional acceptance;
+- the implementer's summary into independent review;
+- local success into release readiness.
+
+Record commands, exit codes, result summaries, artifact paths, scope review, and known evidence limitations. Do not expose private chain-of-thought, raw ReAct reasoning, credentials, sensitive data, or unfinished internal tool plans.
+
+## Drift Response
+
+- `L1_LOCAL`: correct a local, reversible deviation and record it.
+- `L2_DIRECTION`: stop propagation, cite the conflict, recommend a resolution, and ask.
+- `L3_HIGH_IMPACT`: freeze expansion and produce a drift report with preserve, repair, and rollback options.
+
+Do not destructively reset, overwrite user work, or roll back without explicit authorization.
+
+## Stop Conditions
+
+Return a precise blocker when:
+
+- direction is ambiguous;
+- sources conflict and the conflict cannot be resolved by declared authority;
+- the active slice has expanded materially;
+- a protected capability would be removed or weakened;
+- a reference has not been inspected or classified;
+- evidence proves only a proxy for the requested outcome;
+- a provider or tool would expand permission, network, cost, or external-write scope;
+- the same correction fails twice;
+- the checkpoint cannot be reconciled with the working tree;
+- release evidence is stale or incomplete.
+
+## Common Rationalizations
+
+| Rationalization | Required response |
+| --- | --- |
+| "The model is capable enough to remember" | Re-anchor from durable project sources after compaction or resume. |
+| "The document exists, so the agent knows it" | Route and reread the applicable source before the decision. |
+| "This is only a technical choice" | Gate it if it changes architecture, contracts, data, security, dependencies, or product experience. |
+| "All design Skills will make the UI safer" | Select one aesthetic director and separate engineering from validation. |
+| "Tests pass, so the UI is right" | Require both functional and visual acceptance. |
+| "I can clean up the drift automatically" | Stop propagation and propose options; do not perform destructive rollback. |
+| "One more large batch will save time" | Return to one approved, rejectable, verifiable slice. |
+
+## Completion
+
+Before claiming completion:
+
+1. Run a fresh full re-anchor.
+2. Confirm the final diff stays within approved scope.
+3. Run every applicable verification command.
+4. Check functional, visual, safety, and release evidence separately.
+5. Record independence limitations honestly.
+6. Update the correct durable source with accepted decisions or reusable failures.
+7. Write the final checkpoint and exact verdict.
+
