@@ -59,3 +59,30 @@ test('quarantine cleanup failure happens after commit and is reported without ro
   assert.equal(failures[0].quarantine.includes(`${path.sep}.agents${path.sep}skills${path.sep}`), false);
   assert.equal(failures[0].quarantine.includes(`${path.sep}.claude${path.sep}skills${path.sep}`), false);
 });
+
+test('a locked Skill reports actionable Windows guidance without removing managed text', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-uninstall-locked-'));
+  const instructions = path.join(root, 'CLAUDE.md');
+  const skill = path.join(root, '.claude', 'skills', 'vibe-tether');
+  const quarantineRoot = path.join(root, '.vibetether', 'quarantine');
+  await mkdir(skill, { recursive: true });
+  await writeFile(instructions, '# Before\nmanaged\n', 'utf8');
+  await writeFile(path.join(skill, 'SKILL.md'), 'canonical\n', 'utf8');
+  const locked = Object.assign(new Error('operation not permitted'), { code: 'EPERM' });
+
+  await assert.rejects(
+    applyUninstallPlans(
+      [{ target: instructions, original: '# Before\nmanaged\n', content: '# Before\n', removeFile: false }],
+      [{ relativePath: '.claude/skills/vibe-tether', target: skill, quarantineRoot }],
+      { writeAtomic, rename: async () => { throw locked; } },
+    ),
+    (error) => {
+      assert.match(error.message, /\.claude\/skills\/vibe-tether/);
+      assert.match(error.message, /close.*process.*retry/i);
+      return true;
+    },
+  );
+
+  assert.equal(await readFile(instructions, 'utf8'), '# Before\nmanaged\n');
+  assert.equal(await exists(skill), true);
+});

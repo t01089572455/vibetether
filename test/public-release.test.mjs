@@ -91,7 +91,7 @@ test('README explains support, architecture, UI control, and preview limitations
   assert.match(readme, /Claude Code[\s\S]*official preview/i);
   assert.match(readme, /```mermaid[\s\S]*control kernel/i);
   assert.match(readme, /```mermaid[\s\S]*golden screen/i);
-  assert.match(readme, /0\.2\.1 preview/i);
+  assert.match(readme, /0\.2\.2 preview/i);
   assert.match(readme, /not independent agent forward tests/i);
   assert.match(readme, /30\/30[\s\S]*24\/30/);
   assert.match(readme, /35\.0%/);
@@ -105,8 +105,19 @@ test('package metadata points to the authenticated public repository', async () 
   assert.equal(pkg.repository.url, 'git+https://github.com/t01089572455/vibetether.git');
   assert.equal(pkg.homepage, 'https://github.com/t01089572455/vibetether#readme');
   assert.equal(pkg.bugs.url, 'https://github.com/t01089572455/vibetether/issues');
-  assert.equal(pkg.version, '0.2.1');
+  assert.equal(pkg.version, '0.2.2');
   assert.equal(pkg.files.includes('docs/operations'), true);
+});
+
+test('Windows Skill lifecycle recovery is documented without weakening customization safety', async () => {
+  const runbook = await text('docs/operations/windows-skill-lifecycle.md');
+  assert.match(runbook, /registered legacy fingerprint/i);
+  assert.match(runbook, /transaction copy/i);
+  assert.match(runbook, /uninstall --project .*--dry-run/i);
+  assert.match(runbook, /close.*Claude Code.*retry/is);
+  assert.match(runbook, /partial rollback/i);
+  assert.match(runbook, /unknown|customized/i);
+  assert.doesNotMatch(runbook, /Remove-Item.*-Recurse|rm\s+-rf/i);
 });
 
 test('public release documents contain no local path or non-English brand leakage', async () => {

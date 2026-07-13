@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -78,4 +78,54 @@ test('initialization restores a replaced legacy Skill when a later install fails
 
   assert.equal(await readFile(path.join(legacySkill, 'SKILL.md'), 'utf8'), 'legacy canonical bytes\n');
   assert.equal(await exists(laterSkill), false);
+});
+
+test('initialization keeps a replaced Skill available while the atomic installer runs', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-upgrade-source-available-'));
+  const legacySkill = path.join(root, '.agents', 'skills', 'vibe-tether');
+  await mkdir(legacySkill, { recursive: true });
+  await writeFile(path.join(legacySkill, 'SKILL.md'), 'legacy canonical bytes\n', 'utf8');
+
+  await applyInitialization(root, [], [{
+    target: legacySkill,
+    needsInstall: true,
+    replacesExisting: true,
+    install: async (target) => {
+      assert.equal(await readFile(path.join(target, 'SKILL.md'), 'utf8'), 'legacy canonical bytes\n');
+      await rm(target, { recursive: true, force: true });
+      await mkdir(target, { recursive: true });
+      await writeFile(path.join(target, 'SKILL.md'), 'new canonical bytes\n', 'utf8');
+    },
+  }]);
+
+  assert.equal(await readFile(path.join(legacySkill, 'SKILL.md'), 'utf8'), 'new canonical bytes\n');
+});
+
+test('failed upgrade preserves the target and original error when its transaction copy disappears', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-upgrade-missing-backup-'));
+  const legacySkill = path.join(root, '.agents', 'skills', 'vibe-tether');
+  const transactionRoot = path.join(root, '.vibetether', 'transaction');
+  await mkdir(legacySkill, { recursive: true });
+  await writeFile(path.join(legacySkill, 'SKILL.md'), 'legacy canonical bytes\n', 'utf8');
+
+  await assert.rejects(
+    applyInitialization(root, [], [{
+      relativePath: '.agents/skills/vibe-tether',
+      target: legacySkill,
+      needsInstall: true,
+      replacesExisting: true,
+      install: async () => {
+        const [transactionCopy] = await readdir(transactionRoot);
+        await rm(path.join(transactionRoot, transactionCopy), { recursive: true, force: true });
+        throw new Error('injected install failure');
+      },
+    }]),
+    (error) => {
+      assert.match(error.message, /injected install failure/);
+      assert.match(error.message, /transaction (copy|backup).*(missing|unavailable)/i);
+      return true;
+    },
+  );
+
+  assert.equal(await readFile(path.join(legacySkill, 'SKILL.md'), 'utf8'), 'legacy canonical bytes\n');
 });

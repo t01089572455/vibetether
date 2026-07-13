@@ -12,7 +12,7 @@ import {
   resolveInside,
   writeAtomic,
 } from './files.mjs';
-import { skillFingerprint, sourceSkill } from './skill-install.mjs';
+import { LEGACY_VIBETETHER_FINGERPRINTS, skillFingerprint, sourceSkill } from './skill-install.mjs';
 
 async function exists(target) {
   try {
@@ -36,7 +36,17 @@ export async function applyUninstallPlans(textPlans, skillPlans, operations = {}
       if (!plan.quarantineRoot) throw new CliError('A safe uninstall quarantine root is required.', 3);
       await run.mkdir(plan.quarantineRoot, { recursive: true });
       const quarantine = path.join(plan.quarantineRoot, `${randomUUID()}.remove`);
-      await run.rename(plan.target, quarantine);
+      try {
+        await run.rename(plan.target, quarantine);
+      } catch (error) {
+        if (['EACCES', 'EPERM'].includes(error.code)) {
+          throw new CliError(
+            `Cannot quarantine installed Skill at ${plan.relativePath ?? plan.target}: ${error.message}. Close Claude Code, Codex, editors, or any process using this Skill, then retry.`,
+            3,
+          );
+        }
+        throw error;
+      }
       quarantined.push({ ...plan, quarantine });
     }
     for (const plan of textPlans) {
@@ -105,7 +115,7 @@ export async function uninstall(options) {
     } catch (error) {
       throw new CliError(`Cannot verify installed Skill at ${adapter.skillDirectory}: ${error.message}`, 3);
     }
-    if (installedFingerprint !== canonicalFingerprint) {
+    if (installedFingerprint !== canonicalFingerprint && !LEGACY_VIBETETHER_FINGERPRINTS.has(installedFingerprint)) {
       throw new CliError(`Refusing to remove modified installed Skill at ${adapter.skillDirectory}. Back up the customization first.`, 3);
     }
     skillPlans.push({ relativePath: adapter.skillDirectory, target, quarantineRoot });

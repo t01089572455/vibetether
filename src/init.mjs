@@ -1,4 +1,4 @@
-import { mkdir, realpath, rename, rm } from 'node:fs/promises';
+import { access, cp, mkdir, realpath, rename, rm } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import YAML from 'yaml';
@@ -144,18 +144,26 @@ export async function applyInitialization(root, textPlans, skillPlans, installSk
         if (plan.replacesExisting) {
           await mkdir(transactionRoot, { recursive: true });
           transactionBackup = path.join(transactionRoot, `${randomUUID()}.previous`);
-          await rename(plan.target, transactionBackup);
+          await cp(plan.target, transactionBackup, { recursive: true, errorOnExist: true, force: false });
         }
         await (plan.install ?? installSkillOperation)(plan.target);
         installedSkills.push({ ...plan, transactionBackup });
       } catch (error) {
         if (transactionBackup) {
+          try {
+            await access(transactionBackup);
+          } catch (backupError) {
+            throw new CliError(
+              `Skill upgrade failed at ${plan.relativePath ?? plan.target}: ${error.message}. Transaction copy is unavailable at ${transactionBackup}: ${backupError.message}. The target was left untouched during recovery.`,
+              3,
+            );
+          }
           await rm(plan.target, { recursive: true, force: true }).catch(() => {});
           try {
             await rename(transactionBackup, plan.target);
           } catch (restoreError) {
             throw new CliError(
-              `Skill upgrade failed and the previous copy is preserved at ${transactionBackup}: ${restoreError.message}`,
+              `Skill upgrade failed at ${plan.relativePath ?? plan.target}: ${error.message}. Restoring the transaction copy from ${transactionBackup} also failed: ${restoreError.message}`,
               3,
             );
           }

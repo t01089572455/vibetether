@@ -7,7 +7,7 @@ import test from 'node:test';
 import YAML from 'yaml';
 import { inspectProject } from '../src/doctor.mjs';
 import { initialize } from '../src/init.mjs';
-import { skillFingerprint } from '../src/skill-install.mjs';
+import { LEGACY_VIBETETHER_FINGERPRINTS, skillFingerprint } from '../src/skill-install.mjs';
 import { uninstall } from '../src/uninstall.mjs';
 
 function git(cwd, args) {
@@ -173,6 +173,23 @@ test('doctor and uninstall block on a modified catalog copy owned by VibeTether'
     /modified catalog Skill/i,
   );
   assert.equal(await exists(path.join(target, 'AGENTS.md')), true);
+});
+
+test('uninstall accepts an exact VibeTether fingerprint registered as a legacy release', async () => {
+  const target = await mkdtemp(path.join(os.tmpdir(), 'vibetether-legacy-uninstall-'));
+  await initialize({ project: target, agent: 'codex', profile: 'core', dryRun: false, yes: true });
+  const installedSkill = path.join(target, '.agents', 'skills', 'vibe-tether');
+  await writeFile(path.join(installedSkill, 'legacy-release-marker.txt'), 'registered legacy release\n', 'utf8');
+  const registeredLegacyFingerprint = await skillFingerprint(installedSkill);
+  LEGACY_VIBETETHER_FINGERPRINTS.add(registeredLegacyFingerprint);
+
+  try {
+    await uninstall({ project: target, dryRun: false, yes: true });
+  } finally {
+    LEGACY_VIBETETHER_FINGERPRINTS.delete(registeredLegacyFingerprint);
+  }
+
+  assert.equal(await exists(installedSkill), false);
 });
 
 test('doctor and uninstall refuse a missing or modified managed provider license', async () => {

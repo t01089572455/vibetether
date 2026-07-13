@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/t01089572455/vibetether/actions/workflows/ci.yml/badge.svg)](https://github.com/t01089572455/vibetether/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Preview](https://img.shields.io/badge/release-0.2.1%20preview-orange.svg)](#preview-status)
+[![Preview](https://img.shields.io/badge/release-0.2.2%20preview-orange.svg)](#preview-status)
 
 VibeTether is a project-local control Skill, advisory Skill router, and reusable-success capture loop for long-running coding work. It helps capable agents keep the approved goal, project rules, current slice, required evidence, and proven operational paths visible after context compaction, handoffs, phase changes, and repeated corrections.
 
@@ -113,7 +113,7 @@ The checkpoint disposition is deliberately small: `captured`, `already-encoded`,
 
 Durable knowledge goes to its natural source: tests or validators for deterministic behavior, runbooks for build/deployment/local-environment procedures, ADRs for architecture, product specifications for product decisions, and Skill references plus evals for cross-project agent methods. VibeTether does not create a universal success ledger and never records credentials, private keys, one-time codes, private reasoning, or sensitive tool output.
 
-See the [GitHub publishing Proven Path](docs/operations/github-publishing.md) for the first real operational example.
+See the [GitHub publishing Proven Path](docs/operations/github-publishing.md) and [Windows Skill lifecycle recovery](docs/operations/windows-skill-lifecycle.md) for real operational examples.
 
 ## Profiles and bundles
 
@@ -311,6 +311,12 @@ If npm reports `EPERM` while writing a cache under a protected installation dire
 
 VibeTether will not overwrite or remove the modified copy. Back up the customization, compare it with the pinned upstream version, then either restore the managed fingerprint or move the customization to a user-owned Skill name before re-running `init`.
 
+An exact fingerprint from a registered legacy VibeTether release is not a customization. Current releases can upgrade or uninstall those known copies while continuing to reject unknown content.
+
+### Windows reports `EPERM` while uninstalling a Skill
+
+Claude Code, Codex, an editor, or another process may still have a file open without Windows delete sharing. Close the process using the affected Skill and retry the same `uninstall --dry-run` before applying `uninstall --yes`. VibeTether quarantines Skill directories before editing managed instruction blocks, so a lock at this stage leaves those text files unchanged. See [Windows Skill lifecycle recovery](docs/operations/windows-skill-lifecycle.md).
+
 ### A provider is unavailable during a task
 
 Run `capabilities` again so live installation paths are refreshed. Optional providers fall back to the declared built-in path. Do not download a new provider in the middle of active work; reconfigure it through a reviewed `init` operation.
@@ -360,7 +366,7 @@ Project instructions are a behavioral control layer, not a security sandbox. Vib
 
 ## Preview status
 
-This is a **0.2.1 preview**. The repository includes deterministic contract, lifecycle, catalog, license, routing, rollback, and scenario-matrix tests plus 14 static drift-pressure scenarios. Those static checks are **not independent agent forward tests** and cannot justify a stable `1.0.0` effectiveness claim.
+This is a **0.2.2 preview**. The repository includes deterministic contract, lifecycle, catalog, license, routing, rollback, and scenario-matrix tests plus 14 static drift-pressure scenarios. Those static checks are **not independent agent forward tests** and cannot justify a stable `1.0.0` effectiveness claim.
 
 A three-role comparative adjudication in the development session scored synthetic next-action responses. The VibeTether-enabled run scored **30/30**, versus **24/30** for an already strong baseline, with **35.0%** more words. The observed gain was explicit re-anchor, checkpoint, authority, and functional-versus-visual acceptance discipline. This is preview evidence from a synthetic response trial, not a real multi-hour Codex and Claude project trial. Read the [evaluation report](evals/results/preview-evaluation.md), [run metadata](evals/results/run-metadata.json), and [honesty boundary](evals/README.md).
 
