@@ -28,7 +28,8 @@ export function runProviderGit(cwd, hooksPath, args, execute = spawnSync) {
       GCM_INTERACTIVE: 'Never',
     },
   };
-  let result = execute('git', ['-c', `core.hooksPath=${hooksPath}`, ...args], options);
+  const controlledArgs = ['-c', `core.hooksPath=${hooksPath}`, '-c', 'core.autocrlf=false', ...args];
+  let result = execute('git', controlledArgs, options);
   if (result.error) {
     throw new CliError(`Git is required to install curated providers: ${result.error.message}`, 3);
   }
@@ -36,7 +37,7 @@ export function runProviderGit(cwd, hooksPath, args, execute = spawnSync) {
   if (result.status !== 0 && /schannel:.*(?:AcquireCredentialsHandle|SEC_E_NO_CREDENTIALS)/i.test(detail)) {
     result = execute(
       'git',
-      ['-c', `core.hooksPath=${hooksPath}`, '-c', 'http.sslBackend=openssl', ...args],
+      ['-c', `core.hooksPath=${hooksPath}`, '-c', 'core.autocrlf=false', '-c', 'http.sslBackend=openssl', ...args],
       options,
     );
     if (result.error) {

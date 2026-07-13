@@ -84,6 +84,30 @@ test('stages an exact commit and verifies the complete skill and license', async
   assert.equal(await exists(staged.staging_root), false);
 });
 
+test('provider staging is fingerprint-stable when host Git enables autocrlf', async () => {
+  const names = ['GIT_CONFIG_COUNT', 'GIT_CONFIG_KEY_0', 'GIT_CONFIG_VALUE_0'];
+  const original = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  process.env.GIT_CONFIG_COUNT = '1';
+  process.env.GIT_CONFIG_KEY_0 = 'core.autocrlf';
+  process.env.GIT_CONFIG_VALUE_0 = 'true';
+
+  try {
+    const fixture = await fixtureRepository('autocrlf');
+    const staged = await stageProviderSources([source(fixture)]);
+    try {
+      assert.equal(await skillFingerprint(staged.skills[0].source_path), fixture.fingerprint);
+      assert.equal(await readFile(staged.repositories[0].license_path, 'utf8'), 'MIT fixture license\n');
+    } finally {
+      await staged.cleanup();
+    }
+  } finally {
+    for (const name of names) {
+      if (original[name] === undefined) delete process.env[name];
+      else process.env[name] = original[name];
+    }
+  }
+});
+
 test('complete catalogs reject undeclared upstream Skill directories', async () => {
   const fixture = await fixtureRepository('complete-catalog', ['demo', 'extra']);
   const complete = source(fixture, { catalog_mode: 'complete', skill_root: 'skills' });
