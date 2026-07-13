@@ -61,13 +61,9 @@ export async function uninstall(options) {
     skillPlans.push({ relativePath: adapter.skillDirectory, target });
   }
 
-  const manifestTarget = resolveInside(root, '.vibetether/project.yaml');
-  await rejectSymlinkPath(root, '.vibetether/project.yaml');
-  const manifestOriginal = await readTextIfPresent(manifestTarget);
   const items = [
     ...textPlans.map((item) => item.relativePath),
     ...skillPlans.map((item) => item.relativePath),
-    ...(manifestOriginal === null ? [] : ['.vibetether/project.yaml']),
   ];
 
   if (options.dryRun) {
@@ -88,11 +84,9 @@ export async function uninstall(options) {
       if (plan.removeFile) await rm(plan.target, { force: true });
       else await writeAtomic(plan.target, plan.content);
     }
-    if (manifestOriginal !== null) await rm(manifestTarget, { force: true });
     for (const plan of quarantined) await rm(plan.quarantine, { recursive: true, force: true });
   } catch (error) {
     for (const plan of textPlans) await writeAtomic(plan.target, plan.original).catch(() => {});
-    if (manifestOriginal !== null) await writeAtomic(manifestTarget, manifestOriginal).catch(() => {});
     for (const plan of quarantined.reverse()) await rename(plan.quarantine, plan.target).catch(() => {});
     throw error;
   }

@@ -80,7 +80,7 @@ test('uninstall removes only VibeTether-managed content and preserves the Intent
   assert.equal(await exists(path.join(target, 'CLAUDE.md')), false);
   assert.equal(await exists(path.join(target, '.agents', 'skills', 'vibe-tether')), false);
   assert.equal(await exists(path.join(target, '.claude', 'skills', 'vibe-tether')), false);
-  assert.equal(await exists(path.join(target, '.vibetether', 'project.yaml')), false);
+  assert.equal(await exists(path.join(target, '.vibetether', 'project.yaml')), true);
   assert.equal(await exists(path.join(target, '.vibetether', 'intent.md')), true);
 });
 
