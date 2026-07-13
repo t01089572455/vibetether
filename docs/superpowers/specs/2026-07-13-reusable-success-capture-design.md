@@ -107,9 +107,23 @@ When more than one form applies, executable enforcement comes first and document
 
 ## Managed Instruction Contract
 
-The bounded VibeTether block in `AGENTS.md` and `CLAUDE.md` will mention the completion audit in compact form. It will not duplicate the full protocol. The installed Skill routes to the heavy success-capture reference.
+The bounded VibeTether block in `AGENTS.md` and `CLAUDE.md` is the project-level activation contract. It must explicitly instruct the agent to apply VibeTether automatically at task entry, consequential actions, phase transitions, resume, compaction recovery, and completion boundaries. The user should not need to type `$vibe-tether` on every task.
+
+The managed block will carry the compact normative rule below; the installed Skill routes to the heavy success-capture reference instead of duplicating its full protocol:
+
+```markdown
+<!-- vibetether:start -->
+## VibeTether
+
+Automatically apply the installed VibeTether Skill at task entry, before consequential actions, at phase transitions, after resume or context compaction, and before completion, handoff, the next slice, merge, release, or publication. Consult `.vibetether/project.yaml` and `.vibetether/capabilities.yaml`; project truth overrides provider advice.
+
+Before claiming success, run the Success Salience Gate. If success followed failed attempts, depended on a non-default command, port, flag, ordering, permission, environment condition, or revealed a reusable verification or recovery path, persist a sanitized Proven Path in the correct durable source. Prefer tests, scripts, or validators for deterministic knowledge; use runbooks for operations, ADRs for architecture, product specifications for product decisions, and Skill references plus evaluations for cross-project methods. Record `captured`, `already-encoded`, or `not-reusable` in checkpoint `experience_feedback`, including evidence and the destination or reason. Never persist credentials, private keys, one-time codes, private reasoning, or sensitive tool output. A completion-like state must pass `vibetether doctor` with no pending experience disposition.
+<!-- vibetether:end -->
+```
 
 This improves automatic triggering while preserving user-owned instructions and keeping the mechanism visible to both harnesses.
+
+The project instruction is a strong behavioral constraint, not a sandbox or cryptographic enforcement boundary. Therefore the checkpoint schema and `doctor` audit remain required: the instruction makes the agent run the gate; the mechanical audit makes skipped disposition visible and blocks a clean completion verdict.
 
 ## Compatibility
 
