@@ -1,6 +1,6 @@
 # VibeTether Preview Evaluations
 
-The preview suite checks whether VibeTether's deterministic control contract routes known drift pressures to the expected preflight and gate. It covers context compaction, document conflicts, structural technical decisions, and multi-screen UI propagation.
+The preview suite checks whether VibeTether's deterministic control contract routes known drift pressures to the expected preflight and gate. It covers context compaction, document conflicts, safe reversible preparation while a direction gate is pending, structural technical decisions, and multi-screen UI propagation.
 
 Run it with:
 

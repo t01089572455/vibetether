@@ -126,6 +126,49 @@ test('init refuses malformed or duplicate managed blocks without partial writes'
   assert.equal(await exists(path.join(target, '.vibetether')), false);
 });
 
+test('init rejects reversed managed markers and preserves every user byte', async () => {
+  const target = await project('reversed-markers');
+  const original = '# Existing  \r\n<!-- vibetether:end -->\r\nuser text\t \r\n<!-- vibetether:start -->\r\n';
+  await writeFile(path.join(target, 'AGENTS.md'), original, 'utf8');
+
+  const result = runCli(['init', '--project', target, '--agent', 'codex', '--yes']);
+
+  assert.equal(result.status, 3, result.stderr || result.stdout);
+  assert.match(result.stderr, /managed block conflict/i);
+  assert.equal(await readFile(path.join(target, 'AGENTS.md'), 'utf8'), original);
+  assert.equal(await exists(path.join(target, '.vibetether')), false);
+});
+
+test('init preserves CRLF and trailing whitespace outside its managed block', async () => {
+  const target = await project('byte-preservation');
+  const original = '# Existing  \r\nKeep trailing whitespace\t \r\n';
+  await writeFile(path.join(target, 'AGENTS.md'), original, 'utf8');
+
+  const result = runCli(['init', '--project', target, '--agent', 'codex', '--yes']);
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const installed = await readFile(path.join(target, 'AGENTS.md'), 'utf8');
+  assert.equal(installed.slice(0, original.length), original);
+  assert.match(installed, /<!-- vibetether:start -->\r\n/);
+});
+
+test('init refuses to overwrite a customized installed Skill without partial writes', async () => {
+  const target = await project('modified-skill');
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
+  const agentsBefore = await readFile(path.join(target, 'AGENTS.md'), 'utf8');
+  const installedSkill = path.join(target, '.agents', 'skills', 'vibe-tether', 'SKILL.md');
+  const customized = `${await readFile(installedSkill, 'utf8')}\nUser customization.\n`;
+  await writeFile(installedSkill, customized, 'utf8');
+
+  const result = runCli(['init', '--project', target, '--agent', 'both', '--profile', 'standard', '--yes']);
+
+  assert.equal(result.status, 3, result.stderr || result.stdout);
+  assert.match(result.stderr, /modified installed Skill/i);
+  assert.equal(await readFile(installedSkill, 'utf8'), customized);
+  assert.equal(await readFile(path.join(target, 'AGENTS.md'), 'utf8'), agentsBefore);
+  assert.equal(await exists(path.join(target, 'CLAUDE.md')), false);
+});
+
 test('init keeps runtime checkpoint state out of version control', async () => {
   const target = await project('ignore-state');
   await writeFile(path.join(target, '.gitignore'), 'dist/\n', 'utf8');
@@ -139,6 +182,51 @@ test('init keeps runtime checkpoint state out of version control', async () => {
   assert.equal(await exists(path.join(target, '.vibetether', 'intent.md')), true);
   const checkpoint = YAML.parse(await readFile(path.join(target, '.vibetether', 'state', 'current.yaml'), 'utf8'));
   assert.equal(checkpoint.schema_version, 1);
-  assert.equal(checkpoint.lifecycle_state, 'DISCOVER');
+  assert.equal(checkpoint.phase, 'DISCOVER');
+  assert.equal(typeof checkpoint.goal, 'string');
+  assert.equal(typeof checkpoint.last_reanchor, 'string');
+  assert.equal(Array.isArray(checkpoint.protected_capabilities), true);
   assert.equal(checkpoint.private_reasoning, undefined);
+});
+
+test('repeated init preserves curated manifest fields and existing harnesses', async () => {
+  const target = await project('curated-manifest');
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--yes']).status, 0);
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
+  manifest.project_gates = ['changing-public-api'];
+  manifest.verification = { test: 'npm test' };
+  manifest.sources.always.push('docs/curated.md');
+  await mkdir(path.join(target, 'docs'), { recursive: true });
+  await writeFile(path.join(target, 'docs', 'curated.md'), '# Curated\n', 'utf8');
+  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+
+  const result = runCli(['init', '--project', target, '--agent', 'claude', '--profile', 'extended', '--yes']);
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const after = YAML.parse(await readFile(manifestPath, 'utf8'));
+  assert.deepEqual(after.project_gates, ['changing-public-api']);
+  assert.deepEqual(after.verification, { test: 'npm test' });
+  assert.equal(after.sources.always.includes('docs/curated.md'), true);
+  assert.equal(after.harnesses.codex.enabled, true);
+  assert.equal(after.harnesses.claude.enabled, true);
+});
+
+test('init discovers requirement and testing sources but stops on competing product direction', async () => {
+  const discovered = await project('broader-scan');
+  await mkdir(path.join(discovered, 'docs', 'specs'), { recursive: true });
+  await writeFile(path.join(discovered, 'docs', 'testing.md'), '# Testing\n', 'utf8');
+  assert.equal(runCli(['init', '--project', discovered, '--agent', 'codex', '--yes']).status, 0);
+  const manifest = YAML.parse(await readFile(path.join(discovered, '.vibetether', 'project.yaml'), 'utf8'));
+  assert.deepEqual(manifest.sources.conditional.requirements, ['docs/specs/']);
+  assert.deepEqual(manifest.sources.conditional.testing, ['docs/testing.md']);
+
+  const ambiguous = await project('competing-direction');
+  await mkdir(path.join(ambiguous, 'docs'), { recursive: true });
+  await writeFile(path.join(ambiguous, 'docs', 'product-direction.md'), '# Direction A\n', 'utf8');
+  await writeFile(path.join(ambiguous, 'PRD.md'), '# Direction B\n', 'utf8');
+  const result = runCli(['init', '--project', ambiguous, '--agent', 'codex', '--yes']);
+  assert.equal(result.status, 3, result.stderr || result.stdout);
+  assert.match(result.stderr, /competing product direction/i);
+  assert.equal(await exists(path.join(ambiguous, '.vibetether')), false);
 });

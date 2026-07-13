@@ -58,7 +58,7 @@ test('doctor detects a stale runtime checkpoint without exposing private reasoni
   assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--yes']).status, 0);
   const checkpointPath = path.join(target, '.vibetether', 'state', 'current.yaml');
   const checkpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
-  checkpoint.updated_at = '2000-01-01T00:00:00.000Z';
+  checkpoint.last_reanchor = '2000-01-01T00:00:00.000Z';
   await writeFile(checkpointPath, YAML.stringify(checkpoint), 'utf8');
 
   const result = runCli(['doctor', '--project', target, '--json']);
@@ -77,6 +77,27 @@ test('doctor detects a stale runtime checkpoint without exposing private reasoni
   assert.match(validator.stderr, /stale checkpoint/i);
 });
 
+test('doctor detects changed managed instructions and customized Skill copies', async () => {
+  const target = await project('doctor-adapter-drift');
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--yes']).status, 0);
+  const agentsPath = path.join(target, 'AGENTS.md');
+  const agents = await readFile(agentsPath, 'utf8');
+  await writeFile(
+    agentsPath,
+    agents.replace(/<!-- vibetether:start -->[\s\S]*<!-- vibetether:end -->/, '<!-- vibetether:start -->\nChanged control rules.\n<!-- vibetether:end -->'),
+    'utf8',
+  );
+  const installedSkill = path.join(target, '.agents', 'skills', 'vibe-tether', 'SKILL.md');
+  await writeFile(installedSkill, `${await readFile(installedSkill, 'utf8')}\nCustomization.\n`, 'utf8');
+
+  const result = runCli(['doctor', '--project', target, '--json']);
+
+  assert.equal(result.status, 4, result.stderr || result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.issues.some((issue) => issue.code === 'changed-managed-block'), true);
+  assert.equal(report.issues.some((issue) => issue.code === 'changed-skill'), true);
+});
+
 test('uninstall dry-run leaves the project unchanged', async () => {
   const target = await project('uninstall-dry');
   assert.equal(runCli(['init', '--project', target, '--agent', 'both', '--yes']).status, 0);
@@ -88,6 +109,18 @@ test('uninstall dry-run leaves the project unchanged', async () => {
   assert.match(result.stdout, /DRY RUN/);
   assert.equal(await readFile(path.join(target, 'AGENTS.md'), 'utf8'), before);
   assert.equal(await exists(path.join(target, '.agents', 'skills', 'vibe-tether', 'SKILL.md')), true);
+});
+
+test('uninstall rejects reversed markers without changing user content', async () => {
+  const target = await project('uninstall-reversed');
+  const original = '# User content\r\n<!-- vibetether:end -->\r\nkeep me  \r\n<!-- vibetether:start -->\r\n';
+  await writeFile(path.join(target, 'AGENTS.md'), original, 'utf8');
+
+  const result = runCli(['uninstall', '--project', target, '--yes']);
+
+  assert.equal(result.status, 3, result.stderr || result.stdout);
+  assert.match(result.stderr, /managed block conflict/i);
+  assert.equal(await readFile(path.join(target, 'AGENTS.md'), 'utf8'), original);
 });
 
 test('uninstall removes only VibeTether-managed content and preserves the Intent Contract', async () => {

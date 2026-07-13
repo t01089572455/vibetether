@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { access, readFile } from 'node:fs/promises';
+import { access, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +17,16 @@ async function exists(target) {
   } catch {
     return false;
   }
+}
+
+async function recursiveTextFiles(directory) {
+  const files = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const target = path.join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...(await recursiveTextFiles(target)));
+    else if (entry.isFile() && /\.(md|mjs|yaml|yml|json)$/i.test(entry.name)) files.push(target);
+  }
+  return files;
 }
 
 async function validateSelf() {
@@ -42,6 +52,16 @@ async function validateSelf() {
     if (!(await exists(path.join(skillDir, 'references', reference)))) {
       errors.push(`Missing reference: ${reference}`);
     }
+  }
+  for (const file of await recursiveTextFiles(skillDir)) {
+    const relative = path.relative(skillDir, file);
+    const content = await readFile(file, 'utf8');
+    if (/[\u3400-\u9fff]/.test(content)) errors.push(`Non-public language or brand leakage in ${relative}`);
+    if (/(?:^|\s)[A-Za-z]:[\\/]/m.test(content)) errors.push(`Absolute local path leakage in ${relative}`);
+    if (/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bAKIA[0-9A-Z]{16}\b/.test(content)) {
+      errors.push(`Credential-like content in ${relative}`);
+    }
+    if (/(^|[\\/])\.env($|[.\\/])|\.(?:pem|key)$/i.test(relative)) errors.push(`Non-public artifact in ${relative}`);
   }
   return errors;
 }
@@ -158,10 +178,15 @@ async function validateProject(projectRoot) {
       errors.push(`Missing checkpoint: ${manifest.checkpoint.path}`);
     } else {
       const checkpointSource = await readFile(checkpointPath, 'utf8');
-      const updatedAt = checkpointSource.match(/^updated_at:\s*(.+)$/m)?.[1];
-      const timestamp = Date.parse(updatedAt ?? '');
+      for (const field of ['goal', 'phase', 'slice', 'last_reanchor', 'next_intended_action']) {
+        if (!new RegExp(`^${field}:\\s*.+$`, 'm').test(checkpointSource)) {
+          errors.push(`Checkpoint is missing required field: ${field}`);
+        }
+      }
+      const lastReanchor = checkpointSource.match(/^last_reanchor:\s*(.+)$/m)?.[1];
+      const timestamp = Date.parse(lastReanchor ?? '');
       const maxAge = Number(manifest.checkpoint.max_age_hours ?? 168) * 60 * 60 * 1000;
-      if (!Number.isFinite(timestamp)) errors.push('Checkpoint has an invalid updated_at value');
+      if (!Number.isFinite(timestamp)) errors.push('Checkpoint has an invalid last_reanchor value');
       else if (Date.now() - timestamp > maxAge) errors.push(`Stale checkpoint: older than ${manifest.checkpoint.max_age_hours ?? 168} hours`);
       if (/private_reasoning|chain[-_ ]of[-_ ]thought/i.test(checkpointSource)) {
         errors.push('Checkpoint contains a forbidden private-reasoning field');

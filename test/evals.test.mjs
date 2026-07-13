@@ -16,7 +16,7 @@ async function scenarios() {
 test('preview scenarios cover the approved drift-pressure classes with complete contracts', async () => {
   const values = await scenarios();
   const ids = values.map((scenario) => scenario.id);
-  assert.deepEqual(ids, ['context-compaction', 'document-conflict', 'structural-decision', 'ui-propagation']);
+  assert.deepEqual(ids, ['context-compaction', 'document-conflict', 'safe-preparation', 'structural-decision', 'ui-propagation']);
 
   for (const scenario of values) {
     assert.equal(typeof scenario.input_state, 'object');
@@ -37,7 +37,7 @@ test('static runner validates every scenario and states the preview honesty boun
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /4\/4 static scenario contracts passed/);
+  assert.match(result.stdout, /5\/5 static scenario contracts passed/);
   assert.match(result.stdout, /not independent agent forward tests/i);
   assert.match(result.stdout, /cannot justify a 1\.0\.0 claim/i);
 });
@@ -55,6 +55,7 @@ test('independent preview evaluation preserves raw runs, mapped scores, and hone
   const enabled = JSON.parse(await readFile(path.join(root, 'evals', 'results', 'skill-enabled.json'), 'utf8'));
   const judge = JSON.parse(await readFile(path.join(root, 'evals', 'results', 'judge-scores.json'), 'utf8'));
   const report = await readFile(path.join(root, 'evals', 'results', 'preview-evaluation.md'), 'utf8');
+  const metadata = JSON.parse(await readFile(path.join(root, 'evals', 'results', 'run-metadata.json'), 'utf8'));
   const expectedIds = ['context-compaction', 'document-conflict', 'ui-propagation'];
 
   assert.deepEqual(baseline.scenarios.map((scenario) => scenario.id), expectedIds);
@@ -72,4 +73,9 @@ test('independent preview evaluation preserves raw runs, mapped scores, and hone
   assert.match(report, /word-count overhead/i);
   assert.match(report, /not a real multi-hour coding-project trial/i);
   assert.doesNotMatch(report, /eliminates? (context )?drift/i);
+  assert.equal(metadata.schema_version, 1);
+  assert.match(metadata.host, /Codex/i);
+  assert.match(metadata.model_family, /GPT-5/i);
+  assert.equal(metadata.isolation.fresh_context_per_run, true);
+  assert.equal(metadata.authorization, 'explicit-user-authorization-in-development-session');
 });

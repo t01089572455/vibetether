@@ -1,5 +1,6 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
+import { CliError } from './errors.mjs';
 
 async function kind(root, relativePath) {
   try {
@@ -21,12 +22,41 @@ export async function scanProject(root, enabledAdapters, profile) {
     return manifestPath;
   };
 
-  const context = await record('CONTEXT.md', 'product context');
-  const direction = await record('docs/product-direction.md', 'product direction');
+  const recordMany = async (candidates, role, confidence = 'medium') => {
+    const found = [];
+    for (const candidate of candidates) {
+      const value = await record(candidate, role, confidence);
+      if (value) found.push(value);
+    }
+    return found;
+  };
+
+  const contexts = await recordMany(['CONTEXT.md', 'docs/context.md'], 'product context');
+  const directions = await recordMany(
+    ['docs/product-direction.md', 'PRD.md', 'docs/PRD.md', 'docs/prd.md', 'docs/product.md'],
+    'product direction',
+    'high',
+  );
+  if (directions.length > 1) {
+    throw new CliError(`Competing product direction candidates require user confirmation: ${directions.join(', ')}`, 3);
+  }
+  const direction = directions[0] ?? null;
   const architecture = await record('docs/adr', 'architecture decisions');
-  const uiSpec = await record('docs/ui-spec.md', 'user interface specification');
+  const uiSpecs = await recordMany(
+    ['docs/ui-spec.md', 'docs/ux-spec.md', 'docs/ui-design.md'],
+    'user interface specification',
+    'high',
+  );
+  if (uiSpecs.length > 1) {
+    throw new CliError(`Competing UI direction candidates require user confirmation: ${uiSpecs.join(', ')}`, 3);
+  }
   const designSystem = await record('docs/design-system.md', 'design system');
-  const release = await record('docs/release-checklist.md', 'release checklist');
+  const requirements = await recordMany(['docs/specs', 'docs/prd', 'specs'], 'requirements and specifications');
+  const testing = await recordMany(['docs/testing.md', 'docs/test-plan.md'], 'testing contract');
+  const release = await recordMany(
+    ['docs/release-checklist.md', 'docs/release.md', 'RELEASE.md'],
+    'release checklist',
+  );
 
   const instructionFiles = enabledAdapters.map((name) => (name === 'codex' ? 'AGENTS.md' : 'CLAUDE.md'));
   for (const file of instructionFiles) {
@@ -35,7 +65,7 @@ export async function scanProject(root, enabledAdapters, profile) {
 
   const goalSource = direction || '.vibetether/intent.md';
   const always = [...instructionFiles];
-  if (context) always.push(context);
+  always.push(...contexts);
   if (!always.includes(goalSource)) always.push(goalSource);
 
   discovery['.vibetether/intent.md'] = {
@@ -52,9 +82,11 @@ export async function scanProject(root, enabledAdapters, profile) {
     sources: {
       always,
       conditional: {
+        requirements,
         architecture: architecture ? [architecture] : [],
-        ui: [uiSpec, designSystem].filter(Boolean),
-        release: release ? [release] : [],
+        ui: [...uiSpecs, designSystem].filter(Boolean),
+        testing,
+        release,
       },
     },
     discovery,

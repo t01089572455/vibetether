@@ -81,6 +81,14 @@ test('the installed validator can validate its own public Skill', () => {
   assert.match(result.stdout, /VibeTether Skill: valid/);
 });
 
+test('the installed validator performs its own recursive leakage scan', async () => {
+  const script = await readFile(path.join(skillDir, 'scripts', 'validate-project.mjs'), 'utf8');
+  assert.match(script, /readdir/);
+  assert.match(script, /recursive/i);
+  assert.match(script, /\\u3400/);
+  assert.match(script, /absolute local path/i);
+});
+
 test('pressure-test feedback keeps control strict without unnecessary process overhead', async () => {
   const skill = await readFile(skillPath, 'utf8');
   const authority = await readFile(path.join(skillDir, 'references', 'authority-and-conflicts.md'), 'utf8');

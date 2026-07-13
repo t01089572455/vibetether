@@ -16,32 +16,44 @@ export async function readTextIfPresent(target) {
 export function inspectManagedBlock(content, label) {
   const starts = content.split(MANAGED_START).length - 1;
   const ends = content.split(MANAGED_END).length - 1;
-  if (starts !== ends || starts > 1) {
+  const reversed = starts === 1 && ends === 1 && content.indexOf(MANAGED_START) > content.indexOf(MANAGED_END);
+  if (starts !== ends || starts > 1 || reversed) {
     throw new CliError(`Managed block conflict in ${label}. Repair or remove the existing VibeTether markers, then retry.`, 3);
   }
 }
 
 export function applyManagedBlock(content, body) {
-  const block = `${MANAGED_START}\n${body.trim()}\n${MANAGED_END}`;
+  const newline = content.includes('\r\n') ? '\r\n' : '\n';
+  const normalizedBody = body.trim().replace(/\r?\n/g, newline);
+  const block = `${MANAGED_START}${newline}${normalizedBody}${newline}${MANAGED_END}`;
   if (content.includes(MANAGED_START)) {
     const start = content.indexOf(MANAGED_START);
     const end = content.indexOf(MANAGED_END, start) + MANAGED_END.length;
     return `${content.slice(0, start)}${block}${content.slice(end)}`;
   }
 
-  const base = content.replace(/[\t ]+$/gm, '').replace(/\s*$/, '');
-  return base ? `${base}\n\n${block}\n` : `${block}\n`;
+  if (!content) return `${block}${newline}`;
+  let separator = '';
+  if (!content.endsWith(newline)) separator += newline;
+  if (!`${content}${separator}`.endsWith(`${newline}${newline}`)) separator += newline;
+  return `${content}${separator}${block}${newline}`;
+}
+
+export function managedBlockBody(content) {
+  if (!content.includes(MANAGED_START) || !content.includes(MANAGED_END)) return null;
+  const start = content.indexOf(MANAGED_START) + MANAGED_START.length;
+  const end = content.indexOf(MANAGED_END, start);
+  return content.slice(start, end).trim();
 }
 
 export function removeManagedBlock(content) {
   if (!content.includes(MANAGED_START)) return content;
   const start = content.indexOf(MANAGED_START);
   const end = content.indexOf(MANAGED_END, start) + MANAGED_END.length;
-  const merged = `${content.slice(0, start)}${content.slice(end)}`
-    .replace(/\r\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trimEnd();
-  return merged ? `${merged}\n` : '';
+  const before = content.slice(0, start);
+  const after = content.slice(end);
+  if (!before && /^(\r?\n)?$/.test(after)) return '';
+  return `${before}${after}`;
 }
 
 export function resolveInside(root, relativePath) {

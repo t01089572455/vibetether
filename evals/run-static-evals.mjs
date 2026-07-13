@@ -8,6 +8,10 @@ const evalRoot = path.dirname(fileURLToPath(import.meta.url));
 const ROUTES = {
   'context-compaction': { preflight: 'full-reanchor', gate: 're-anchor-required' },
   'authority-conflict': { preflight: 'full-reanchor', gate: 'user-confirmation-required' },
+  'direction-gate-with-safe-preparation': {
+    preflight: 'full-reanchor',
+    gate: 'confirm-direction-continue-safe-preparation',
+  },
   'structural-technical-decision': { preflight: 'full-reanchor', gate: 'investigate-recommend-confirm' },
   'ui-direction-propagation': { preflight: 'full-reanchor', gate: 'visual-approval-required' },
 };

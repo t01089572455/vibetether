@@ -3,6 +3,8 @@ import path from 'node:path';
 import YAML from 'yaml';
 import { ADAPTERS, MANAGED_END, MANAGED_START } from './adapters.mjs';
 import { CliError } from './errors.mjs';
+import { managedBlockBody } from './files.mjs';
+import { skillFingerprint, sourceSkill } from './skill-install.mjs';
 
 function flattenSources(value) {
   if (typeof value === 'string') return [value];
@@ -78,9 +80,23 @@ export async function inspectProject(options) {
         const ends = instructions.split(MANAGED_END).length - 1;
         if (starts !== 1 || ends !== 1) {
           issues.push(issue('invalid-managed-block', `Expected one VibeTether managed block in ${path.basename(instructionPath)}`));
+        } else if (managedBlockBody(instructions) !== adapter.managedBody.trim()) {
+          issues.push(issue('changed-managed-block', `VibeTether managed block changed in ${path.basename(instructionPath)}`));
         }
       }
-      if (!(await exists(skillPath))) issues.push(issue('missing-skill', `Missing installed Skill for ${name}`));
+      if (!(await exists(skillPath))) {
+        issues.push(issue('missing-skill', `Missing installed Skill for ${name}`));
+      } else {
+        try {
+          const [canonical, installed] = await Promise.all([
+            skillFingerprint(sourceSkill),
+            skillFingerprint(path.dirname(skillPath)),
+          ]);
+          if (canonical !== installed) issues.push(issue('changed-skill', `Installed Skill changed for ${name}`));
+        } catch (error) {
+          issues.push(issue('invalid-skill', `Cannot verify installed Skill for ${name}: ${error.message}`));
+        }
+      }
     }
 
     const checkpoint = manifest.checkpoint;
@@ -94,13 +110,20 @@ export async function inspectProject(options) {
       } else {
         try {
           const state = YAML.parse(await readFile(checkpointPath, 'utf8'));
-          if (state?.schema_version !== 1 || !state?.lifecycle_state || !state?.updated_at) {
+          if (
+            state?.schema_version !== 1 ||
+            !state?.goal ||
+            !state?.phase ||
+            !state?.slice ||
+            !state?.last_reanchor ||
+            !state?.next_intended_action
+          ) {
             issues.push(issue('invalid-checkpoint', 'Runtime checkpoint is missing required recovery fields'));
           } else {
-            const updatedAt = Date.parse(state.updated_at);
+            const updatedAt = Date.parse(state.last_reanchor);
             const maxAge = Number(checkpoint.max_age_hours ?? 168) * 60 * 60 * 1000;
             if (!Number.isFinite(updatedAt)) {
-              issues.push(issue('invalid-checkpoint', 'Runtime checkpoint has an invalid updated_at value'));
+              issues.push(issue('invalid-checkpoint', 'Runtime checkpoint has an invalid last_reanchor value'));
             } else if (Date.now() - updatedAt > maxAge) {
               issues.push(issue('stale-checkpoint', `Runtime checkpoint is older than ${checkpoint.max_age_hours ?? 168} hours`));
             }

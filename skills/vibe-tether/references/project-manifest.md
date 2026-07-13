@@ -82,4 +82,3 @@ Run the lightweight preflight before consequential actions. Perform a full re-an
 Show a diff, create a backup before the first applied change, preserve user content, remain idempotent, stop on conflicting managed blocks, and remove only managed content during uninstall.
 
 Instruction files are behavioral guidance, not a security boundary. Use platform permissions and explicit hooks for enforcement when supported and authorized.
-

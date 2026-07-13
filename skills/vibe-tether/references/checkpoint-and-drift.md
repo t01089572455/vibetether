@@ -88,4 +88,3 @@ Do not run destructive rollback automatically. Preserve user work and request ex
 - a new dependency or architecture appears without a decision;
 - the checkpoint and working tree disagree;
 - release evidence predates the final diff.
-
