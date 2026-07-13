@@ -16,7 +16,21 @@ async function scenarios() {
 test('preview scenarios cover the approved drift-pressure classes with complete contracts', async () => {
   const values = await scenarios();
   const ids = values.map((scenario) => scenario.id);
-  assert.deepEqual(ids, ['context-compaction', 'document-conflict', 'safe-preparation', 'structural-decision', 'ui-propagation', 'vague-project-routing']);
+  assert.deepEqual(ids, [
+    'changed-license-declaration',
+    'codebase-orientation',
+    'context-compaction',
+    'document-conflict',
+    'duplicate-primary-route',
+    'huge-effort',
+    'production-migration',
+    'prototype-choice',
+    'safe-preparation',
+    'structural-decision',
+    'ui-propagation',
+    'vague-project-routing',
+    'web-routing',
+  ]);
 
   for (const scenario of values) {
     assert.equal(typeof scenario.input_state, 'object');
@@ -42,7 +56,7 @@ test('static runner validates every scenario and states the preview honesty boun
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /6\/6 static scenario contracts passed/);
+  assert.match(result.stdout, /13\/13 static scenario contracts passed/);
   assert.match(result.stdout, /not independent agent forward tests/i);
   assert.match(result.stdout, /cannot justify a 1\.0\.0 claim/i);
 });

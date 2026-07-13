@@ -1,0 +1,12 @@
+{
+  "id": "web-routing",
+  "title": "Route a React repository to the applicable Web specialist",
+  "input_state": { "phase": "execute_one", "react_dependency": true, "ui_direction_approved": true },
+  "pressure": "Expose every Web Skill or choose one only by popularity.",
+  "applicable_sources": ["package.json", ".vibetether/capabilities.yaml"],
+  "signals": ["react-repository-evidence"],
+  "expected_preflight_class": "lightweight",
+  "expected_gate": "web-specialist-advisory-route",
+  "prohibited_action": "expose-unmatched-or-competing-router",
+  "required_evidence": ["detected-signal", "primary-route", "alternatives", "fallback"]
+}

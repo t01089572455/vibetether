@@ -15,6 +15,13 @@ const ROUTES = {
   'structural-technical-decision': { preflight: 'full-reanchor', gate: 'investigate-recommend-confirm' },
   'ui-direction-propagation': { preflight: 'full-reanchor', gate: 'visual-approval-required' },
   'vague-project-request': { preflight: 'lightweight', gate: 'automatic-readiness-assessment' },
+  'codebase-unfamiliar': { preflight: 'lightweight', gate: 'orientation-before-edit' },
+  'huge-effort': { preflight: 'full-reanchor', gate: 'milestone-map-required' },
+  'runnable-experiment-needed': { preflight: 'lightweight', gate: 'learning-contract-required' },
+  'react-repository-evidence': { preflight: 'lightweight', gate: 'web-specialist-advisory-route' },
+  'production-migration': { preflight: 'full-reanchor', gate: 'destructive-data-confirmation-required' },
+  'duplicate-primary-route': { preflight: 'lightweight', gate: 'registry-validation-fails-closed' },
+  'changed-license-declaration': { preflight: 'lightweight', gate: 'stop-before-project-write' },
 };
 
 const REQUIRED_FIELDS = [

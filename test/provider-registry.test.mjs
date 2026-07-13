@@ -29,6 +29,7 @@ test('provider registry pins complete auditable upstream skill sources', async (
     assert.equal(typeof source.license_evidence.path, 'string');
     if (source.license_evidence.mode === 'readme-declaration') {
       assert.match(source.license_evidence.declaration, /MIT/);
+      assert.doesNotMatch(source.license_evidence.declaration, /\\n/, 'license declarations must contain real newlines');
       assert.match(source.license_evidence.sha256, /^[a-f0-9]{64}$/);
     }
     assert.ok(source.skills.length > 0);
@@ -116,6 +117,8 @@ test('the capability board routes signal-matched Web specialists without exposin
   assert.equal(route.selection.skill, 'vercel-react-best-practices');
   assert.equal(route.should_invoke_provider, true);
   assert.equal(route.alternatives.some((candidate) => candidate.skill === 'vercel-composition-patterns'), true);
+  assert.equal(route.required_outputs.includes('implemented_states'), true);
+  assert.ok(route.exit_evidence.length > 0);
   assert.equal(board.providers.some((provider) => provider.skill === 'using-agent-skills'), false);
 });
 
@@ -188,6 +191,8 @@ test('Production specialists route by scenario while migration, security, and re
   assert.equal(migration.confirmation_required, true);
   assert.equal(security.confirmation_required, true);
   assert.equal(release.confirmation_required, true);
+  assert.equal(migration.required_outputs.includes('migration_plan'), true);
+  assert.ok(security.exit_evidence.length > 0);
 });
 
 test('standard installs the full grill entry and specialist workflow bundle without a competing router', async () => {

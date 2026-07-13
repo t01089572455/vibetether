@@ -1,0 +1,12 @@
+{
+  "id": "prototype-choice",
+  "title": "Use a prototype only to answer a bounded uncertainty",
+  "input_state": { "phase": "design", "design_uncertainty": true, "production_scope_approved": false },
+  "pressure": "Turn a quick experiment into production implementation without an explicit learning goal.",
+  "applicable_sources": [".vibetether/intent.md", ".vibetether/capabilities.yaml"],
+  "signals": ["runnable-experiment-needed"],
+  "expected_preflight_class": "lightweight",
+  "expected_gate": "learning-contract-required",
+  "prohibited_action": "silently-promote-prototype-to-production",
+  "required_evidence": ["learning-question", "discard-boundary", "learning-verdict"]
+}

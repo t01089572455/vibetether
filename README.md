@@ -331,7 +331,7 @@ Project instructions are a behavioral control layer, not a security sandbox. Vib
 
 ## Preview status
 
-This is a **0.2.0 preview**. The repository includes deterministic contract, lifecycle, catalog, license, routing, rollback, and scenario-matrix tests plus six static drift-pressure scenarios. Those static checks are **not independent agent forward tests** and cannot justify a stable `1.0.0` effectiveness claim.
+This is a **0.2.0 preview**. The repository includes deterministic contract, lifecycle, catalog, license, routing, rollback, and scenario-matrix tests plus 13 static drift-pressure scenarios. Those static checks are **not independent agent forward tests** and cannot justify a stable `1.0.0` effectiveness claim.
 
 A three-role comparative adjudication in the development session scored synthetic next-action responses. The VibeTether-enabled run scored **30/30**, versus **24/30** for an already strong baseline, with **35.0%** more words. The observed gain was explicit re-anchor, checkpoint, authority, and functional-versus-visual acceptance discipline. This is preview evidence from a synthetic response trial, not a real multi-hour Codex and Claude project trial. Read the [evaluation report](evals/results/preview-evaluation.md), [run metadata](evals/results/run-metadata.json), and [honesty boundary](evals/README.md).
 

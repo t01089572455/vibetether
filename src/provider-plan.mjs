@@ -153,8 +153,12 @@ export function createCapabilityBoard(registry, profile, lock, harnesses) {
           reason: definition.use_when?.[0] ?? `Use ${skill.install_name} for ${capabilityId}.`,
           fallback: definition.fallback ?? contract?.fallback,
           selection: 'recommend',
-          expected_outputs: definition.required_outputs ?? contract?.required_outputs ?? [],
-          exit_evidence: definition.exit_evidence ?? contract?.exit_evidence ?? [],
+          expected_outputs: definition.required_outputs?.length
+            ? definition.required_outputs
+            : contract?.required_outputs ?? [],
+          exit_evidence: definition.exit_evidence?.length
+            ? definition.exit_evidence
+            : contract?.exit_evidence ?? [],
         }));
       });
     });
