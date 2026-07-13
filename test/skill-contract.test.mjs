@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
@@ -78,4 +78,16 @@ test('the installed validator can validate its own public Skill', () => {
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /VibeTether Skill: valid/);
+});
+
+test('no published Skill resource leaks project-private product terms', async () => {
+  const entries = await readdir(skillDir, { recursive: true, withFileTypes: true });
+  const textFiles = entries
+    .filter((entry) => entry.isFile() && /\.(md|mjs|yaml)$/.test(entry.name))
+    .map((entry) => path.join(entry.parentPath, entry.name));
+
+  for (const file of textFiles) {
+    const content = await readFile(file, 'utf8');
+    assert.doesNotMatch(content, /观翌问数|DB-GPT|Trace Rail|SQL Guard/, path.relative(root, file));
+  }
 });

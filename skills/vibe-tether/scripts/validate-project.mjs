@@ -29,7 +29,7 @@ async function validateSelf() {
   if (!frontmatter) errors.push('SKILL.md is missing YAML frontmatter');
   if (!/^name:\s*vibe-tether$/m.test(frontmatter?.[1] ?? '')) errors.push('Skill name must be vibe-tether');
   if (!/^description:\s*Use when /m.test(frontmatter?.[1] ?? '')) errors.push('Description must start with Use when');
-  if (/TODO|TBD|观翌问数|DB-GPT|Trace Rail|SQL Guard/.test(skill)) errors.push('Skill contains placeholders or project-private terms');
+  if (/TODO|TBD/.test(skill)) errors.push('Skill contains unresolved placeholders');
   if (skill.split(/\r?\n/).length >= 500) errors.push('SKILL.md must stay below 500 lines');
 
   const references = [
