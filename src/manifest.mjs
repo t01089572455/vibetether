@@ -47,6 +47,12 @@ export function createInitialCheckpoint(goalSource, recommendedProvider = 'vibe-
         selection_reason: null,
         invocation_status: 'not-started',
       },
+      experience_feedback: {
+        trigger: null,
+        disposition: 'pending',
+        reason: '',
+        artifacts: [],
+      },
     },
     { lineWidth: 0 },
   );

@@ -76,6 +76,12 @@ test('init installs Codex and Claude project Skills and preserves user instructi
   assert.match(agents, /Keep this line\./);
   assert.match(agents, /<!-- vibetether:start -->[\s\S]*<!-- vibetether:end -->/);
   assert.match(claude, /<!-- vibetether:start -->[\s\S]*<!-- vibetether:end -->/);
+  for (const instructions of [agents, claude]) {
+    assert.match(instructions, /automatically apply.*vibe-tether/i);
+    assert.match(instructions, /after every verified[\s\S]*success/i);
+    assert.match(instructions, /first-proven-path/i);
+    assert.match(instructions, /credentials|private keys|one-time codes/i);
+  }
 });
 
 test('repeated init is byte-for-byte idempotent', async () => {
@@ -208,6 +214,12 @@ test('init keeps runtime checkpoint state out of version control', async () => {
   assert.equal(typeof checkpoint.goal, 'string');
   assert.equal(typeof checkpoint.last_reanchor, 'string');
   assert.equal(Array.isArray(checkpoint.protected_capabilities), true);
+  assert.deepEqual(checkpoint.experience_feedback, {
+    trigger: null,
+    disposition: 'pending',
+    reason: '',
+    artifacts: [],
+  });
   assert.equal(checkpoint.private_reasoning, undefined);
 });
 

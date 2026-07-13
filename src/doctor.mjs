@@ -7,6 +7,11 @@ import { CliError } from './errors.mjs';
 import { managedBlockBody } from './files.mjs';
 import { skillFingerprint, sourceSkill } from './skill-install.mjs';
 
+const COMPLETION_PHASES = new Set(['REVIEW', 'SHIP']);
+const CAPTURE_TRIGGERS = new Set(['first-proven-path', 'recovered-path', 'changed-proven-path']);
+const VALID_TRIGGERS = new Set([...CAPTURE_TRIGGERS, 'repeat-proven-path', 'routine-non-path']);
+const VALID_DISPOSITIONS = new Set(['captured', 'already-encoded', 'not-reusable']);
+
 function flattenSources(value) {
   if (typeof value === 'string') return [value];
   if (Array.isArray(value)) return value.flatMap(flattenSources);
@@ -40,6 +45,59 @@ function projectPath(root, relativePath) {
 
 function portablePath(value) {
   return String(value ?? '').replaceAll('\\', '/');
+}
+
+async function validateExperienceFeedback(root, state, issues) {
+  const feedback = state.experience_feedback;
+  const completionLike = COMPLETION_PHASES.has(String(state.phase ?? '').toUpperCase());
+  if (!feedback || feedback.disposition === 'pending') {
+    if (completionLike) {
+      issues.push(issue(
+        'pending-experience-feedback',
+        'Completion-like checkpoint requires a captured, already-encoded, or not-reusable experience disposition',
+      ));
+    }
+    return;
+  }
+  if (typeof feedback !== 'object' || Array.isArray(feedback)) {
+    issues.push(issue('invalid-experience-feedback', 'Checkpoint experience_feedback must be a mapping'));
+    return;
+  }
+
+  const trigger = feedback.trigger;
+  const disposition = feedback.disposition;
+  const reason = typeof feedback.reason === 'string' ? feedback.reason.trim() : '';
+  const artifacts = feedback.artifacts;
+  const invalid =
+    !VALID_TRIGGERS.has(trigger) ||
+    !VALID_DISPOSITIONS.has(disposition) ||
+    !reason ||
+    !Array.isArray(artifacts) ||
+    (CAPTURE_TRIGGERS.has(trigger) && disposition !== 'captured') ||
+    (trigger === 'repeat-proven-path' && disposition !== 'already-encoded') ||
+    (trigger === 'routine-non-path' && disposition !== 'not-reusable') ||
+    (disposition !== 'not-reusable' && artifacts.length === 0) ||
+    (disposition === 'not-reusable' && artifacts.length !== 0);
+  if (invalid) {
+    issues.push(issue(
+      'invalid-experience-feedback',
+      'Checkpoint experience_feedback trigger, disposition, reason, and artifacts are inconsistent',
+    ));
+    return;
+  }
+
+  for (const artifact of artifacts) {
+    if (typeof artifact !== 'string' || !artifact.trim()) {
+      issues.push(issue('invalid-experience-feedback', 'Experience artifact paths must be non-empty strings'));
+      continue;
+    }
+    const target = projectPath(root, artifact);
+    if (!target) {
+      issues.push(issue('experience-artifact-escape', `Experience artifact path escapes the project: ${artifact}`));
+    } else if (!(await exists(target))) {
+      issues.push(issue('missing-experience-artifact', `Missing experience artifact: ${artifact}`));
+    }
+  }
 }
 
 async function readYamlArtifact(root, relativePath, label, issues) {
@@ -340,6 +398,7 @@ export async function inspectProject(options) {
             } else if (Date.now() - updatedAt > maxAge) {
               issues.push(issue('stale-checkpoint', `Runtime checkpoint is older than ${checkpoint.max_age_hours ?? 168} hours`));
             }
+            await validateExperienceFeedback(root, state, issues);
           }
         } catch (error) {
           issues.push(issue('invalid-checkpoint', `Cannot parse runtime checkpoint: ${error.message}`));

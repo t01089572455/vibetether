@@ -24,7 +24,7 @@ const preReadinessSharedRules = [
   'Make low-risk, reversible, goal-aligned technical choices autonomously and record material decisions.',
 ].join('\n');
 
-const sharedRules = [
+const preSuccessCaptureSharedRules = [
   '## VibeTether drift control and capability routing',
   '',
   'Invoke the `vibe-tether` Skill before consequential actions in long-running work and after compaction, resume, handoff, repeated failure, or a phase change.',
@@ -38,7 +38,25 @@ const sharedRules = [
   'Make low-risk, reversible, goal-aligned technical choices autonomously and record material decisions.',
 ].join('\n');
 
-export const LEGACY_MANAGED_BODIES = new Set([legacySharedRules, preReadinessSharedRules]);
+const sharedRules = [
+  '## VibeTether drift control, capability routing, and success capture',
+  '',
+  'Automatically apply the `vibe-tether` Skill at task entry, before consequential actions, after compaction, resume, handoff, repeated failure, or a phase change, and before completion, the next slice, merge, release, or publication.',
+  'Consult `.vibetether/capabilities.yaml` and automatically assess its work-readiness dimensions before implementation; do not start product work from guessed direction.',
+  'Investigate discoverable facts autonomously. Route unresolved directional gaps to the recommended clarification provider and ask the user one recommended decision question at a time.',
+  'Provider recommendations are advisory: use the recommended installed Skill when it fits, otherwise use an installed alternative or declared fallback and record the material reason in the checkpoint.',
+  'Re-read `.vibetether/project.yaml` and its applicable truth sources before choosing direction or reusing an operational path.',
+  'Ask the user when product direction, architecture, visual direction, destructive data changes, permissions, or release scope is ambiguous.',
+  'Make low-risk, reversible, goal-aligned technical choices autonomously and record material decisions.',
+  'After every verified user-level or engineering-level success, run the Success Capture Gate. A reusable workflow that succeeds for the first time is a `first-proven-path` and must be captured immediately; recovered or materially changed paths must update their Proven Path, while unchanged repeated paths must not create duplicate documentation.',
+  'Record `captured`, `already-encoded`, or `not-reusable` in checkpoint `experience_feedback`, with a reason and artifact paths. Never persist credentials, private keys, one-time codes, private reasoning, or sensitive tool output. A completion-like state must pass `vibetether doctor` with no pending disposition.',
+].join('\n');
+
+export const LEGACY_MANAGED_BODIES = new Set([
+  legacySharedRules,
+  preReadinessSharedRules,
+  preSuccessCaptureSharedRules,
+]);
 
 export const ADAPTERS = {
   codex: {
