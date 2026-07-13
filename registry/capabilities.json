@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "runtime_auto_install": false,
+  "selection_policy": {
+    "one_primary_workflow_provider_per_phase": true,
+    "project_truth_overrides_provider_advice": true,
+    "remote_candidates_require_install_time_review": true,
+    "record_provider_version_and_exit_evidence": true
+  },
+  "capabilities": [
+    {
+      "id": "requirements-clarification",
+      "purpose": "Turn an ambiguous request into an approved Intent Contract without guessing direction.",
+      "required_inputs": ["user_request", "applicable_truth_sources"],
+      "required_outputs": ["goal", "success_evidence", "scope_boundaries", "open_direction_decisions"],
+      "fallback": "Use the built-in directional interview and stop on unresolved direction."
+    },
+    {
+      "id": "product-design",
+      "purpose": "Map behavior and user experience choices to approved product outcomes.",
+      "required_inputs": ["intent_contract", "product_truth"],
+      "required_outputs": ["approved_design", "acceptance_evidence"],
+      "fallback": "Use the built-in design brief and request approval before implementation."
+    },
+    {
+      "id": "planning",
+      "purpose": "Convert approved direction into small, verifiable execution slices.",
+      "required_inputs": ["approved_design", "repository_state"],
+      "required_outputs": ["ordered_slices", "verification_commands", "risk_gates"],
+      "fallback": "Use the built-in slice plan with one in-progress slice at a time."
+    },
+    {
+      "id": "implementation",
+      "purpose": "Implement one approved slice while preserving project constraints.",
+      "required_inputs": ["current_slice", "applicable_constraints"],
+      "required_outputs": ["bounded_change", "change_summary"],
+      "fallback": "Use the built-in minimal-change execution loop."
+    },
+    {
+      "id": "tdd",
+      "purpose": "Prove behavior through an observed red-green-refactor cycle.",
+      "required_inputs": ["behavior_contract"],
+      "required_outputs": ["red_evidence", "green_evidence", "refactor_evidence"],
+      "fallback": "Use the built-in red-green-refactor discipline."
+    },
+    {
+      "id": "debugging",
+      "purpose": "Diagnose unexpected behavior before proposing a correction.",
+      "required_inputs": ["reproduction", "observed_evidence"],
+      "required_outputs": ["root_cause", "minimal_fix", "regression_evidence"],
+      "fallback": "Use the built-in reproduce-isolate-hypothesize-verify loop."
+    },
+    {
+      "id": "frontend-product-design",
+      "purpose": "Lock visual intent, information hierarchy, interaction states, and a golden reference.",
+      "required_inputs": ["product_goal", "page_type", "brand_or_reference_assets"],
+      "required_outputs": ["visual_direction", "golden_screen", "state_matrix"],
+      "fallback": "Use the built-in UI Intent Contract and require visual approval."
+    },
+    {
+      "id": "frontend-engineering",
+      "purpose": "Implement approved UI intent with responsive and accessible behavior.",
+      "required_inputs": ["approved_ui_contract", "existing_design_system"],
+      "required_outputs": ["implemented_states", "accessibility_evidence", "responsive_evidence"],
+      "fallback": "Use the built-in UI implementation checklist."
+    },
+    {
+      "id": "browser-verification",
+      "purpose": "Verify real rendered behavior and compare it with the golden reference.",
+      "required_inputs": ["running_product", "golden_screen", "critical_flows"],
+      "required_outputs": ["functional_verdict", "visual_verdict", "captured_evidence"],
+      "fallback": "Use the built-in render-capture-compare loop."
+    },
+    {
+      "id": "security-review",
+      "purpose": "Inspect trust boundaries, permissions, secrets, and destructive operations.",
+      "required_inputs": ["change_set", "threat_context"],
+      "required_outputs": ["findings", "risk_verdict"],
+      "fallback": "Use the built-in high-risk checklist and stop on unreviewed critical risk."
+    },
+    {
+      "id": "code-review",
+      "purpose": "Review correctness, regressions, contracts, and maintainability against project truth.",
+      "required_inputs": ["diff", "acceptance_contract"],
+      "required_outputs": ["prioritized_findings", "review_verdict"],
+      "fallback": "Use the built-in evidence-first review checklist."
+    },
+    {
+      "id": "release-verification",
+      "purpose": "Prove release readiness and obtain confirmation before external publication.",
+      "required_inputs": ["release_candidate", "release_contract"],
+      "required_outputs": ["fresh_verification", "known_limitations", "release_decision"],
+      "fallback": "Use the built-in release gate and require explicit confirmation."
+    }
+  ]
+}

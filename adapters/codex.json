@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "codex",
+  "display_name": "OpenAI Codex",
+  "status": "official-preview",
+  "instruction_file": "AGENTS.md",
+  "skill_directory": ".agents/skills/vibe-tether",
+  "managed_block": {
+    "start": "<!-- vibetether:start -->",
+    "end": "<!-- vibetether:end -->"
+  },
+  "enforcement": "behavioral",
+  "overwrite_user_content": false,
+  "notes": "Automatic invocation depends on the host's Skill routing. Re-anchor triggers are also written into project instructions."
+}

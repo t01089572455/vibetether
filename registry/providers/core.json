@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "remote_candidates_are_installed": false,
+    "activation_requires_compatible_version_license_integrity_and_evaluation": true,
+    "popularity_is_discovery_signal_only": true
+  },
+  "providers": [
+    {
+      "id": "vibetether-built-in-alignment",
+      "kind": "built-in",
+      "workflow_role": "primary",
+      "phases": ["discover", "align"],
+      "capabilities": ["requirements-clarification"],
+      "enabled_by_default": true
+    },
+    {
+      "id": "vibetether-built-in-design",
+      "kind": "built-in",
+      "workflow_role": "primary",
+      "phases": ["design"],
+      "capabilities": ["product-design", "frontend-product-design"],
+      "page_types": ["all"],
+      "enabled_by_default": true
+    },
+    {
+      "id": "vibetether-built-in-planning",
+      "kind": "built-in",
+      "workflow_role": "primary",
+      "phases": ["plan"],
+      "capabilities": ["planning"],
+      "enabled_by_default": true
+    },
+    {
+      "id": "vibetether-built-in-execution",
+      "kind": "built-in",
+      "workflow_role": "primary",
+      "phases": ["execute"],
+      "capabilities": ["implementation", "tdd", "debugging", "frontend-engineering"],
+      "enabled_by_default": true
+    },
+    {
+      "id": "vibetether-built-in-verification",
+      "kind": "built-in",
+      "workflow_role": "primary",
+      "phases": ["verify"],
+      "capabilities": ["browser-verification", "release-verification"],
+      "enabled_by_default": true
+    },
+    {
+      "id": "vibetether-built-in-review",
+      "kind": "built-in",
+      "workflow_role": "primary",
+      "phases": ["review"],
+      "capabilities": ["code-review", "security-review"],
+      "enabled_by_default": true
+    },
+    {
+      "id": "vibetether-built-in-release",
+      "kind": "built-in",
+      "workflow_role": "primary",
+      "phases": ["ship"],
+      "capabilities": ["release-verification"],
+      "enabled_by_default": true
+    },
+    {
+      "id": "obra-superpowers",
+      "kind": "remote-candidate",
+      "workflow_role": "candidate",
+      "phases": ["discover", "design", "plan", "execute", "verify", "review"],
+      "capabilities": ["requirements-clarification", "planning", "tdd", "debugging", "code-review"],
+      "page_types": [],
+      "source": "https://github.com/obra/superpowers",
+      "version": "unpinned-candidate",
+      "license": "unverified-required-before-install",
+      "integrity": "unverified-required-before-install",
+      "enabled_by_default": false,
+      "runtime_install": false
+    },
+    {
+      "id": "anthropics-frontend-design",
+      "kind": "remote-candidate",
+      "workflow_role": "candidate",
+      "phases": ["design"],
+      "capabilities": ["frontend-product-design"],
+      "page_types": ["landing", "marketing", "portfolio", "brand-surface"],
+      "source": "https://github.com/anthropics/skills",
+      "version": "unpinned-candidate",
+      "license": "unverified-required-before-install",
+      "integrity": "unverified-required-before-install",
+      "enabled_by_default": false,
+      "runtime_install": false
+    },
+    {
+      "id": "addyosmani-agent-skills",
+      "kind": "remote-candidate",
+      "workflow_role": "candidate",
+      "phases": ["design", "execute", "verify", "review"],
+      "capabilities": ["frontend-product-design", "frontend-engineering", "browser-verification", "code-review"],
+      "page_types": ["product-ui", "dashboard", "content-site", "marketing"],
+      "source": "https://github.com/addyosmani/agent-skills",
+      "version": "unpinned-candidate",
+      "license": "unverified-required-before-install",
+      "integrity": "unverified-required-before-install",
+      "enabled_by_default": false,
+      "runtime_install": false
+    },
+    {
+      "id": "ui-ux-pro-max",
+      "kind": "remote-candidate",
+      "workflow_role": "candidate",
+      "phases": ["design", "execute"],
+      "capabilities": ["frontend-product-design", "frontend-engineering"],
+      "page_types": ["product-ui", "dashboard", "commerce", "marketing", "mobile"],
+      "source": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+      "version": "unpinned-candidate",
+      "license": "unverified-required-before-install",
+      "integrity": "unverified-required-before-install",
+      "enabled_by_default": false,
+      "runtime_install": false
+    },
+    {
+      "id": "impeccable",
+      "kind": "remote-candidate",
+      "workflow_role": "candidate",
+      "phases": ["design", "verify", "review"],
+      "capabilities": ["frontend-product-design", "browser-verification", "code-review"],
+      "page_types": ["product-ui", "dashboard", "marketing", "content-site"],
+      "source": "https://github.com/pbakaus/impeccable",
+      "version": "unpinned-candidate",
+      "license": "unverified-required-before-install",
+      "integrity": "unverified-required-before-install",
+      "enabled_by_default": false,
+      "runtime_install": false
+    }
+  ]
+}
