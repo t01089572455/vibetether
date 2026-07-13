@@ -24,6 +24,19 @@ function parseFrontmatter(markdown) {
   );
 }
 
+async function collectTextFiles(directory) {
+  const files = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const target = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await collectTextFiles(target)));
+    } else if (entry.isFile() && /\.(md|mjs|yaml)$/.test(entry.name)) {
+      files.push(target);
+    }
+  }
+  return files;
+}
+
 test('the public Skill exposes the VibeTether drift-control contract', async () => {
   const skill = await readFile(skillPath, 'utf8');
   const frontmatter = parseFrontmatter(skill);
@@ -102,10 +115,7 @@ test('pressure-test feedback keeps control strict without unnecessary process ov
 });
 
 test('no published Skill resource leaks project-private product terms', async () => {
-  const entries = await readdir(skillDir, { recursive: true, withFileTypes: true });
-  const textFiles = entries
-    .filter((entry) => entry.isFile() && /\.(md|mjs|yaml)$/.test(entry.name))
-    .map((entry) => path.join(entry.parentPath, entry.name));
+  const textFiles = await collectTextFiles(skillDir);
 
   for (const file of textFiles) {
     const content = await readFile(file, 'utf8');
