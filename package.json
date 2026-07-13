@@ -1,0 +1,36 @@
+{
+  "name": "vibetether",
+  "version": "0.1.0",
+  "description": "Keep coding agents tethered to project truth.",
+  "type": "module",
+  "bin": {
+    "vibetether": "./bin/vibetether.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "skills",
+    "registry",
+    "adapters",
+    "evals"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "eval": "node evals/run-static-evals.mjs",
+    "check": "npm test && npm run eval && node skills/vibe-tether/scripts/validate-project.mjs --self"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "yaml": "^2.8.1"
+  },
+  "license": "MIT",
+  "keywords": [
+    "agent-skills",
+    "codex",
+    "claude-code",
+    "vibe-coding",
+    "drift-control"
+  ]
+}
