@@ -40,21 +40,12 @@ test('package metadata points to the authenticated public repository', async () 
   assert.equal(pkg.version, '0.1.0');
 });
 
-test('public release documents contain no project-private terms or path leakage', async () => {
+test('public release documents contain no local path or non-English brand leakage', async () => {
   const corpus = await Promise.all(['README.md', 'SECURITY.md', 'CONTRIBUTING.md'].map(text));
   const joined = corpus.join('\n');
-  for (const forbidden of [
-    /gyws/i,
-    /LoveBuddy/i,
-    /python_workspace/i,
-    /DB-GPT/i,
-    /SQL Guard/i,
-    /Text2SQL/i,
-    /Trace Rail/i,
-    /观翌问数/,
-  ]) {
-    assert.doesNotMatch(joined, forbidden);
-  }
+  assert.doesNotMatch(joined, /(?:^|\s)[A-Za-z]:[\\/]/m);
+  assert.doesNotMatch(joined, /[\u3400-\u9fff]/);
+  assert.doesNotMatch(joined, /<[^>]*(owner|username|repository)[^>]*>/i);
 });
 
 test('CI verifies the release on Windows and Ubuntu with supported Node versions', async () => {

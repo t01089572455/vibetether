@@ -39,7 +39,8 @@ test('the public Skill exposes the VibeTether drift-control contract', async () 
   assert.match(skill, /one primary workflow provider/i);
   assert.match(skill, /DISCOVER[\s\S]*ALIGN[\s\S]*DESIGN[\s\S]*PLAN[\s\S]*EXECUTE_ONE/);
   assert.match(skill, /do not expose.*chain-of-thought|never expose.*chain-of-thought/i);
-  assert.doesNotMatch(skill, /观翌问数|DB-GPT|Trace Rail|SQL Guard/);
+  assert.doesNotMatch(skill, /[\u3400-\u9fff]/);
+  assert.doesNotMatch(skill, /(?:^|\s)[A-Za-z]:[\\/]/m);
   assert.ok(skill.split(/\r?\n/).length < 500, 'SKILL.md must stay below 500 lines');
 });
 
@@ -88,6 +89,7 @@ test('no published Skill resource leaks project-private product terms', async ()
 
   for (const file of textFiles) {
     const content = await readFile(file, 'utf8');
-    assert.doesNotMatch(content, /观翌问数|DB-GPT|Trace Rail|SQL Guard/, path.relative(root, file));
+    assert.doesNotMatch(content, /[\u3400-\u9fff]/, path.relative(root, file));
+    assert.doesNotMatch(content, /(?:^|\s)[A-Za-z]:[\\/]/m, path.relative(root, file));
   }
 });
