@@ -1,6 +1,6 @@
 # Complete Provider Catalog and Selective Routing Design
 
-**Status:** Approved direction; awaiting written-spec review before implementation planning.
+**Status:** Approved; implementation planning authorized.
 
 **Decision date:** 2026-07-13
 
@@ -27,6 +27,7 @@ The design succeeds when:
 7. Framework- and production-specific Skills activate only when repository evidence or an explicit profile requires them.
 8. Initialization, upgrade, doctor, dry-run, and uninstall remain transactional, idempotent, fingerprinted, and license-aware.
 9. No Skill is downloaded during an active coding task. Missing optional providers use a visible fallback until the user runs an explicit initialization or update command.
+10. The public README gives a novice a complete, testable journey from installation through routing, verification, upgrade, troubleshooting, and uninstall without requiring prior knowledge of agent Skills.
 
 ## 3. Non-Goals
 
@@ -255,7 +256,28 @@ Representative routes include:
 
 Humans see plain-language situations. Agents use the equivalent capability IDs and observable signals. README text and registry data must be generated or contract-tested together so they cannot silently diverge.
 
-## 10. Failure Handling
+## 10. Public README and Usage Experience
+
+The README is a versioned product surface, not release-day marketing cleanup. It must be updated in the same implementation slices as the CLI, registry, generated board, and lifecycle behavior it describes.
+
+The first screen should lead with the concrete outcome: VibeTether helps capable coding agents stay aligned with durable project truth during long, multi-phase work, and recommends the right specialist without requiring the user to memorize Skill names. The language may be vivid and persuasive, but every behavioral claim must be supported by a command, contract test, evaluation, or clearly labeled limitation. It must not promise perfect host invocation, zero drift, or effectiveness not yet demonstrated by real trials.
+
+The README must include:
+
+1. A copy-paste quick start covering Skill-only installation, project initialization, dry-run, verification, capability inspection, update/re-run, and safe uninstall.
+2. A plain-language explanation of `core`, `standard`, and `extended`, plus automatic Web/Production bundle detection and the `--bundle` and `--no-auto-bundles` controls.
+3. A "When should I use what?" table generated from, or contract-tested against, the same scenario registry used by the agent-facing routing reference.
+4. Walkthroughs for a vague new project, an unfamiliar codebase, a long or compacted task, UI direction and implementation, bug diagnosis, and release or migration work.
+5. A clear distinction between cataloged, exposed, automatically eligible, alternative, and explicit-only Skills, including why competing routers are not automatically exposed.
+6. Codex and Claude discovery-path instructions, the managed files VibeTether creates, and how the project instructions keep the router visible at re-anchor boundaries.
+7. Explainable examples showing detected repository signals, recommended provider, fallback, required outputs, and exit evidence.
+8. Upgrade, idempotence, doctor, conflict recovery, offline/core behavior, network boundaries, uninstall, and common troubleshooting guidance.
+9. Provider provenance, exact pins and licenses, exclusions, preview evaluation scope, known limitations, and an honest comparison with using uncoordinated Skills directly.
+10. A contributor and personal-test section with deterministic commands and a short manual acceptance tour that a user can run in a temporary project.
+
+Exact public commands, option names, profile/bundle semantics, required headings, and representative scenario claims are contract-tested. A CLI or registry change that makes the README stale must fail the public-release test rather than ship silently.
+
+## 11. Failure Handling
 
 Initialization stops before project writes when:
 
@@ -277,7 +299,7 @@ During an active task:
 
 Transactional rollback restores the prior catalog, exposed Skills, lock, board, managed instruction blocks, and license state if any later initialization step fails.
 
-## 11. Compatibility and Migration
+## 12. Compatibility and Migration
 
 Existing `0.2.0` installations migrate through the existing exact-fingerprint path:
 
@@ -290,7 +312,7 @@ Existing `0.2.0` installations migrate through the existing exact-fingerprint pa
 
 The legacy `extended` profile remains valid. New bundle flags add capability without requiring users to rewrite existing commands.
 
-## 12. Testing Strategy
+## 13. Testing Strategy
 
 Implementation follows test-first development. Required RED scenarios include:
 
@@ -310,10 +332,12 @@ Implementation follows test-first development. Required RED scenarios include:
 14. Uninstall removes only unchanged VibeTether-owned catalog and exposed copies.
 15. A failed late installation restores the previous catalog, lock, board, and active Skills.
 16. README scenario examples match registry routes and provider availability.
+17. README quick-start and lifecycle commands parse successfully, documented options exist in CLI help, and the manual acceptance tour remains executable in a temporary project.
+18. README claims about automatic routing, provider availability, offline behavior, and host limitations match generated artifacts and evaluation evidence.
 
 Static routing tests are necessary but insufficient. The preview evaluation set must add forward scenarios for codebase orientation, huge-effort decomposition, prototype choice, compaction/handoff, React UI routing, production migration, and duplicate-provider pressure. Claims remain preview-level until real long-running Codex and Claude trials show that the router reduces drift without unacceptable overhead.
 
-## 13. Delivery Slices
+## 14. Delivery Slices
 
 Implementation must remain separable and reviewable:
 
@@ -330,7 +354,7 @@ Implementation must remain separable and reviewable:
 
 Each slice must preserve a green baseline before the next begins. Provider additions that require new network, permissions, credentials, services, or external writes receive a separate user gate.
 
-## 14. Release Boundary
+## 15. Release Boundary
 
 This design authorizes implementation planning after written-spec approval. It does not authorize publication, deployment, GitHub push, or a stable `1.0.0` effectiveness claim.
 
