@@ -121,6 +121,7 @@ test('capabilities command exposes a human dashboard and machine-readable built-
   assert.match(dashboard.stdout, /automatic work-readiness gate/i);
   assert.match(dashboard.stdout, /when to use/i);
   assert.match(dashboard.stdout, /installed skill inventory/i);
+  assert.match(dashboard.stdout, /catalog-only alternatives/i);
 
   const board = JSON.parse(await readFile(path.join(target, '.vibetether', 'capabilities.yaml'), 'utf8'));
   assert.equal(board.mode, 'advisory-router');

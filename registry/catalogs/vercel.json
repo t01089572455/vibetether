@@ -34,7 +34,9 @@
       "when_any": [
         "react",
         "nextjs"
-      ]
+      ],
+      "route_priority": 110,
+      "use_when": ["Use when React component APIs or composition boundaries are the main design pressure."]
     },
     {
       "id": "vercel-deploy-to-vercel",
@@ -54,7 +56,9 @@
       "exit_evidence": [],
       "when_any": [
         "vercel"
-      ]
+      ],
+      "route_priority": 130,
+      "use_when": ["Use when an approved release is ready for a Vercel deployment workflow."]
     },
     {
       "id": "vercel-vercel-react-best-practices",
@@ -75,7 +79,9 @@
       "when_any": [
         "react",
         "nextjs"
-      ]
+      ],
+      "route_priority": 130,
+      "use_when": ["Use as the primary React or Next.js implementation specialist."]
     },
     {
       "id": "vercel-vercel-react-native-skills",
@@ -95,7 +101,9 @@
       "exit_evidence": [],
       "when_any": [
         "react-native"
-      ]
+      ],
+      "route_priority": 130,
+      "use_when": ["Use for React Native or Expo implementation work."]
     },
     {
       "id": "vercel-vercel-react-view-transitions",
@@ -116,7 +124,9 @@
       "when_any": [
         "react",
         "nextjs"
-      ]
+      ],
+      "route_priority": 100,
+      "use_when": ["Use when an approved React interaction specifically needs view transitions."]
     },
     {
       "id": "vercel-vercel-cli-with-tokens",
@@ -136,7 +146,9 @@
       "exit_evidence": [],
       "when_any": [
         "vercel"
-      ]
+      ],
+      "route_priority": 90,
+      "use_when": ["Use when Vercel CLI authentication or token handling is the bounded task."]
     },
     {
       "id": "vercel-vercel-optimize",
@@ -156,7 +168,9 @@
       "exit_evidence": [],
       "when_any": [
         "vercel"
-      ]
+      ],
+      "route_priority": 120,
+      "use_when": ["Use when a Vercel workload has a measured optimization target."]
     },
     {
       "id": "vercel-web-design-guidelines",
@@ -177,7 +191,9 @@
       "when_any": [
         "react",
         "nextjs"
-      ]
+      ],
+      "route_priority": 130,
+      "use_when": ["Use to verify an implemented Web interface against current design guidelines."]
     },
     {
       "id": "vercel-writing-guidelines",

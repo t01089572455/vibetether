@@ -131,7 +131,35 @@ export function createCapabilityBoard(registry, profile, lock, harnesses) {
     ),
   );
   const catalog = new Map((registry.capability_catalog ?? []).map((capability) => [capability.id, capability]));
-  const routes = routing.routes.map((route) => {
+  const routedProviders = new Set(routing.routes.map((route) => `${route.provider}:${route.capability}`));
+  const specialistRoutes = activeExposures
+    .filter((skill) => skill.active !== false)
+    .flatMap((skill) => {
+      const definition = definitions.get(skill.id) ?? {};
+      if (definition.invocation_policy !== 'advisory-auto-eligible') return [];
+      return (skill.capabilities ?? []).flatMap((capabilityId) => {
+        if (routedProviders.has(`${skill.install_name}:${capabilityId}`)) return [];
+        const contract = catalog.get(capabilityId);
+        const phases = definition.route_phases ?? contract?.phases?.slice(0, 1) ?? [];
+        return phases.map((phase) => ({
+          id: `catalog-${skill.id}-${String(phase).toLowerCase()}`,
+          priority: definition.route_priority ?? 50,
+          phase,
+          capability: capabilityId,
+          provider: skill.install_name,
+          workflow_role: definition.workflow_role ?? 'domain',
+          when_any: definition.when_any ?? [],
+          when_all: definition.when_all ?? [],
+          reason: definition.use_when?.[0] ?? `Use ${skill.install_name} for ${capabilityId}.`,
+          fallback: definition.fallback ?? contract?.fallback,
+          selection: 'recommend',
+          expected_outputs: definition.required_outputs ?? contract?.required_outputs ?? [],
+          exit_evidence: definition.exit_evidence ?? contract?.exit_evidence ?? [],
+        }));
+      });
+    });
+  const routeDefinitions = [...routing.routes, ...specialistRoutes];
+  const routes = routeDefinitions.map((route) => {
     const installed = skills.get(route.provider);
     const availableIn = harnesses.filter((harness) => installed?.installations?.[harness]);
     const contract = catalog.get(route.capability);
@@ -184,6 +212,9 @@ export function createCapabilityBoard(registry, profile, lock, harnesses) {
       provider_options: [...new Set(routes
         .filter((route) => route.capability === capability.id)
         .map((route) => route.recommendation.skill))],
+      catalog_alternatives: [...new Set([...definitions.values()]
+        .filter((provider) => provider.exposure === 'catalog-only' && provider.capabilities?.includes(capability.id))
+        .map((provider) => provider.install_name))],
       fallback: capability.fallback,
     })),
     providers: activeExposures.map((skill) => {

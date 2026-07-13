@@ -3,9 +3,12 @@ import test from 'node:test';
 import {
   buildRoutingDocument,
   loadProviderRegistry,
+  resolveExposurePlan,
   resolveProfileProviders,
   resolveRoute,
 } from '../src/provider-registry.mjs';
+import { createCapabilityBoard } from '../src/provider-plan.mjs';
+import { resolveBoardRoute } from '../src/capabilities.mjs';
 
 test('provider registry pins complete auditable upstream skill sources', async () => {
   const registry = await loadProviderRegistry();
@@ -88,6 +91,103 @@ test('catalog selection and exposure planning keep supply separate from automati
   assert.equal(web.some((provider) => provider.install_name === 'deploy-to-vercel'), false);
   assert.equal(production.some((provider) => provider.install_name === 'security-and-hardening'), true);
   assert.equal(production.some((provider) => provider.install_name === 'using-agent-skills'), false);
+});
+
+test('the capability board routes signal-matched Web specialists without exposing a competing router', async () => {
+  const registry = await loadProviderRegistry();
+  const providers = resolveExposurePlan(registry, 'standard', {
+    bundles: ['web'],
+    explicit_bundles: [],
+    signals: ['react'],
+  });
+  const exposures = providers.map((provider) => ({
+    ...provider,
+    active: true,
+    installations: { codex: { path: `.agents/skills/${provider.install_name}`, ownership: 'vibetether' } },
+  }));
+  const board = createCapabilityBoard(registry, 'standard', { exposures, skills: exposures, bundles: ['web'] }, ['codex']);
+  const route = resolveBoardRoute(board, {
+    phase: 'EXECUTE_ONE',
+    capability: 'frontend-engineering',
+    signals: ['react'],
+    harness: 'codex',
+  });
+
+  assert.equal(route.selection.skill, 'vercel-react-best-practices');
+  assert.equal(route.should_invoke_provider, true);
+  assert.equal(route.alternatives.some((candidate) => candidate.skill === 'vercel-composition-patterns'), true);
+  assert.equal(board.providers.some((provider) => provider.skill === 'using-agent-skills'), false);
+});
+
+test('standard exposes complementary automatic specialists and advertises catalog-only scenario alternatives', async () => {
+  const registry = await loadProviderRegistry();
+  const providers = resolveExposurePlan(registry, 'standard', { bundles: [], signals: [] });
+  const names = providers.map((provider) => provider.install_name);
+  for (const name of ['codebase-design', 'prototype', 'research']) assert.equal(names.includes(name), true);
+
+  const exposures = providers.map((provider) => ({
+    ...provider,
+    active: true,
+    installations: { codex: { path: `.agents/skills/${provider.install_name}`, ownership: 'vibetether' } },
+  }));
+  const board = createCapabilityBoard(registry, 'standard', { exposures, skills: exposures, bundles: [] }, ['codex']);
+  const orientation = resolveBoardRoute(board, {
+    phase: 'ALIGN',
+    capability: 'codebase-orientation',
+    signals: ['codebase-unfamiliar'],
+    harness: 'codex',
+  });
+  assert.equal(orientation.selection.skill, 'codebase-design');
+
+  const byCapability = new Map(board.capabilities.map((capability) => [capability.id, capability]));
+  assert.equal(byCapability.get('huge-effort-wayfinding').catalog_alternatives.includes('wayfinder'), true);
+  assert.equal(byCapability.get('handoff-recovery').catalog_alternatives.includes('handoff'), true);
+  assert.equal(byCapability.get('triage-qa').catalog_alternatives.includes('triage'), true);
+});
+
+test('Production specialists route by scenario while migration, security, and release retain confirmation gates', async () => {
+  const registry = await loadProviderRegistry();
+  const providers = resolveExposurePlan(registry, 'standard', {
+    bundles: ['production'],
+    explicit_bundles: ['production'],
+    signals: [],
+  });
+  const exposures = providers.map((provider) => ({
+    ...provider,
+    active: true,
+    installations: { claude: { path: `.claude/skills/${provider.install_name}`, ownership: 'vibetether' } },
+  }));
+  const board = createCapabilityBoard(
+    registry,
+    'standard',
+    { exposures, skills: exposures, bundles: ['production'] },
+    ['claude'],
+  );
+  const migration = resolveBoardRoute(board, {
+    phase: 'PLAN',
+    capability: 'migration',
+    signals: ['migration', 'destructive-data-change'],
+    harness: 'claude',
+  });
+  const security = resolveBoardRoute(board, {
+    phase: 'REVIEW',
+    capability: 'security-review',
+    signals: ['security', 'permission-security-or-privacy'],
+    harness: 'claude',
+  });
+  const release = resolveBoardRoute(board, {
+    phase: 'SHIP',
+    capability: 'release-verification',
+    signals: ['release', 'merge-deploy-release-or-publish'],
+    harness: 'claude',
+  });
+
+  assert.equal(migration.selection.skill, 'deprecation-and-migration');
+  assert.equal(security.selection.skill, 'security-and-hardening');
+  assert.equal(release.selection.skill, 'shipping-and-launch');
+  assert.equal(migration.confirmation_required, true);
+  assert.equal(security.confirmation_required, true);
+  assert.equal(release.confirmation_required, true);
 });
 
 test('standard installs the full grill entry and specialist workflow bundle without a competing router', async () => {
@@ -211,7 +311,17 @@ test('equal-priority automatic primary routes fail closed', async () => {
 test('upstream explicit aliases declare the automatic routes that cover their behavior', async () => {
   const registry = await loadProviderRegistry();
   const providers = resolveProfileProviders(registry, 'standard');
-  const routes = buildRoutingDocument(registry, 'standard').routes;
+  const exposures = providers.map((provider) => ({
+    ...provider,
+    active: true,
+    installations: { codex: { path: `.agents/skills/${provider.install_name}`, ownership: 'vibetether' } },
+  }));
+  const routes = createCapabilityBoard(
+    registry,
+    'standard',
+    { exposures, skills: exposures, bundles: [] },
+    ['codex'],
+  ).routes.map((route) => ({ ...route, provider: route.recommendation.skill }));
   for (const provider of providers) {
     const routed = routes.some((route) => route.provider === provider.install_name);
     assert.equal(

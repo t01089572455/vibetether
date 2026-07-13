@@ -126,14 +126,17 @@
       "catalog_status": "audited",
       "workflow_role": "alternative",
       "invocation_policy": "advisory-auto-eligible",
-      "exposure": "catalog-only",
+      "exposure": "standard",
       "capabilities": [
         "codebase-orientation"
       ],
       "conflicts": [],
       "fallback": "vibetether-built-in-codebase-orientation",
-      "required_outputs": [],
-      "exit_evidence": []
+      "required_outputs": ["codebase_map", "relevant_entry_points"],
+      "exit_evidence": ["The relevant code paths and architectural boundaries are identified."],
+      "when_any": ["codebase-unfamiliar", "entry-points-unclear"],
+      "route_priority": 120,
+      "use_when": ["Use when the repository is unfamiliar or the relevant entry points are unclear."]
     },
     {
       "id": "mattpocock-diagnosing-bugs",
@@ -232,14 +235,17 @@
       "catalog_status": "audited",
       "workflow_role": "alternative",
       "invocation_policy": "advisory-auto-eligible",
-      "exposure": "catalog-only",
+      "exposure": "standard",
       "capabilities": [
         "prototype"
       ],
       "conflicts": [],
       "fallback": "vibetether-built-in-prototype",
-      "required_outputs": [],
-      "exit_evidence": []
+      "required_outputs": ["bounded_prototype", "learning_verdict"],
+      "exit_evidence": ["The prototype answers the declared uncertainty without becoming production scope."],
+      "when_any": ["runnable-experiment-needed", "design-uncertainty"],
+      "route_priority": 120,
+      "use_when": ["Use when a throwaway runnable experiment is the cheapest way to resolve uncertainty."]
     },
     {
       "id": "mattpocock-research",
@@ -249,14 +255,17 @@
       "catalog_status": "audited",
       "workflow_role": "alternative",
       "invocation_policy": "advisory-auto-eligible",
-      "exposure": "catalog-only",
+      "exposure": "standard",
       "capabilities": [
         "research"
       ],
       "conflicts": [],
       "fallback": "vibetether-built-in-research",
-      "required_outputs": [],
-      "exit_evidence": []
+      "required_outputs": ["primary_sources", "evidence_synthesis"],
+      "exit_evidence": ["Claims are traceable to current primary sources and inferences are labeled."],
+      "when_any": ["primary-source-research-needed", "external-facts-uncertain"],
+      "route_priority": 120,
+      "use_when": ["Use when current external facts or primary-source evidence are required before a decision."]
     },
     {
       "id": "mattpocock-resolving-merge-conflicts",

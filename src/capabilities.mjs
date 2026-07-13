@@ -174,6 +174,9 @@ function humanDashboard(root, board) {
     lines.push(`  When to use: ${(capability.invoke_when ?? []).join(', ') || 'Use the capability purpose and project signals.'}`);
     lines.push(`  Outputs: ${(capability.expected_outputs ?? []).join(', ') || 'See the project contract.'}`);
     lines.push(`  Exit evidence: ${(capability.exit_evidence ?? []).join(' ') || 'Record fresh evidence before moving phases.'}`);
+    if (capability.catalog_alternatives?.length) {
+      lines.push(`  Catalog-only alternatives: ${capability.catalog_alternatives.join(', ')}`);
+    }
   }
   lines.push('');
   lines.push('Installed Skill inventory:');

@@ -49,7 +49,9 @@
       "exit_evidence": [],
       "when_any": [
         "browser"
-      ]
+      ],
+      "route_priority": 120,
+      "use_when": ["Use when a real browser flow needs DevTools-backed verification."]
     },
     {
       "id": "addy-ci-cd-and-automation",
@@ -69,7 +71,9 @@
       "exit_evidence": [],
       "when_any": [
         "ci"
-      ]
+      ],
+      "route_priority": 120,
+      "use_when": ["Use for CI/CD and automation changes after pipeline scope is approved."]
     },
     {
       "id": "addy-code-review-and-quality",
@@ -157,7 +161,9 @@
       "exit_evidence": [],
       "when_any": [
         "migration"
-      ]
+      ],
+      "route_priority": 120,
+      "use_when": ["Use to plan a deprecation or migration with compatibility and rollback evidence."]
     },
     {
       "id": "addy-documentation-and-adrs",
@@ -296,7 +302,9 @@
       "exit_evidence": [],
       "when_any": [
         "observability"
-      ]
+      ],
+      "route_priority": 120,
+      "use_when": ["Use when production behavior needs diagnosable, privacy-aware instrumentation."]
     },
     {
       "id": "addy-performance-optimization",
@@ -316,7 +324,9 @@
       "exit_evidence": [],
       "when_any": [
         "performance"
-      ]
+      ],
+      "route_priority": 120,
+      "use_when": ["Use when a measured performance problem has an explicit budget."]
     },
     {
       "id": "addy-planning-and-task-breakdown",
@@ -353,7 +363,9 @@
       "exit_evidence": [],
       "when_any": [
         "security"
-      ]
+      ],
+      "route_priority": 120,
+      "use_when": ["Use for a focused security and hardening review of approved changes."]
     },
     {
       "id": "addy-shipping-and-launch",
@@ -373,7 +385,9 @@
       "exit_evidence": [],
       "when_any": [
         "release"
-      ]
+      ],
+      "route_priority": 120,
+      "use_when": ["Use when a verified release candidate is ready for launch preparation."]
     },
     {
       "id": "addy-source-driven-development",

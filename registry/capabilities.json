@@ -244,6 +244,146 @@
       "fallback": "Use the built-in Skill authoring and validation checklist."
     },
     {
+      "id": "codebase-orientation",
+      "phases": ["ALIGN"],
+      "purpose": "Map an unfamiliar repository before choosing an implementation path.",
+      "invoke_when": ["codebase-unfamiliar", "entry-points-unclear"],
+      "required_inputs": ["repository", "current_request"],
+      "required_outputs": ["codebase_map", "relevant_entry_points"],
+      "exit_evidence": ["Relevant entry points, boundaries, and constraints are identified."],
+      "fallback": "Use the built-in read-only repository orientation loop."
+    },
+    {
+      "id": "research",
+      "phases": ["DISCOVER"],
+      "purpose": "Collect current primary-source evidence before a decision depends on external facts.",
+      "invoke_when": ["primary-source-research-needed", "external-facts-uncertain"],
+      "required_inputs": ["research_question", "source_constraints"],
+      "required_outputs": ["primary_sources", "evidence_synthesis"],
+      "exit_evidence": ["Material claims are traceable and inferences are labeled."],
+      "fallback": "Use the built-in primary-source research checklist."
+    },
+    {
+      "id": "prototype",
+      "phases": ["DESIGN"],
+      "purpose": "Use a bounded throwaway experiment to answer a costly design uncertainty.",
+      "invoke_when": ["runnable-experiment-needed", "design-uncertainty"],
+      "required_inputs": ["uncertainty", "discard_boundary"],
+      "required_outputs": ["bounded_prototype", "learning_verdict"],
+      "exit_evidence": ["The experiment answers the declared question without silently becoming production scope."],
+      "fallback": "Use the built-in bounded prototype contract."
+    },
+    {
+      "id": "triage-qa",
+      "phases": ["DIAGNOSE"],
+      "purpose": "Turn loosely reported issues into reproducible, prioritized work without losing user context.",
+      "invoke_when": ["multiple-issues", "qa-session", "priority-unclear"],
+      "required_inputs": ["reported_issues", "product_context"],
+      "required_outputs": ["reproductions", "prioritized_issue_set"],
+      "exit_evidence": ["Each retained issue has evidence, scope, and a disposition."],
+      "fallback": "Use the built-in evidence-first triage loop."
+    },
+    {
+      "id": "huge-effort-wayfinding",
+      "phases": ["PLAN"],
+      "purpose": "Keep a very large effort navigable through milestones, dependency boundaries, and resumable checkpoints.",
+      "invoke_when": ["huge-effort", "many-workstreams", "long-horizon"],
+      "required_inputs": ["approved_direction", "known_dependencies"],
+      "required_outputs": ["milestone_map", "current_frontier", "recovery_points"],
+      "exit_evidence": ["The current frontier and next bounded slice remain unambiguous after interruption."],
+      "fallback": "Use the built-in milestone and checkpoint map."
+    },
+    {
+      "id": "handoff-recovery",
+      "phases": ["ALIGN"],
+      "purpose": "Restore intent, truth, decisions, and the next verified action after handoff or context loss.",
+      "invoke_when": ["handoff", "context-compacted", "session-resumed"],
+      "required_inputs": ["project_truth", "latest_checkpoint", "repository_state"],
+      "required_outputs": ["reanchored_state", "next_verified_action"],
+      "exit_evidence": ["The resumed agent can state goal, constraints, current slice, and next evidence without guessing."],
+      "fallback": "Use the built-in full re-anchor protocol."
+    },
+    {
+      "id": "architecture-improvement",
+      "phases": ["DESIGN"],
+      "purpose": "Improve structure only where domain evidence and delivery pressure justify the change.",
+      "invoke_when": ["architecture-friction", "domain-boundary-eroding"],
+      "required_inputs": ["codebase_map", "domain_language", "change_pressure"],
+      "required_outputs": ["architecture_option", "migration_boundary"],
+      "exit_evidence": ["The structural change has a concrete consumer, boundary, and migration path."],
+      "fallback": "Use the built-in evidence-led architecture review."
+    },
+    {
+      "id": "performance",
+      "phases": ["VERIFY"],
+      "purpose": "Measure and improve performance against an explicit budget and representative workload.",
+      "invoke_when": ["performance-regression", "performance-budget", "vercel"],
+      "required_inputs": ["baseline", "representative_workload", "budget"],
+      "required_outputs": ["measurements", "bottleneck_evidence", "post_change_comparison"],
+      "exit_evidence": ["Fresh measurements support the performance verdict."],
+      "fallback": "Use the built-in measure-before-optimizing loop."
+    },
+    {
+      "id": "ci-cd",
+      "phases": ["EXECUTE_ONE"],
+      "purpose": "Change automation pipelines with reversible steps, secret safety, and reproducible evidence.",
+      "invoke_when": ["ci", "pipeline-change"],
+      "required_inputs": ["pipeline_contract", "secret_boundaries"],
+      "required_outputs": ["pipeline_change", "validation_evidence"],
+      "exit_evidence": ["The pipeline change is reproducible and does not expose credentials."],
+      "fallback": "Use the built-in CI/CD safety checklist."
+    },
+    {
+      "id": "migration",
+      "phases": ["PLAN"],
+      "purpose": "Design data or API migrations with compatibility, rollback, and explicit destructive gates.",
+      "invoke_when": ["migration", "schema-change", "deprecation"],
+      "required_inputs": ["current_contract", "target_contract", "data_risk"],
+      "required_outputs": ["migration_plan", "rollback_plan", "compatibility_window"],
+      "exit_evidence": ["Migration and rollback paths are tested or explicitly gated before destructive work."],
+      "fallback": "Use the built-in migration and rollback gate."
+    },
+    {
+      "id": "observability",
+      "phases": ["EXECUTE_ONE"],
+      "purpose": "Add signals that make product behavior and failures diagnosable without leaking sensitive data.",
+      "invoke_when": ["observability", "production-diagnosis"],
+      "required_inputs": ["failure_modes", "privacy_constraints"],
+      "required_outputs": ["instrumentation", "diagnostic_query"],
+      "exit_evidence": ["A representative failure can be detected and diagnosed from the new signals."],
+      "fallback": "Use the built-in observable-outcomes checklist."
+    },
+    {
+      "id": "production-engineering",
+      "phases": ["EXECUTE_ONE"],
+      "purpose": "Apply focused production engineering guidance without replacing the primary delivery workflow.",
+      "invoke_when": ["production-hardening"],
+      "required_inputs": ["current_slice", "production_constraints"],
+      "required_outputs": ["bounded_hardening_change"],
+      "exit_evidence": ["The hardening change has current verification and remains within scope."],
+      "fallback": "Use the built-in production hardening checklist."
+    },
+    {
+      "id": "plan-execution-with-subagents",
+      "phases": ["EXECUTE_ONE"],
+      "purpose": "Execute independent plan slices through authorized subagents with review between integrations.",
+      "invoke_when": ["subagents-available", "delegation-authorized"],
+      "required_inputs": ["approved_plan", "independent_slice_boundaries"],
+      "required_outputs": ["reviewed_subagent_results"],
+      "exit_evidence": ["Each delegated result is reviewed against the approved plan before integration."],
+      "fallback": "Use the built-in sequential execution loop."
+    },
+    {
+      "id": "catalog-reference",
+      "phases": ["DISCOVER"],
+      "purpose": "Expose a searchable inventory of audited upstream Skills without making them automatic workflow owners.",
+      "invoke_when": ["specialist-not-covered", "user-requests-catalog-skill"],
+      "required_inputs": ["scenario", "catalog_inventory"],
+      "required_outputs": ["candidate_comparison", "explicit_selection"],
+      "exit_evidence": ["A catalog candidate is selected explicitly or the built-in fallback is retained."],
+      "fallback": "Use the built-in catalog search and keep VibeTether as the workflow owner."
+    },
+    {
       "id": "completion-verification",
       "phases": ["VERIFY"],
       "purpose": "Require fresh evidence before any completion or correctness claim.",
