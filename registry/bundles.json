@@ -16,8 +16,9 @@
           "path": "skills/productivity/grill-me",
           "fingerprint": "95d42a09fbde39e0801c6dc04d18605e3f28af72ea22e43c7eabf9e1fd9b6d65",
           "capabilities": ["explicit-requirements-interview"],
-          "invocation_policy": "explicit-only",
-          "use_when": ["The user explicitly invokes grill-me to start a relentless clarification interview."]
+          "invocation_policy": "upstream-explicit-alias",
+          "auto_covered_by": ["grilling"],
+          "use_when": ["The user explicitly invokes the grill-me command alias; VibeTether automatically covers its readiness behavior through grilling."]
         },
         {
           "id": "mattpocock-grilling",
@@ -32,8 +33,9 @@
           "path": "skills/engineering/grill-with-docs",
           "fingerprint": "e72b54b4032184ede733d420f1fee934f1ab5b14fc3b46e2cef7e024a3153dbc",
           "capabilities": ["explicit-document-alignment"],
-          "invocation_policy": "explicit-only",
-          "use_when": ["The user explicitly asks for a grilling session that also maintains ADR and glossary documents."]
+          "invocation_policy": "upstream-explicit-alias",
+          "auto_covered_by": ["grilling", "domain-modeling"],
+          "use_when": ["The user explicitly invokes the grill-with-docs command alias; VibeTether automatically composes grilling with domain-modeling when readiness gaps require durable decisions."]
         },
         {
           "id": "mattpocock-domain-modeling",

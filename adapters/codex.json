@@ -11,5 +11,5 @@
   },
   "enforcement": "behavioral",
   "overwrite_user_content": false,
-  "notes": "Automatic invocation depends on the host. Project instructions point Codex to the advisory capability board and offline resolver at task and re-anchor boundaries."
+  "notes": "Automatic invocation depends on the host. Project instructions tell Codex to run the automatic readiness assessment and consult the advisory capability board at task and re-anchor boundaries."
 }

@@ -114,6 +114,7 @@ export function createCapabilityBoard(registry, profile, lock, harnesses) {
     profile,
     mode: 'advisory-router',
     selection_policy: routing.selection_policy,
+    readiness_gate: registry.readiness_gate,
     high_risk_gates: [
       'direction-ambiguity',
       'architecture-or-public-contract',
@@ -146,6 +147,7 @@ export function createCapabilityBoard(registry, profile, lock, harnesses) {
         active: skill.active,
         selection_status: skill.active ? 'eligible' : 'inactive-not-recommended',
         invocation_policy: definition.invocation_policy ?? 'advisory-auto-eligible',
+        auto_covered_by: definition.auto_covered_by ?? [],
         capabilities: skill.capabilities ?? [],
         available_in: availableIn,
         installations: Object.fromEntries(

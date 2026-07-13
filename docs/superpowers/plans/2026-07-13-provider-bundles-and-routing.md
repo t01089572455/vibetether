@@ -13,7 +13,8 @@
 - Pin upstream repositories by exact commit, verify complete Skill-directory fingerprints and licenses before any project write, and install license copies with ownership metadata.
 - Preserve pre-existing identical Skills without claiming uninstall ownership.
 - Exclude `using-superpowers` so VibeTether does not install a competing top-level router.
-- Route vague requests to the model-invokable `grilling` Skill while keeping `grill-me` visible as an explicit-only alias.
+- Route vague requests to model-invokable `grilling` while keeping the literal upstream `grill-me` command alias visible and marking its behavior as automatically covered.
+- Run an automatic, proportional work-readiness assessment before implementation. Upstream command aliases may stay explicit, but their underlying clarification behavior must be covered automatically.
 
 ## Implemented slices
 
@@ -26,6 +27,7 @@
 7. Added provider-aware doctor warnings/errors, strict lock-path validation, profile downgrade ownership, and managed-only transactional uninstall.
 8. Updated the public Skill, adapters, README, security model, contribution rules, third-party notices, and static evaluation scenarios.
 9. Added an exact-fingerprint, transactional upgrade path for the canonical 0.1.0 VibeTether Skill while continuing to reject modified copies.
+10. Added an automatic work-readiness gate and explicit automatic-equivalence metadata for upstream command aliases (`grill-me` -> `grilling`; `grill-with-docs` -> `grilling` + `domain-modeling`).
 
 ## Verification record
 

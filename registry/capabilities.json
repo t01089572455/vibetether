@@ -7,6 +7,41 @@
     "remote_candidates_require_install_time_review": true,
     "record_provider_version_and_exit_evidence": true
   },
+  "readiness_gate": {
+    "mode": "automatic",
+    "run_before": [
+      "task-entry",
+      "phase-transition",
+      "consequential-action",
+      "resume-or-compaction-recovery"
+    ],
+    "dimensions": [
+      "user-and-outcome",
+      "scope-and-non-goals",
+      "success-evidence",
+      "applicable-project-truth",
+      "unresolved-conflicts",
+      "directional-decisions",
+      "current-slice",
+      "verification-path",
+      "authorization-and-risk"
+    ],
+    "fact_gap": "investigate-autonomously-before-asking",
+    "direction_gap": "route-to-clarification-and-ask-one-recommended-question",
+    "structural_gap": "investigate-recommend-and-confirm",
+    "local_technical_gap": "decide-autonomously-after-bounded-investigation",
+    "implementation_requires": "READY_FOR_IMPLEMENT_ONE",
+    "verdicts": [
+      "READY_FOR_IMPLEMENT_ONE",
+      "INVESTIGATE_FACTS",
+      "ASK_USER_DECISION",
+      "BLOCKED_BY_CONFLICT_OR_AUTHORIZATION"
+    ],
+    "allowed_before_ready": [
+      "read-only-discovery",
+      "reversible-direction-neutral-preparation"
+    ]
+  },
   "capabilities": [
     {
       "id": "requirements-clarification",

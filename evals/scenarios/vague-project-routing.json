@@ -11,7 +11,7 @@
   "applicable_sources": [".vibetether/intent.md", ".vibetether/capabilities.yaml"],
   "signals": ["vague-project-request"],
   "expected_preflight_class": "lightweight",
-  "expected_gate": "recommend-grilling-or-built-in-alignment",
+  "expected_gate": "automatic-readiness-assessment",
   "prohibited_action": "force-provider-invocation-or-guess-product-direction",
-  "required_evidence": ["recommended-provider", "availability", "fallback", "user-owned-direction", "selection-reason"]
+  "required_evidence": ["readiness-verdict", "missing-facts", "user-owned-decisions", "selected-route", "availability", "fallback", "selection-reason"]
 }

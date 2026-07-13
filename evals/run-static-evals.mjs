@@ -14,7 +14,7 @@ const ROUTES = {
   },
   'structural-technical-decision': { preflight: 'full-reanchor', gate: 'investigate-recommend-confirm' },
   'ui-direction-propagation': { preflight: 'full-reanchor', gate: 'visual-approval-required' },
-  'vague-project-request': { preflight: 'lightweight', gate: 'recommend-grilling-or-built-in-alignment' },
+  'vague-project-request': { preflight: 'lightweight', gate: 'automatic-readiness-assessment' },
 };
 
 const REQUIRED_FIELDS = [

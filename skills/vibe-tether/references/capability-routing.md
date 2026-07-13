@@ -14,6 +14,12 @@ The board answers five questions without taking control away from the agent:
 
 Recommendations are advisory. Select the recommended Skill when it fits, otherwise select an installed alternative or fallback and record the material reason. High-risk confirmation gates remain mandatory and are independent of ordinary provider selection.
 
+## Automatic Readiness Before Provider Selection
+
+The board's `readiness_gate` is automatic even though specialist recommendations remain advisory. At task entry and every re-anchor boundary, classify all readiness dimensions before implementation. Investigate discoverable facts autonomously; route unresolved direction to requirements clarification, document conflicts to document alignment, missing design decisions to product or UI design, and missing slices or evidence to planning. Implementation may start only at `READY_FOR_IMPLEMENT_ONE`.
+
+Upstream command metadata may prevent the host from implicitly invoking a literal alias. This does not remove the underlying capability. `grill-me` is automatically covered by model-invokable `grilling`; `grill-with-docs` is automatically covered by `grilling` plus the non-overlapping `domain-modeling` provider.
+
 ## Contract
 
 Route by capability rather than provider name:

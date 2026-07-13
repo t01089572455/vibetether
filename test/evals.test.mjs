@@ -28,6 +28,11 @@ test('preview scenarios cover the approved drift-pressure classes with complete 
     assert.equal(typeof scenario.prohibited_action, 'string');
     assert.ok(scenario.required_evidence.length > 0);
   }
+  const vague = values.find((scenario) => scenario.id === 'vague-project-routing');
+  assert.equal(vague.expected_gate, 'automatic-readiness-assessment');
+  for (const evidence of ['readiness-verdict', 'missing-facts', 'user-owned-decisions', 'selected-route']) {
+    assert.equal(vague.required_evidence.includes(evidence), true, `vague-project-routing is missing ${evidence}`);
+  }
 });
 
 test('static runner validates every scenario and states the preview honesty boundary', () => {

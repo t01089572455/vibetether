@@ -11,7 +11,11 @@ export async function loadProviderRegistry() {
     JSON.parse(await readFile(registryPath, 'utf8')),
     JSON.parse(await readFile(capabilityPath, 'utf8')),
   ]);
-  return { ...registry, capability_catalog: capabilities.capabilities ?? [] };
+  return {
+    ...registry,
+    capability_catalog: capabilities.capabilities ?? [],
+    readiness_gate: capabilities.readiness_gate,
+  };
 }
 
 function profileSkillIds(registry, profileName, seen = new Set()) {
@@ -46,13 +50,36 @@ export function resolveProfileProviders(registry, profileName) {
 }
 
 export function buildRoutingDocument(registry, profileName) {
-  const installed = new Set(resolveProfileProviders(registry, profileName).map((provider) => provider.install_name));
+  if (
+    registry.readiness_gate?.mode !== 'automatic' ||
+    !Array.isArray(registry.readiness_gate.dimensions) ||
+    registry.readiness_gate.dimensions.length === 0 ||
+    !registry.readiness_gate.implementation_requires
+  ) {
+    throw new Error('The registry requires a complete automatic readiness gate');
+  }
+  const selectedProviders = resolveProfileProviders(registry, profileName);
+  const installed = new Set(selectedProviders.map((provider) => provider.install_name));
   const routes = (registry.routes ?? [])
     .filter((route) => route.profiles.includes(profileName))
     .map(({ profiles, priority = 0, ...route }) => ({ ...route, priority }));
   for (const route of routes) {
     if (!installed.has(route.provider)) {
       throw new Error(`Route ${route.id} recommends ${route.provider}, which is not installed by profile ${profileName}`);
+    }
+  }
+  for (const provider of selectedProviders) {
+    if (provider.invocation_policy !== 'upstream-explicit-alias') continue;
+    if (!Array.isArray(provider.auto_covered_by) || provider.auto_covered_by.length === 0) {
+      throw new Error(`Upstream explicit alias ${provider.install_name} requires automatic coverage`);
+    }
+    for (const automaticProvider of provider.auto_covered_by) {
+      if (!installed.has(automaticProvider)) {
+        throw new Error(`Automatic coverage for ${provider.install_name} references unavailable provider ${automaticProvider}`);
+      }
+      if (!routes.some((route) => route.provider === automaticProvider)) {
+        throw new Error(`Automatic coverage provider ${automaticProvider} for ${provider.install_name} has no route in ${profileName}`);
+      }
     }
   }
   return {
@@ -64,6 +91,7 @@ export function buildRoutingDocument(registry, profileName) {
       project_truth_overrides_provider_advice: true,
       runtime_auto_install: false,
       provider_selection: 'advisory',
+      readiness_assessment: 'automatic-before-consequential-work',
       live_availability: 'check-recorded-installation-paths-before-selection',
       missing_provider: 'use-declared-fallback-and-record-the-choice',
     },

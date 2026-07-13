@@ -118,11 +118,14 @@ test('capabilities command exposes a human dashboard and machine-readable built-
   assert.equal(dashboard.status, 0, dashboard.stderr || dashboard.stdout);
   assert.match(dashboard.stdout, /advisory/i);
   assert.match(dashboard.stdout, /requirements-clarification/);
+  assert.match(dashboard.stdout, /automatic work-readiness gate/i);
   assert.match(dashboard.stdout, /when to use/i);
   assert.match(dashboard.stdout, /installed skill inventory/i);
 
   const board = JSON.parse(await readFile(path.join(target, '.vibetether', 'capabilities.yaml'), 'utf8'));
   assert.equal(board.mode, 'advisory-router');
+  assert.equal(board.readiness_gate.mode, 'automatic');
+  assert.equal(board.readiness_gate.implementation_requires, 'READY_FOR_IMPLEMENT_ONE');
 
   const query = runCli([
     'capabilities', '--project', target, '--phase', 'DISCOVER',

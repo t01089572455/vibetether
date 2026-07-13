@@ -1,6 +1,6 @@
 ---
 name: vibe-tether
-description: Use when starting a vague coding request, handling a long-running or multi-phase project, choosing whether and which specialist Skill should help, resuming after context compaction or handoff, detecting drift from project instructions, or checking direction before a consequential action. Provides advisory capability routing; it does not force optional Skill invocation.
+description: Use when a coding request is vague, project context is incomplete, work is long-running or multi-phase, context was compacted or handed off, implementation may start from assumptions, a specialist Skill may help, or the next consequential action could drift from project instructions.
 ---
 
 # VibeTether
@@ -16,13 +16,40 @@ Do not replace the coding agent's implementation ability. Control direction, aut
 1. Read the nearest project instruction file and `.vibetether/project.yaml` when present.
 2. Read `.vibetether/capabilities.yaml` and identify the phase, capability, observed signals, available providers, fallback, expected outputs, and exit evidence. Use the offline resolver for live availability before invoking a provider.
 3. Identify the approved goal, current lifecycle state, active task slice, and last checkpoint.
-4. Decide whether the next action needs a lightweight preflight or full re-anchor.
+4. Run the automatic work-readiness gate and decide whether the next action needs a lightweight preflight or full re-anchor.
 5. Resolve applicable project sources and conflicts before choosing an implementation action.
 6. Classify uncertainty as directional, local technical, or structural technical.
 7. Treat the route as advice: invoke the recommended installed Skill when it fits, choose a better installed alternative when justified, or use the declared built-in fallback.
 8. Record the selected path and material reason in `provider_selection`; then act within the approved slice, collect evidence, and checkpoint the result.
 
 If no project manifest exists, run `vibetether init` or create one using [project-manifest.md](references/project-manifest.md) before long-running product work.
+
+## Automatic Work-Readiness Gate
+
+At task entry, phase changes, consequential actions, resume, and compaction recovery, assess readiness before implementation. Keep this proportional: a clear low-risk task may pass in one compact line, while a vague or conflicting task must not advance on guesses.
+
+Classify each dimension as `known`, `discoverable`, `user-decision`, `conflicted`, or `not-applicable`:
+
+- user and intended outcome;
+- scope, non-goals, and protected capabilities;
+- success evidence and acceptance criteria;
+- applicable project truth and reference meaning;
+- unresolved document or authority conflicts;
+- product, workflow, architecture, data, and visual decisions;
+- the current bounded slice and its dependencies;
+- verification path;
+- authorization, reversibility, and risk.
+
+Investigate every discoverable fact before asking the user. Do not ask the user for facts available in the repository, configured tools, or an authorized source. When a directional decision remains, automatically route to requirements clarification or document alignment and ask one recommended question at a time. Use `grilling` for the model-invokable interview. The upstream `grill-me` command is only an explicit alias for `grilling`; its behavior is automatically covered. The upstream `grill-with-docs` command is an explicit alias for `grilling` plus `domain-modeling`; automatically compose those providers when durable domain decisions or documents are required.
+
+Use exactly one readiness verdict:
+
+- `READY_FOR_IMPLEMENT_ONE`: direction, scope, slice, evidence, and authorization are sufficient; remaining uncertainty is local and reversible.
+- `INVESTIGATE_FACTS`: the agent can close factual gaps without a user decision.
+- `ASK_USER_DECISION`: a product, scope, acceptance, visual, or structural decision belongs to the user.
+- `BLOCKED_BY_CONFLICT_OR_AUTHORIZATION`: authority, permission, or risk prevents safe progress.
+
+Until `READY_FOR_IMPLEMENT_ONE`, allow read-only discovery and reversible direction-neutral preparation only. Do not write product behavior, propagate UI, choose architecture, or broaden scope. Ordinary provider selection remains advisory; the readiness assessment itself is automatic.
 
 ## Lifecycle
 

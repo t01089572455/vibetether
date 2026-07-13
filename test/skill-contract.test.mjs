@@ -46,8 +46,10 @@ test('the public Skill exposes the VibeTether drift-control contract', async () 
   assert.equal(frontmatter.name, 'vibe-tether');
   assert.match(frontmatter.description, /^Use when /);
   assert.match(frontmatter.description, /long-running|long context/i);
-  assert.match(frontmatter.description, /vague coding request/i);
-  assert.match(frontmatter.description, /advisory capability routing/i);
+  assert.match(frontmatter.description, /coding request is vague|vague coding request/i);
+  assert.match(frontmatter.description, /incomplete|missing/i);
+  assert.match(frontmatter.description, /assumption|guess/i);
+  assert.doesNotMatch(frontmatter.description, /Provides|routes the|checks the/i);
   assert.match(skill, /directional uncertainty/i);
   assert.match(skill, /lightweight preflight/i);
   assert.match(skill, /full re-anchor/i);
@@ -61,6 +63,16 @@ test('the public Skill exposes the VibeTether drift-control contract', async () 
   assert.doesNotMatch(skill, /[\u3400-\u9fff]/);
   assert.doesNotMatch(skill, /(?:^|\s)[A-Za-z]:[\\/]/m);
   assert.ok(skill.split(/\r?\n/).length < 500, 'SKILL.md must stay below 500 lines');
+});
+
+test('the public Skill blocks guess-driven implementation with an automatic readiness assessment', async () => {
+  const content = await readFile(path.join(root, 'skills', 'vibe-tether', 'SKILL.md'), 'utf8');
+  assert.match(content, /Automatic Work-Readiness Gate/);
+  assert.match(content, /investigate.*fact.*before asking/i);
+  assert.match(content, /READY_FOR_IMPLEMENT_ONE/);
+  assert.match(content, /one recommended question at a time/i);
+  assert.match(content, /grill-me.*alias.*grilling/is);
+  assert.match(content, /grill-with-docs.*grilling.*domain-modeling/is);
 });
 
 test('the public 0.1.0 Skill fingerprint remains an explicit upgrade allowlist entry', () => {
@@ -93,6 +105,7 @@ test('Codex UI metadata is present and references the public Skill', async () =>
   const metadata = await readFile(path.join(skillDir, 'agents', 'openai.yaml'), 'utf8');
   assert.match(metadata, /display_name:\s*"?VibeTether"?/);
   assert.match(metadata, /short_description:/);
+  assert.match(metadata, /Automatic readiness checks/);
   assert.match(metadata, /\$vibe-tether/);
 });
 

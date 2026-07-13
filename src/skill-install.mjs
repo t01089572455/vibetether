@@ -8,6 +8,7 @@ export const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.u
 export const sourceSkill = path.join(packageRoot, 'skills', 'vibe-tether');
 export const LEGACY_VIBETETHER_FINGERPRINTS = new Set([
   '07e14f9aae4f66ed8baed16893f35a5730b9702174f72a04bf61dd5df45ca89d',
+  '80cfe6c12fc583cc7788e60e5090603a88cdabfd7d1df45cfcbef45f67688bef',
 ]);
 
 async function fingerprintEntry(root, relativePath, hash) {

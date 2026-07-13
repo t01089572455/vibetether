@@ -60,6 +60,11 @@ function registry(source) {
       standard: { skills: ['fixture-demo'] },
       extended: { extends: 'standard', skills: [] },
     },
+    readiness_gate: {
+      mode: 'automatic',
+      dimensions: ['user-and-outcome'],
+      implementation_requires: 'READY_FOR_IMPLEMENT_ONE',
+    },
     capability_catalog: [
       {
         id: 'requirements-clarification',

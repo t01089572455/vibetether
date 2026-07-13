@@ -8,7 +8,7 @@
 
 VibeTether is a cross-agent control Skill and advisory capability router for vague requests and long-running coding work. It reduces the risk of capable agents drifting away from approved goals after context compaction, phase changes, repeated corrections, handoffs, or large project growth.
 
-It does not replace an agent's coding ability or impose one giant development method. It re-anchors decisions to existing project truth, gates high-risk choices, and gives the agent a project-local board for deciding whether and which specialist Skill to use. Ordinary Skill recommendations are advisory, not mandatory.
+It does not replace an agent's coding ability or impose one giant development method. It automatically checks whether the work is ready to start, re-anchors decisions to existing project truth, gates high-risk choices, and gives the agent a project-local board for deciding whether and which specialist Skill to use. Ordinary Skill recommendations are advisory, not mandatory.
 
 ## Quick start
 
@@ -59,6 +59,8 @@ Strong coding agents usually fail long projects less from inability to write cod
 - several good workflow Skills compete for ownership of the same phase.
 
 VibeTether turns those failure modes into explicit preflight classes, ownership rules, advisory routes, gates, evidence contracts, and recovery paths.
+
+Users do not need to know provider names. For a request such as “build me an app,” the entry Skill first checks outcome, scope, non-goals, success evidence, project truth, unresolved decisions, the current slice, verification, and authorization. It looks up discoverable facts itself, then asks only user-owned decisions one at a time with a recommendation. Product implementation waits for `READY_FOR_IMPLEMENT_ONE`; clear low-risk tasks pass the same gate in a compact check.
 
 ## Control architecture
 
@@ -171,7 +173,7 @@ The `standard` bundle installs complete Skill directories from `mattpocock/skill
 
 Provider installation occurs only during explicit `init`, never during an active coding task. Every source is pinned to an exact commit; VibeTether verifies the complete Skill directory fingerprint and upstream license before an atomic copy, records installation ownership, installs the exact license text, and supplies a built-in fallback for optional routes. See [third-party notices](THIRD_PARTY_NOTICES.md).
 
-The generated board includes capability contracts for requirements clarification, document alignment, domain modeling, product and UI design, planning, plan execution, TDD, debugging, frontend engineering, browser verification, security review, code review, completion verification, and release/branch finish. It also lists every installed Skill, source, capability, live harness availability, invocation policy, matching routes, and use signals. Explicit-only aliases such as `grill-me` remain visible without being auto-selected.
+The generated board includes an automatic work-readiness gate plus capability contracts for requirements clarification, document alignment, domain modeling, product and UI design, planning, plan execution, TDD, debugging, frontend engineering, browser verification, security review, code review, completion verification, and release/branch finish. It also lists every installed Skill, source, capability, live harness availability, invocation policy, matching routes, and use signals. Upstream command aliases remain literal user commands, but their behavior is not manual-only: VibeTether automatically covers `grill-me` with model-invokable `grilling`, and covers `grill-with-docs` with `grilling` plus `domain-modeling`.
 
 ## Agent support and guarantee boundary
 

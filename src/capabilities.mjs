@@ -160,6 +160,14 @@ function humanDashboard(root, board) {
     `Project: ${root}`,
     '',
   ];
+  if (board.readiness_gate) {
+    lines.push('Automatic work-readiness gate:');
+    lines.push(`  Run before: ${(board.readiness_gate.run_before ?? []).join(', ')}`);
+    lines.push(`  Dimensions: ${(board.readiness_gate.dimensions ?? []).join(', ')}`);
+    lines.push(`  Implementation requires: ${board.readiness_gate.implementation_requires}`);
+    lines.push('  Discoverable facts are investigated automatically; unresolved direction is routed to one recommended user question at a time.');
+    lines.push('');
+  }
   for (const capability of board.capabilities ?? []) {
     const providers = capability.provider_options?.length ? capability.provider_options.join(', ') : 'vibe-tether built-in';
     lines.push(`${(capability.phases ?? []).join('/')} | ${capability.id} | ${providers}`);
@@ -173,7 +181,8 @@ function humanDashboard(root, board) {
   for (const provider of board.providers ?? []) {
     lines.push(`  ${provider.skill} | ${provider.selection_status} | ${provider.invocation_policy} | ${provider.available_in.join(', ') || 'unavailable'}`);
     lines.push(`    Capabilities: ${provider.capabilities.join(', ')}`);
-    lines.push(`    Routed by: ${provider.routed_by.length ? provider.routed_by.join(', ') : 'explicit invocation only'}`);
+    lines.push(`    Routed by: ${provider.routed_by.length ? provider.routed_by.join(', ') : 'upstream command alias'}`);
+    if (provider.auto_covered_by?.length) lines.push(`    Automatic behavior coverage: ${provider.auto_covered_by.join(' + ')}`);
     lines.push(`    Use when: ${provider.use_when.join(' ')}`);
   }
   lines.push('');
