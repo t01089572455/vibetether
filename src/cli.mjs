@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import { CliError } from './errors.mjs';
 import { initialize } from './init.mjs';
+import { inspectProject } from './doctor.mjs';
+import { uninstall } from './uninstall.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -10,6 +12,8 @@ const HELP = `VibeTether — keep coding agents tethered to project truth
 
 Usage:
   vibetether init [options]
+  vibetether doctor [options]
+  vibetether uninstall [options]
   vibetether --help
   vibetether --version
 
@@ -17,6 +21,15 @@ Init options:
   --project PATH                    Project directory (default: current directory)
   --agent codex|claude|both         Agent harnesses to install (default: both)
   --profile core|standard|extended  Control profile (default: standard)
+  --dry-run                         Show the plan without changing files
+  --yes                             Apply changes without an interactive prompt
+
+Doctor options:
+  --project PATH                    Project directory (default: current directory)
+  --json                            Print a machine-readable report
+
+Uninstall options:
+  --project PATH                    Project directory (default: current directory)
   --dry-run                         Show the plan without changing files
   --yes                             Apply changes without an interactive prompt
 `;
@@ -55,6 +68,20 @@ function parseInit(args) {
   return options;
 }
 
+function parseSimple(args, command) {
+  const options = { project: process.cwd(), json: false, dryRun: false, yes: false };
+  for (let index = 0; index < args.length; index += 1) {
+    const flag = args[index];
+    if (flag === '--project') options.project = valueAfter(args, index++, flag);
+    else if (flag === '--json' && command === 'doctor') options.json = true;
+    else if (flag === '--dry-run' && command === 'uninstall') options.dryRun = true;
+    else if (flag === '--yes' && command === 'uninstall') options.yes = true;
+    else if (flag === '--help' || flag === '-h') return { help: true };
+    else throw new CliError(`Unknown option for ${command}: ${flag}`);
+  }
+  return options;
+}
+
 async function version() {
   const data = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
   return `${data.version}\n`;
@@ -63,10 +90,22 @@ async function version() {
 export async function main(args = process.argv.slice(2)) {
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') return HELP;
   if (args[0] === '--version' || args[0] === '-v') return version();
-  if (args[0] !== 'init') throw new CliError(`Unknown command: ${args[0]}`);
-  const options = parseInit(args.slice(1));
-  if (options.help) return HELP;
-  return initialize(options);
+  if (args[0] === 'init') {
+    const options = parseInit(args.slice(1));
+    if (options.help) return HELP;
+    return initialize(options);
+  }
+  if (args[0] === 'doctor') {
+    const options = parseSimple(args.slice(1), 'doctor');
+    if (options.help) return HELP;
+    return inspectProject(options);
+  }
+  if (args[0] === 'uninstall') {
+    const options = parseSimple(args.slice(1), 'uninstall');
+    if (options.help) return HELP;
+    return uninstall(options);
+  }
+  throw new CliError(`Unknown command: ${args[0]}`);
 }
 
 export { CliError, HELP };

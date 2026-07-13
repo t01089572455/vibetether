@@ -33,6 +33,17 @@ export function applyManagedBlock(content, body) {
   return base ? `${base}\n\n${block}\n` : `${block}\n`;
 }
 
+export function removeManagedBlock(content) {
+  if (!content.includes(MANAGED_START)) return content;
+  const start = content.indexOf(MANAGED_START);
+  const end = content.indexOf(MANAGED_END, start) + MANAGED_END.length;
+  const merged = `${content.slice(0, start)}${content.slice(end)}`
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trimEnd();
+  return merged ? `${merged}\n` : '';
+}
+
 export function resolveInside(root, relativePath) {
   const target = path.resolve(root, relativePath);
   const relative = path.relative(root, target);
