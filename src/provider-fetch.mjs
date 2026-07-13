@@ -153,6 +153,13 @@ export async function stageProviderSources(sources, options = {}) {
       await assertRegularFile(evidencePath, `license evidence for ${source.id}`);
       const evidenceBuffer = await readFile(evidencePath);
       const evidenceContent = evidenceBuffer.toString('utf8');
+      const evidenceSha256 = createHash('sha256').update(evidenceBuffer).digest('hex');
+      if (licenseEvidence.sha256 && licenseEvidence.sha256 !== evidenceSha256) {
+        throw new CliError(
+          `License evidence fingerprint mismatch for ${source.id}: expected ${licenseEvidence.sha256}, received ${evidenceSha256}.`,
+          3,
+        );
+      }
       if (
         licenseEvidence.mode === 'readme-declaration' &&
         (!licenseEvidence.declaration || !evidenceContent.includes(licenseEvidence.declaration))
@@ -173,7 +180,7 @@ export async function stageProviderSources(sources, options = {}) {
         license_evidence: {
           ...licenseEvidence,
           path: licenseEvidence.path,
-          sha256: createHash('sha256').update(evidenceBuffer).digest('hex'),
+          sha256: evidenceSha256,
         },
         ...(licenseEvidence.mode === 'full-text'
           ? {

@@ -120,8 +120,14 @@ export async function uninstall(options) {
   if (lockOriginal !== null) {
     try {
       lock = YAML.parse(lockOriginal);
-      if (lock?.schema_version !== 1 || !Array.isArray(lock?.skills)) {
-        throw new Error('expected schema_version 1 and a skills array');
+      const validV1 = lock?.schema_version === 1 && Array.isArray(lock?.skills);
+      const validV2 =
+        lock?.schema_version === 2 &&
+        Array.isArray(lock?.catalog) &&
+        Array.isArray(lock?.exposures) &&
+        Array.isArray(lock?.skills);
+      if (!validV1 && !validV2) {
+        throw new Error('expected schema_version 1 or 2 and the matching provider arrays');
       }
     } catch (error) {
       throw new CliError(`Cannot safely uninstall providers because the provider lock is invalid: ${error.message}`, 3);
@@ -157,6 +163,29 @@ export async function uninstall(options) {
         if (!skillPlans.some((plan) => plan.target === target)) {
           skillPlans.push({ relativePath: installation.path, target, quarantineRoot });
         }
+      }
+    }
+    for (const skill of lock.catalog ?? []) {
+      const installation = skill.installation;
+      if (installation?.ownership !== 'vibetether') continue;
+      const expectedPath = `.vibetether/providers/catalog/${skill.source_id}/${skill.install_name}`;
+      if (!installation.path || portablePath(installation.path) !== expectedPath) {
+        throw new CliError(`Catalog install path does not match ${skill.id}: ${installation?.path ?? 'missing'}`, 3);
+      }
+      await rejectSymlinkPath(root, installation.path);
+      const target = resolveInside(root, installation.path);
+      if (!(await exists(target))) continue;
+      let installedFingerprint;
+      try {
+        installedFingerprint = await skillFingerprint(target);
+      } catch (error) {
+        throw new CliError(`Cannot verify catalog Skill at ${installation.path}: ${error.message}`, 3);
+      }
+      if (installedFingerprint !== skill.fingerprint) {
+        throw new CliError(`Refusing to remove modified catalog Skill at ${installation.path}. Back up the customization first.`, 3);
+      }
+      if (!skillPlans.some((plan) => plan.target === target)) {
+        skillPlans.push({ relativePath: installation.path, target, quarantineRoot });
       }
     }
     for (const source of lock.sources ?? []) {

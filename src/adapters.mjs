@@ -53,7 +53,7 @@ export const ADAPTERS = {
   },
 };
 
-export const GITIGNORE_BODY = '.vibetether/state/';
+export const GITIGNORE_BODY = ['.vibetether/state/', '.vibetether/providers/catalog/'].join('\n');
 
 export function selectedAdapters(agent) {
   if (agent === 'both') return ['codex', 'claude'];

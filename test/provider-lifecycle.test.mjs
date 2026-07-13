@@ -158,6 +158,23 @@ test('doctor blocks on a modified provider copy owned by VibeTether', async () =
   );
 });
 
+test('doctor and uninstall block on a modified catalog copy owned by VibeTether', async () => {
+  const { target } = await initialized('catalog-modified');
+  const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
+  const catalogPath = path.join(target, lock.catalog[0].installation.path);
+  await writeFile(path.join(catalogPath, 'guide.md'), '# User modification\n', 'utf8');
+
+  await assert.rejects(
+    inspectProject({ project: target, json: true }),
+    (error) => JSON.parse(error.output).issues.some((entry) => entry.code === 'changed-managed-catalog-provider'),
+  );
+  await assert.rejects(
+    uninstall({ project: target, dryRun: false, yes: true }),
+    /modified catalog Skill/i,
+  );
+  assert.equal(await exists(path.join(target, 'AGENTS.md')), true);
+});
+
 test('doctor and uninstall refuse a missing or modified managed provider license', async () => {
   const missing = await initialized('doctor-license-missing');
   const missingLock = YAML.parse(await readFile(path.join(missing.target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
@@ -183,13 +200,16 @@ test('uninstall removes unchanged managed providers and generated routing files'
   const { target, provider } = await initialized('uninstall-managed');
   const lockBefore = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
   const licensePath = path.join(target, lockBefore.sources[0].license_installation.path);
+  const catalogPath = path.join(target, lockBefore.catalog[0].installation.path);
   assert.equal(await exists(licensePath), true);
+  assert.equal(await exists(catalogPath), true);
   await uninstall({ project: target, dryRun: false, yes: true });
 
   assert.equal(await exists(provider), false);
   assert.equal(await exists(path.join(target, '.vibetether', 'capabilities.yaml')), false);
   assert.equal(await exists(path.join(target, '.vibetether', 'providers.lock.yaml')), false);
   assert.equal(await exists(licensePath), false);
+  assert.equal(await exists(catalogPath), false);
   const manifest = YAML.parse(await readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'));
   assert.equal(manifest.capability_board, undefined);
   assert.equal(manifest.provider_lock, undefined);

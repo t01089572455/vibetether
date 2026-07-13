@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { runProviderGit, stageProviderSources } from '../src/provider-fetch.mjs';
 import { skillFingerprint } from '../src/skill-install.mjs';
@@ -103,6 +104,7 @@ test('stages a pinned README license declaration without fabricating full licens
       mode: 'readme-declaration',
       path: 'README.md',
       declaration: '## License\n\nMIT',
+      sha256: createHash('sha256').update('# Provider\n\n## License\n\nMIT\n').digest('hex'),
     },
   });
 
@@ -114,6 +116,24 @@ test('stages a pinned README license declaration without fabricating full licens
   } finally {
     await staged.cleanup();
   }
+});
+
+test('rejects a changed pinned README license-evidence fingerprint', async () => {
+  const fixture = await fixtureRepository('declared-license-fingerprint');
+  await writeFile(path.join(fixture.root, 'README.md'), '# Provider\n\n## License\n\nMIT\n', 'utf8');
+  git(fixture.root, ['add', 'README.md']);
+  git(fixture.root, ['commit', '-qm', 'add license declaration']);
+  fixture.commit = git(fixture.root, ['rev-parse', 'HEAD']);
+  const declared = source(fixture, {
+    license_evidence: {
+      mode: 'readme-declaration',
+      path: 'README.md',
+      declaration: '## License\n\nMIT',
+      sha256: '0'.repeat(64),
+    },
+  });
+
+  await assert.rejects(() => stageProviderSources([declared]), /license evidence fingerprint mismatch/i);
 });
 
 test('rejects a source skill whose fingerprint differs from the audited registry', async () => {

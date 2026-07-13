@@ -200,6 +200,7 @@ test('init keeps runtime checkpoint state out of version control', async () => {
   const ignore = await readFile(path.join(target, '.gitignore'), 'utf8');
   assert.match(ignore, /^dist\/$/m);
   assert.match(ignore, /<!-- vibetether:start -->[\s\S]*\.vibetether\/state\/[\s\S]*<!-- vibetether:end -->/);
+  assert.match(ignore, /<!-- vibetether:start -->[\s\S]*\.vibetether\/providers\/catalog\/[\s\S]*<!-- vibetether:end -->/);
   assert.equal(await exists(path.join(target, '.vibetether', 'intent.md')), true);
   const checkpoint = YAML.parse(await readFile(path.join(target, '.vibetether', 'state', 'current.yaml'), 'utf8'));
   assert.equal(checkpoint.schema_version, 1);
@@ -277,4 +278,21 @@ test('init rejects an unknown specialist bundle', async () => {
 
   assert.equal(result.status, 2, result.stderr || result.stdout);
   assert.match(result.stderr, /invalid --bundle/i);
+});
+
+test('standard dry-run auto-selects the Web catalog and exposes only signal-matched specialists', async () => {
+  const target = await project('web-bundle-dry-run');
+  await writeFile(
+    path.join(target, 'package.json'),
+    JSON.stringify({ dependencies: { next: '^15.0.0', react: '^19.0.0' } }),
+    'utf8',
+  );
+
+  const result = runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'standard', '--dry-run']);
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /bundles:\s*\n\+\s+- web/);
+  assert.match(result.stdout, /\.vibetether\/providers\/catalog\/vercel-agent-skills-f8a72b9\/vercel-react-best-practices/);
+  assert.match(result.stdout, /\.agents\/skills\/vercel-react-best-practices/);
+  assert.doesNotMatch(result.stdout, /\.agents\/skills\/deploy-to-vercel/);
 });

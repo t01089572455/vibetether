@@ -20,10 +20,17 @@ import { stageProviderSources } from './provider-fetch.mjs';
 import {
   createCapabilityBoard,
   createProviderLock,
+  priorCatalogOwnership,
   priorInstallationOwnership,
   resolveProfileSources,
 } from './provider-plan.mjs';
-import { buildRoutingDocument, loadProviderRegistry, resolveProfileProviders, resolveRoute } from './provider-registry.mjs';
+import {
+  buildRoutingDocument,
+  loadProviderRegistry,
+  resolveExposurePlan,
+  resolveProfileProviders,
+  resolveRoute,
+} from './provider-registry.mjs';
 import {
   inspectDirectoryInstall,
   inspectVibeTetherInstall,
@@ -70,7 +77,11 @@ function formatDryRun(root, textPlans, skillPlans) {
   }
   for (const plan of skillPlans) {
     if (!plan.needsInstall) continue;
-    if (plan.kind === 'provider') {
+    if (plan.kind === 'catalog') {
+      sections.push(
+        `--- /dev/null\n+++ ${plan.relativePath}\n+<cataloged provider Skill ${plan.providerId} from ${plan.sourceId}@${plan.commit}>`,
+      );
+    } else if (plan.kind === 'provider') {
       sections.push(
         `--- /dev/null\n+++ ${plan.relativePath}\n+<complete provider Skill ${plan.providerId} from ${plan.sourceId}@${plan.commit}>`,
       );
@@ -172,8 +183,8 @@ export async function initialize(options, dependencies = {}) {
   } catch (error) {
     throw new CliError(`Cannot load the provider registry: ${error.message}`, 3);
   }
-  const providers = resolveProfileProviders(registry, options.profile);
-  const providerSources = resolveProfileSources(registry, options.profile);
+  let providers = resolveProfileProviders(registry, options.profile);
+  let providerSources = resolveProfileSources(registry, options.profile);
   const initialRoute = resolveRoute(buildRoutingDocument(registry, options.profile), {
     phase: 'DISCOVER',
     capability: 'requirements-clarification',
@@ -204,7 +215,11 @@ export async function initialize(options, dependencies = {}) {
   const ignoreOriginal = await readTextIfPresent(ignoreTarget);
   inspectManagedBlock(ignoreOriginal ?? '', '.gitignore');
   const existingIgnoreBody = managedBlockBody(ignoreOriginal ?? '');
-  if (existingIgnoreBody !== null && existingIgnoreBody !== GITIGNORE_BODY) {
+  if (
+    existingIgnoreBody !== null &&
+    existingIgnoreBody !== GITIGNORE_BODY &&
+    existingIgnoreBody !== '.vibetether/state/'
+  ) {
     throw new CliError('Managed block conflict in .gitignore. Refusing to overwrite changed control rules.', 3);
   }
   textPlans.push({
@@ -250,6 +265,13 @@ export async function initialize(options, dependencies = {}) {
     capability_board: '.vibetether/capabilities.yaml',
     provider_lock: '.vibetether/providers.lock.yaml',
   };
+  const routingSignals = (scanned.bundle_signals ?? []).map((signal) => signal.signal);
+  providers = resolveExposurePlan(registry, options.profile, {
+    bundles: manifest.bundles,
+    explicit_bundles: options.bundles ?? [],
+    signals: routingSignals,
+  });
+  providerSources = resolveProfileSources(registry, options.profile, manifest.bundles);
   textPlans.push({
     relativePath: '.vibetether/project.yaml',
     target: manifestTarget,
@@ -325,7 +347,7 @@ export async function initialize(options, dependencies = {}) {
   if (lockOriginal !== null) {
     try {
       existingLock = YAML.parse(lockOriginal);
-      if (existingLock?.schema_version !== 1) throw new Error('schema_version must be 1');
+      if (![1, 2].includes(existingLock?.schema_version)) throw new Error('schema_version must be 1 or 2');
     } catch (error) {
       throw new CliError(`Provider lock conflict in .vibetether/providers.lock.yaml: ${error.message}`, 3);
     }
@@ -333,6 +355,39 @@ export async function initialize(options, dependencies = {}) {
 
   if (options.dryRun) {
     const installations = [];
+    const catalogInstallations = [];
+    for (const source of providerSources) {
+      for (const catalogSkill of source.skills) {
+        const relativePath = `.vibetether/providers/catalog/${source.id}/${catalogSkill.install_name}`;
+        const target = resolveInside(root, relativePath);
+        let needsInstall = true;
+        let ownership = 'planned';
+        try {
+          const installedFingerprint = await skillFingerprint(target);
+          if (installedFingerprint !== catalogSkill.fingerprint) {
+            throw new CliError(`Refusing to overwrite modified catalog Skill at ${relativePath}.`, 3);
+          }
+          needsInstall = false;
+          ownership = priorCatalogOwnership(existingLock, catalogSkill, relativePath) ?? 'preexisting';
+        } catch (error) {
+          if (error.code !== 'ENOENT') throw error;
+        }
+        skillPlans.push({
+          relativePath,
+          target,
+          needsInstall,
+          kind: 'catalog',
+          providerId: catalogSkill.id,
+          sourceId: source.id,
+          commit: source.commit,
+        });
+        catalogInstallations.push({
+          provider_id: catalogSkill.id,
+          path: relativePath,
+          ownership,
+        });
+      }
+    }
     for (const provider of providers) {
       for (const adapter of adapters) {
         const relativePath = path
@@ -370,6 +425,10 @@ export async function initialize(options, dependencies = {}) {
     }
     const plannedSources = [];
     for (const source of providerSources) {
+      if (source.license_evidence?.mode === 'readme-declaration') {
+        plannedSources.push({ ...source, license_evidence: source.license_evidence });
+        continue;
+      }
       const licensePath = `.vibetether/licenses/${source.id}.LICENSE.txt`;
       await rejectSymlinkPath(root, licensePath);
       const target = resolveInside(root, licensePath);
@@ -406,9 +465,11 @@ export async function initialize(options, dependencies = {}) {
     }
     const lock = createProviderLock({
       profile: options.profile,
+      bundles: manifest.bundles,
       sources: plannedSources,
       providers,
       installations,
+      catalogInstallations,
       existingLock,
     });
     const board = createCapabilityBoard(registry, options.profile, lock, adapters);
@@ -438,9 +499,17 @@ export async function initialize(options, dependencies = {}) {
     const stagedSkills = new Map((staged?.skills ?? []).map((provider) => [provider.id, provider]));
     const stagedRepositories = new Map((staged?.repositories ?? []).map((source) => [source.source_id, source]));
     const installedSources = [];
+    const catalogInstallations = [];
     for (const source of providerSources) {
       const stagedSource = stagedRepositories.get(source.id);
       if (!stagedSource) throw new CliError(`Staged provider source is missing: ${source.id}`, 3);
+      if (stagedSource.license_evidence.mode === 'readme-declaration') {
+        installedSources.push({
+          ...source,
+          license_evidence: stagedSource.license_evidence,
+        });
+        continue;
+      }
       const relativePath = `.vibetether/licenses/${source.id}.LICENSE.txt`;
       await rejectSymlinkPath(root, relativePath);
       const target = resolveInside(root, relativePath);
@@ -467,6 +536,29 @@ export async function initialize(options, dependencies = {}) {
         license_sha256: stagedSource.license_sha256,
         license_installation: { path: relativePath, ownership },
       });
+    }
+    for (const source of providerSources) {
+      for (const catalogSkill of source.skills) {
+        const stagedProvider = stagedSkills.get(catalogSkill.id);
+        if (!stagedProvider) throw new CliError(`Staged catalog Skill is missing: ${catalogSkill.id}`, 3);
+        const relativePath = `.vibetether/providers/catalog/${source.id}/${catalogSkill.install_name}`;
+        await rejectSymlinkPath(root, relativePath);
+        const target = resolveInside(root, relativePath);
+        const inspection = await inspectDirectoryInstall(stagedProvider.source_path, target, relativePath);
+        const ownership = priorCatalogOwnership(existingLock, catalogSkill, relativePath) ?? inspection.ownership;
+        skillPlans.push({
+          relativePath,
+          target,
+          source: stagedProvider.source_path,
+          needsInstall: inspection.needsInstall,
+          kind: 'catalog',
+          providerId: catalogSkill.id,
+          sourceId: source.id,
+          commit: source.commit,
+          install: (destination) => installDirectory(stagedProvider.source_path, destination),
+        });
+        catalogInstallations.push({ provider_id: catalogSkill.id, path: relativePath, ownership });
+      }
     }
     const installations = [];
     for (const provider of providers) {
@@ -498,9 +590,11 @@ export async function initialize(options, dependencies = {}) {
 
     const lock = createProviderLock({
       profile: options.profile,
+      bundles: manifest.bundles,
       sources: installedSources,
       providers,
       installations,
+      catalogInstallations,
       existingLock,
     });
     const board = createCapabilityBoard(registry, options.profile, lock, adapters);
@@ -529,5 +623,6 @@ export async function initialize(options, dependencies = {}) {
     await staged?.cleanup();
   }
 
-  return `VibeTether initialized ${root} for ${adapters.join(' + ')} using the ${options.profile} profile with ${providers.length} curated provider Skill(s).\n`;
+  const warnings = (staged?.warnings ?? []).map((warning) => `- ${warning}`).join('\n');
+  return `VibeTether initialized ${root} for ${adapters.join(' + ')} using the ${options.profile} profile with ${providers.length} curated provider Skill(s).\n${warnings ? `Warnings:\n${warnings}\n` : ''}`;
 }

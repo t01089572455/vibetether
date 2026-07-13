@@ -156,20 +156,31 @@ export async function inspectProject(options) {
       }
     }
     if (lock) {
-      if (lock.schema_version !== 1 || !Array.isArray(lock.sources) || !Array.isArray(lock.skills)) {
-        issues.push(issue('invalid-provider-lock', 'Provider lock must use schema_version 1 and declare sources and skills arrays'));
+      const validV1 = lock.schema_version === 1 && Array.isArray(lock.sources) && Array.isArray(lock.skills);
+      const validV2 =
+        lock.schema_version === 2 &&
+        Array.isArray(lock.sources) &&
+        Array.isArray(lock.catalog) &&
+        Array.isArray(lock.exposures) &&
+        Array.isArray(lock.skills);
+      if (!validV1 && !validV2) {
+        issues.push(issue('invalid-provider-lock', 'Provider lock must use schema_version 1 or 2 and declare its provider arrays'));
       }
     }
     if (board && lock && board.profile !== lock.profile) {
       issues.push(issue('provider-profile-mismatch', `Capability board profile ${board.profile} does not match provider lock profile ${lock.profile}`));
     }
 
-    const activeProviders = (lock?.skills ?? []).filter((skill) => skill.active);
-    const activeSourceIds = new Set(activeProviders.map((skill) => skill.source_id));
+    const lockedExposures = lock?.skills ?? lock?.exposures ?? [];
+    const activeProviders = lockedExposures.filter((skill) => skill.active);
+    const activeSourceIds = new Set([
+      ...activeProviders.map((skill) => skill.source_id),
+      ...(lock?.catalog ?? []).filter((skill) => skill.active).map((skill) => skill.source_id),
+    ]);
     for (const source of lock?.sources ?? []) {
       const installation = source.license_installation;
       if (!installation?.path || !source.license_sha256) {
-        if (activeSourceIds.has(source.id)) {
+        if (activeSourceIds.has(source.id) && source.license_evidence?.mode !== 'readme-declaration') {
           issues.push(issue('missing-provider-license-record', `Active provider source ${source.id} lacks an installed license record`));
         }
         continue;
@@ -200,7 +211,7 @@ export async function inspectProject(options) {
       }
     }
     const availableProviders = new Set();
-    for (const skill of lock?.skills ?? []) {
+    for (const skill of lockedExposures) {
       if (!skill?.id || !skill?.install_name || !/^[a-f0-9]{64}$/.test(skill?.fingerprint ?? '')) {
         issues.push(issue('invalid-provider-lock', `Provider lock contains an invalid Skill record: ${skill?.id ?? 'unknown'}`));
         continue;
@@ -257,10 +268,48 @@ export async function inspectProject(options) {
       }
     }
 
+    for (const skill of lock?.catalog ?? []) {
+      const installation = skill.installation;
+      if (!skill?.id || !skill?.install_name || !/^[a-f0-9]{64}$/.test(skill?.fingerprint ?? '')) {
+        issues.push(issue('invalid-provider-lock', `Provider lock contains an invalid catalog record: ${skill?.id ?? 'unknown'}`));
+        continue;
+      }
+      if (!['vibetether', 'preexisting'].includes(installation?.ownership)) {
+        issues.push(issue('invalid-catalog-installation', `Catalog provider ${skill.id} has invalid ownership metadata: ${installation?.ownership ?? 'missing'}`));
+        continue;
+      }
+      const expectedPath = `.vibetether/providers/catalog/${skill.source_id}/${skill.install_name}`;
+      if (!installation?.path || portablePath(installation.path) !== expectedPath) {
+        issues.push(issue('catalog-installation-path-mismatch', `Catalog path does not match ${skill.id}: ${installation?.path ?? 'missing'}`));
+        continue;
+      }
+      const target = projectPath(root, installation.path);
+      if (!target) {
+        issues.push(issue('catalog-path-escape', `Catalog path escapes the project: ${installation.path}`));
+        continue;
+      }
+      if (!(await exists(target))) {
+        if (skill.active) issues.push(issue('missing-catalog-provider', `Missing cataloged provider ${skill.id}: ${installation.path}`));
+        continue;
+      }
+      try {
+        const installedFingerprint = await skillFingerprint(target);
+        if (installedFingerprint !== skill.fingerprint) {
+          const managed = installation.ownership === 'vibetether';
+          (managed ? issues : warnings).push((managed ? issue : warning)(
+            managed ? 'changed-managed-catalog-provider' : 'changed-preexisting-catalog-provider',
+            `${managed ? 'VibeTether-managed' : 'Pre-existing'} catalog provider ${skill.install_name} changed at ${installation.path}`,
+          ));
+        }
+      } catch (error) {
+        issues.push(issue('invalid-catalog-provider', `Cannot verify catalog provider ${skill.install_name}: ${error.message}`));
+      }
+    }
+
     manifest.__providerSummary = {
       active: activeProviders.length,
       available: availableProviders.size,
-      total: lock?.skills?.length ?? 0,
+      total: lockedExposures.length,
     };
 
     const checkpoint = manifest.checkpoint;

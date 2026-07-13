@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 import YAML from 'yaml';
 import { initialize } from '../src/init.mjs';
+import { inspectProject } from '../src/doctor.mjs';
 import { skillFingerprint } from '../src/skill-install.mjs';
 
 function git(cwd, args) {
@@ -29,6 +31,28 @@ async function upstream() {
     root,
     commit: git(root, ['rev-parse', 'HEAD']),
     fingerprint: await skillFingerprint(path.join(root, 'skills', 'demo')),
+  };
+}
+
+async function completeUpstream() {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-init-complete-upstream-'));
+  for (const name of ['demo', 'router']) {
+    await mkdir(path.join(root, 'skills', name), { recursive: true });
+    await writeFile(path.join(root, 'skills', name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name}.\n---\n`, 'utf8');
+    await writeFile(path.join(root, 'skills', name, 'guide.md'), `# ${name} content\n`, 'utf8');
+  }
+  await writeFile(path.join(root, 'LICENSE'), 'MIT fixture license\n', 'utf8');
+  git(root, ['init', '-q']);
+  git(root, ['config', 'user.name', 'VibeTether Tests']);
+  git(root, ['config', 'user.email', 'tests@example.invalid']);
+  git(root, ['add', '.']);
+  git(root, ['commit', '-qm', 'complete fixture provider']);
+  return {
+    root,
+    commit: git(root, ['rev-parse', 'HEAD']),
+    fingerprints: Object.fromEntries(await Promise.all(
+      ['demo', 'router'].map(async (name) => [name, await skillFingerprint(path.join(root, 'skills', name))]),
+    )),
   };
 }
 
@@ -93,6 +117,35 @@ function registry(source) {
       },
     ],
   };
+}
+
+function completeRegistry(source) {
+  const value = registry({ ...source, fingerprint: source.fingerprints.demo });
+  value.schema_version = 2;
+  value.sources[0] = {
+    ...value.sources[0],
+    catalog_mode: 'complete',
+    skill_root: 'skills',
+    catalog_group: 'foundation',
+    license_evidence: { mode: 'full-text', path: 'LICENSE' },
+    skills: [
+      {
+        id: 'fixture-demo', install_name: 'demo', path: 'skills/demo', fingerprint: source.fingerprints.demo,
+        catalog_status: 'audited', workflow_role: 'primary', invocation_policy: 'advisory-auto-eligible',
+        exposure: 'standard', capabilities: ['requirements-clarification'], conflicts: [],
+        fallback: 'vibetether-built-in-alignment', required_outputs: [], exit_evidence: [],
+      },
+      {
+        id: 'fixture-router', install_name: 'router', path: 'skills/router', fingerprint: source.fingerprints.router,
+        catalog_status: 'audited', workflow_role: 'competing-router', invocation_policy: 'catalog-only',
+        exposure: 'catalog-only', capabilities: ['routing'], conflicts: ['vibe-tether'],
+        fallback: 'vibe-tether', required_outputs: [], exit_evidence: [],
+      },
+    ],
+  };
+  value.profiles.standard.catalog_sources = ['fixture-source'];
+  value.profiles.extended.catalog_sources = [];
+  return value;
 }
 
 async function project(name) {
@@ -163,6 +216,95 @@ test('standard init installs complete providers and writes an advisory capabilit
   assert.match(agents, /consult.*\.vibetether\/capabilities\.yaml/i);
   assert.match(agents, /recommend/i);
   assert.doesNotMatch(agents, /must invoke every recommended provider/i);
+});
+
+test('complete catalogs are cached while competing routers remain outside host discovery', async () => {
+  const source = await completeUpstream();
+  const target = await project('complete-catalog');
+
+  await initialize(options(target, { agent: 'codex' }), {
+    loadRegistry: async () => completeRegistry(source),
+  });
+
+  assert.equal(
+    await readFile(path.join(target, '.vibetether', 'providers', 'catalog', 'fixture-source', 'demo', 'guide.md'), 'utf8'),
+    '# demo content\n',
+  );
+  assert.equal(
+    await readFile(path.join(target, '.vibetether', 'providers', 'catalog', 'fixture-source', 'router', 'guide.md'), 'utf8'),
+    '# router content\n',
+  );
+  assert.equal(await exists(path.join(target, '.agents', 'skills', 'demo', 'SKILL.md')), true);
+  assert.equal(await exists(path.join(target, '.agents', 'skills', 'router')), false);
+  const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
+  assert.equal(lock.schema_version, 2);
+  assert.equal(lock.catalog.length, 2);
+  assert.equal(lock.exposures.length, 1);
+  assert.equal(lock.catalog.find((skill) => skill.install_name === 'router').workflow_role, 'competing-router');
+  assert.equal(lock.catalog.every((skill) => skill.installation.ownership === 'vibetether'), true);
+  assert.equal(lock.exposures[0].installations.codex.path, '.agents/skills/demo');
+});
+
+test('complete-catalog dry-run lists catalog and exposure decisions without fetching', async () => {
+  const source = await completeUpstream();
+  const target = await project('complete-catalog-dry-run');
+
+  const output = await initialize(options(target, { agent: 'codex', dryRun: true, yes: false }), {
+    loadRegistry: async () => completeRegistry(source),
+    stageProviders: async () => {
+      throw new Error('dry-run must not fetch');
+    },
+  });
+
+  assert.match(output, /\.vibetether\/providers\/catalog\/fixture-source\/demo/);
+  assert.match(output, /\.vibetether\/providers\/catalog\/fixture-source\/router/);
+  assert.match(output, /\.agents\/skills\/demo/);
+  assert.doesNotMatch(output, /\.agents\/skills\/router/);
+  assert.equal(await exists(path.join(target, '.vibetether')), false);
+});
+
+test('README-declaration sources record provenance without creating a fake license file', async () => {
+  const source = await completeUpstream();
+  await rm(path.join(source.root, 'LICENSE'));
+  await writeFile(path.join(source.root, 'README.md'), '# Fixture\n\n## License\n\nMIT\n', 'utf8');
+  git(source.root, ['add', '-A']);
+  git(source.root, ['commit', '-qm', 'declare fixture license']);
+  source.commit = git(source.root, ['rev-parse', 'HEAD']);
+  const value = completeRegistry(source);
+  value.sources[0].commit = source.commit;
+  value.sources[0].ref = source.commit;
+  value.sources[0].license_path = 'README.md';
+  value.sources[0].license_evidence = {
+    mode: 'readme-declaration',
+    path: 'README.md',
+    declaration: '## License\n\nMIT',
+    sha256: createHash('sha256').update('# Fixture\n\n## License\n\nMIT\n').digest('hex'),
+  };
+  const target = await project('declared-license');
+
+  const output = await initialize(options(target, { agent: 'codex' }), { loadRegistry: async () => value });
+  const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
+
+  assert.equal(await exists(path.join(target, '.vibetether', 'licenses', 'fixture-source.LICENSE.txt')), false);
+  assert.equal(lock.sources[0].license_evidence.mode, 'readme-declaration');
+  assert.match(lock.sources[0].license_evidence.sha256, /^[a-f0-9]{64}$/);
+  assert.equal(lock.sources[0].license_installation, undefined);
+  assert.match(output, /complete license text is not present upstream/i);
+});
+
+test('doctor rejects an invalid catalog ownership record', async () => {
+  const source = await completeUpstream();
+  const target = await project('catalog-ownership');
+  await initialize(options(target, { agent: 'codex' }), { loadRegistry: async () => completeRegistry(source) });
+  const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
+  const lock = YAML.parse(await readFile(lockPath, 'utf8'));
+  lock.catalog[0].installation.ownership = 'planned';
+  await writeFile(lockPath, YAML.stringify(lock), 'utf8');
+
+  await assert.rejects(
+    inspectProject({ project: target, json: true }),
+    (error) => JSON.parse(error.output).issues.some((entry) => entry.code === 'invalid-catalog-installation'),
+  );
 });
 
 test('provider-aware init is byte-for-byte idempotent and retains managed ownership', async () => {

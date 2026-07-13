@@ -1,6 +1,9 @@
-import { buildRoutingDocument, resolveProfileProviders } from './provider-registry.mjs';
+import { buildRoutingDocument, resolveCatalogSources, resolveProfileProviders } from './provider-registry.mjs';
 
-export function resolveProfileSources(registry, profile) {
+export function resolveProfileSources(registry, profile, bundles = []) {
+  if (registry.profiles?.[profile]?.catalog_sources || bundles.length > 0) {
+    return resolveCatalogSources(registry, profile, bundles);
+  }
   const selected = new Set(resolveProfileProviders(registry, profile).map((provider) => provider.id));
   return registry.sources
     .map((source) => ({ ...source, skills: source.skills.filter((skill) => selected.has(skill.id)) }))
@@ -8,7 +11,7 @@ export function resolveProfileSources(registry, profile) {
 }
 
 export function priorInstallationOwnership(existingLock, provider, harness, relativePath) {
-  const previous = existingLock?.skills?.find((skill) => skill.id === provider.id);
+  const previous = (existingLock?.exposures ?? existingLock?.skills)?.find((skill) => skill.id === provider.id);
   if (
     previous?.fingerprint === provider.fingerprint &&
     previous.installations?.[harness]?.path === relativePath &&
@@ -19,9 +22,29 @@ export function priorInstallationOwnership(existingLock, provider, harness, rela
   return null;
 }
 
-export function createProviderLock({ profile, sources, providers, installations, existingLock = null }) {
+export function priorCatalogOwnership(existingLock, provider, relativePath) {
+  const previous = existingLock?.catalog?.find((skill) => skill.id === provider.id);
+  if (
+    previous?.fingerprint === provider.fingerprint &&
+    previous.installation?.path === relativePath &&
+    previous.installation.ownership === 'vibetether'
+  ) {
+    return 'vibetether';
+  }
+  return null;
+}
+
+export function createProviderLock({
+  profile,
+  bundles = [],
+  sources,
+  providers,
+  installations,
+  catalogInstallations = [],
+  existingLock = null,
+}) {
   const activeIds = new Set(providers.map((provider) => provider.id));
-  const skills = providers.map((provider) => {
+  const exposures = providers.map((provider) => {
     const skillInstallations = {};
     for (const value of installations.filter((installation) => installation.provider_id === provider.id)) {
       skillInstallations[value.harness] = {
@@ -40,12 +63,34 @@ export function createProviderLock({ profile, sources, providers, installations,
     };
   });
 
-  for (const previous of existingLock?.skills ?? []) {
+  for (const previous of existingLock?.exposures ?? existingLock?.skills ?? []) {
     if (activeIds.has(previous.id)) continue;
-    skills.push({ ...previous, active: false });
+    exposures.push({ ...previous, active: false });
   }
 
-  const sourceIds = new Set(skills.map((skill) => skill.source_id));
+  const activeCatalogIds = new Set(sources.flatMap((source) => source.skills.map((skill) => skill.id)));
+  const catalog = sources.flatMap((source) => source.skills.map((skill) => {
+    const installation = catalogInstallations.find((value) => value.provider_id === skill.id);
+    return {
+      id: skill.id,
+      install_name: skill.install_name,
+      source_id: source.id,
+      fingerprint: skill.fingerprint,
+      workflow_role: skill.workflow_role ?? 'unclassified',
+      invocation_policy: skill.invocation_policy ?? 'advisory-auto-eligible',
+      exposure: skill.exposure ?? 'profile',
+      capabilities: skill.capabilities ?? [],
+      conflicts: skill.conflicts ?? [],
+      active: true,
+      installation: installation ? { path: installation.path, ownership: installation.ownership } : null,
+    };
+  }));
+  for (const previous of existingLock?.catalog ?? []) {
+    if (activeCatalogIds.has(previous.id)) continue;
+    catalog.push({ ...previous, active: false });
+  }
+
+  const sourceIds = new Set(catalog.map((skill) => skill.source_id));
   const lockSources = sources
     .filter((source) => sourceIds.has(source.id))
     .map((source) => ({
@@ -55,6 +100,7 @@ export function createProviderLock({ profile, sources, providers, installations,
       commit: source.commit,
       license: source.license,
       license_path: source.license_path,
+      ...(source.license_evidence ? { license_evidence: source.license_evidence } : {}),
       ...(source.license_sha256 ? { license_sha256: source.license_sha256 } : {}),
       ...(source.license_installation ? { license_installation: source.license_installation } : {}),
     }));
@@ -64,17 +110,21 @@ export function createProviderLock({ profile, sources, providers, installations,
   }
 
   return {
-    schema_version: 1,
+    schema_version: 2,
     profile,
+    bundles,
     install_time_only: true,
     sources: lockSources,
-    skills,
+    catalog,
+    exposures,
+    skills: exposures,
   };
 }
 
 export function createCapabilityBoard(registry, profile, lock, harnesses) {
   const routing = buildRoutingDocument(registry, profile);
-  const skills = new Map((lock.skills ?? []).map((skill) => [skill.install_name, skill]));
+  const activeExposures = lock.exposures ?? lock.skills ?? [];
+  const skills = new Map(activeExposures.map((skill) => [skill.install_name, skill]));
   const definitions = new Map(
     (registry.sources ?? []).flatMap((source) =>
       (source.skills ?? []).map((skill) => [skill.id, { ...skill, source_id: source.id }]),
@@ -136,7 +186,7 @@ export function createCapabilityBoard(registry, profile, lock, harnesses) {
         .map((route) => route.recommendation.skill))],
       fallback: capability.fallback,
     })),
-    providers: (lock.skills ?? []).map((skill) => {
+    providers: activeExposures.map((skill) => {
       const definition = definitions.get(skill.id) ?? {};
       const providerRoutes = routes.filter((route) => route.recommendation.skill === skill.install_name);
       const availableIn = harnesses.filter((harness) => skill.installations?.[harness]);
