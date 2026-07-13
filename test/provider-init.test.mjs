@@ -138,7 +138,7 @@ function completeRegistry(source) {
       {
         id: 'fixture-router', install_name: 'router', path: 'skills/router', fingerprint: source.fingerprints.router,
         catalog_status: 'audited', workflow_role: 'competing-router', invocation_policy: 'catalog-only',
-        exposure: 'catalog-only', capabilities: ['routing'], conflicts: ['vibe-tether'],
+        exposure: 'catalog-only', capabilities: ['requirements-clarification'], conflicts: ['vibe-tether'],
         fallback: 'vibe-tether', required_outputs: [], exit_evidence: [],
       },
     ],
