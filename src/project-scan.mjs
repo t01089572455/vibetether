@@ -69,5 +69,10 @@ export async function scanProject(root, enabledAdapters, profile) {
       destructive_actions: 'confirm',
       release_actions: 'confirm',
     },
+    checkpoint: {
+      mode: 'local',
+      path: '.vibetether/state/current.yaml',
+      max_age_hours: 168,
+    },
   };
 }

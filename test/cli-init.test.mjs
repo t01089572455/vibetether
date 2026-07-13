@@ -74,6 +74,7 @@ test('repeated init is byte-for-byte idempotent', async () => {
     readFile(path.join(target, 'CLAUDE.md'), 'utf8'),
     readFile(path.join(target, '.gitignore'), 'utf8'),
     readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'),
+    readFile(path.join(target, '.vibetether', 'state', 'current.yaml'), 'utf8'),
   ]);
 
   const second = runCli(args);
@@ -83,6 +84,7 @@ test('repeated init is byte-for-byte idempotent', async () => {
     readFile(path.join(target, 'CLAUDE.md'), 'utf8'),
     readFile(path.join(target, '.gitignore'), 'utf8'),
     readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'),
+    readFile(path.join(target, '.vibetether', 'state', 'current.yaml'), 'utf8'),
   ]);
 
   assert.deepEqual(after, before);
@@ -135,4 +137,8 @@ test('init keeps runtime checkpoint state out of version control', async () => {
   assert.match(ignore, /^dist\/$/m);
   assert.match(ignore, /<!-- vibetether:start -->[\s\S]*\.vibetether\/state\/[\s\S]*<!-- vibetether:end -->/);
   assert.equal(await exists(path.join(target, '.vibetether', 'intent.md')), true);
+  const checkpoint = YAML.parse(await readFile(path.join(target, '.vibetether', 'state', 'current.yaml'), 'utf8'));
+  assert.equal(checkpoint.schema_version, 1);
+  assert.equal(checkpoint.lifecycle_state, 'DISCOVER');
+  assert.equal(checkpoint.private_reasoning, undefined);
 });

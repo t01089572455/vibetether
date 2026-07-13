@@ -5,6 +5,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import YAML from 'yaml';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cli = path.join(root, 'bin', 'vibetether.mjs');
@@ -50,6 +51,30 @@ test('doctor exits 4 when a declared truth source is missing', async () => {
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, false);
   assert.equal(report.issues.some((issue) => issue.code === 'missing-source'), true);
+});
+
+test('doctor detects a stale runtime checkpoint without exposing private reasoning', async () => {
+  const target = await project('doctor-stale');
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--yes']).status, 0);
+  const checkpointPath = path.join(target, '.vibetether', 'state', 'current.yaml');
+  const checkpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
+  checkpoint.updated_at = '2000-01-01T00:00:00.000Z';
+  await writeFile(checkpointPath, YAML.stringify(checkpoint), 'utf8');
+
+  const result = runCli(['doctor', '--project', target, '--json']);
+
+  assert.equal(result.status, 4, result.stderr || result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.issues.some((issue) => issue.code === 'stale-checkpoint'), true);
+  assert.doesNotMatch(result.stdout, /chain-of-thought|private_reasoning/i);
+
+  const installedValidator = path.join(target, '.agents', 'skills', 'vibe-tether', 'scripts', 'validate-project.mjs');
+  const validator = spawnSync(process.execPath, [installedValidator, '--project', target], {
+    cwd: target,
+    encoding: 'utf8',
+  });
+  assert.equal(validator.status, 1, validator.stderr || validator.stdout);
+  assert.match(validator.stderr, /stale checkpoint/i);
 });
 
 test('uninstall dry-run leaves the project unchanged', async () => {

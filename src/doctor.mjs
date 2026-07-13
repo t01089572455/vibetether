@@ -82,6 +82,34 @@ export async function inspectProject(options) {
       }
       if (!(await exists(skillPath))) issues.push(issue('missing-skill', `Missing installed Skill for ${name}`));
     }
+
+    const checkpoint = manifest.checkpoint;
+    if (checkpoint?.path) {
+      const checkpointPath = path.resolve(root, checkpoint.path);
+      const relative = path.relative(root, checkpointPath);
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        issues.push(issue('checkpoint-escape', 'Checkpoint path escapes the project'));
+      } else if (!(await exists(checkpointPath))) {
+        issues.push(issue('missing-checkpoint', `Missing runtime checkpoint: ${checkpoint.path}`));
+      } else {
+        try {
+          const state = YAML.parse(await readFile(checkpointPath, 'utf8'));
+          if (state?.schema_version !== 1 || !state?.lifecycle_state || !state?.updated_at) {
+            issues.push(issue('invalid-checkpoint', 'Runtime checkpoint is missing required recovery fields'));
+          } else {
+            const updatedAt = Date.parse(state.updated_at);
+            const maxAge = Number(checkpoint.max_age_hours ?? 168) * 60 * 60 * 1000;
+            if (!Number.isFinite(updatedAt)) {
+              issues.push(issue('invalid-checkpoint', 'Runtime checkpoint has an invalid updated_at value'));
+            } else if (Date.now() - updatedAt > maxAge) {
+              issues.push(issue('stale-checkpoint', `Runtime checkpoint is older than ${checkpoint.max_age_hours ?? 168} hours`));
+            }
+          }
+        } catch (error) {
+          issues.push(issue('invalid-checkpoint', `Cannot parse runtime checkpoint: ${error.message}`));
+        }
+      }
+    }
   }
 
   const harnesses = Object.entries(manifest?.harnesses ?? {})

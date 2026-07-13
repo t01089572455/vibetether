@@ -11,7 +11,7 @@ import {
   resolveInside,
   writeAtomic,
 } from './files.mjs';
-import { DEFAULT_INTENT, serializeManifest } from './manifest.mjs';
+import { createInitialCheckpoint, DEFAULT_INTENT, serializeManifest } from './manifest.mjs';
 import { scanProject } from './project-scan.mjs';
 import { installSkill } from './skill-install.mjs';
 
@@ -50,7 +50,7 @@ export async function initialize(options) {
     content: applyManagedBlock(ignoreOriginal ?? '', GITIGNORE_BODY),
   });
 
-  for (const relativePath of ['.vibetether/project.yaml', '.vibetether/intent.md']) {
+  for (const relativePath of ['.vibetether/project.yaml', '.vibetether/intent.md', '.vibetether/state/current.yaml']) {
     await rejectSymlinkPath(root, relativePath);
   }
   for (const adapter of adapters) {
@@ -75,6 +75,17 @@ export async function initialize(options) {
       target: intentTarget,
       original: null,
       content: DEFAULT_INTENT,
+    });
+  }
+
+  const checkpointTarget = resolveInside(root, '.vibetether/state/current.yaml');
+  const checkpointOriginal = await readTextIfPresent(checkpointTarget);
+  if (checkpointOriginal === null) {
+    textPlans.push({
+      relativePath: '.vibetether/state/current.yaml',
+      target: checkpointTarget,
+      original: null,
+      content: createInitialCheckpoint(manifest.goal_source),
     });
   }
 
