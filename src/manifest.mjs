@@ -23,6 +23,15 @@ export function enableHarnesses(manifest, adapters) {
   return { ...manifest, harnesses };
 }
 
+export function createInitialExperienceFeedback() {
+  return {
+    trigger: null,
+    disposition: 'pending',
+    reason: '',
+    artifacts: [],
+  };
+}
+
 export function createInitialCheckpoint(goalSource, recommendedProvider = 'vibe-tether') {
   return YAML.stringify(
     {
@@ -47,12 +56,7 @@ export function createInitialCheckpoint(goalSource, recommendedProvider = 'vibe-
         selection_reason: null,
         invocation_status: 'not-started',
       },
-      experience_feedback: {
-        trigger: null,
-        disposition: 'pending',
-        reason: '',
-        artifacts: [],
-      },
+      experience_feedback: createInitialExperienceFeedback(),
     },
     { lineWidth: 0 },
   );

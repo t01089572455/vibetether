@@ -14,7 +14,14 @@ import {
   resolveInside,
   writeAtomic,
 } from './files.mjs';
-import { createInitialCheckpoint, DEFAULT_INTENT, enableHarnesses, parseManifest, serializeManifest } from './manifest.mjs';
+import {
+  createInitialCheckpoint,
+  createInitialExperienceFeedback,
+  DEFAULT_INTENT,
+  enableHarnesses,
+  parseManifest,
+  serializeManifest,
+} from './manifest.mjs';
 import { scanProject } from './project-scan.mjs';
 import { stageProviderSources } from './provider-fetch.mjs';
 import {
@@ -331,6 +338,7 @@ export async function initialize(options, dependencies = {}) {
     } catch (error) {
       throw new CliError(`Checkpoint conflict in .vibetether/state/current.yaml: ${error.message}`, 3);
     }
+    let checkpointChanged = false;
     if (!checkpoint.provider_selection) {
       checkpoint.provider_selection = {
         capability: 'requirements-clarification',
@@ -339,6 +347,13 @@ export async function initialize(options, dependencies = {}) {
         selection_reason: null,
         invocation_status: 'not-started',
       };
+      checkpointChanged = true;
+    }
+    if (!checkpoint.experience_feedback) {
+      checkpoint.experience_feedback = createInitialExperienceFeedback();
+      checkpointChanged = true;
+    }
+    if (checkpointChanged) {
       textPlans.push({
         relativePath: '.vibetether/state/current.yaml',
         target: checkpointTarget,

@@ -91,7 +91,7 @@ test('README explains support, architecture, UI control, and preview limitations
   assert.match(readme, /Claude Code[\s\S]*official preview/i);
   assert.match(readme, /```mermaid[\s\S]*control kernel/i);
   assert.match(readme, /```mermaid[\s\S]*golden screen/i);
-  assert.match(readme, /0\.2\.0 preview/i);
+  assert.match(readme, /0\.2\.1 preview/i);
   assert.match(readme, /not independent agent forward tests/i);
   assert.match(readme, /30\/30[\s\S]*24\/30/);
   assert.match(readme, /35\.0%/);
@@ -105,7 +105,8 @@ test('package metadata points to the authenticated public repository', async () 
   assert.equal(pkg.repository.url, 'git+https://github.com/t01089572455/vibetether.git');
   assert.equal(pkg.homepage, 'https://github.com/t01089572455/vibetether#readme');
   assert.equal(pkg.bugs.url, 'https://github.com/t01089572455/vibetether/issues');
-  assert.equal(pkg.version, '0.2.0');
+  assert.equal(pkg.version, '0.2.1');
+  assert.equal(pkg.files.includes('docs/operations'), true);
 });
 
 test('public release documents contain no local path or non-English brand leakage', async () => {

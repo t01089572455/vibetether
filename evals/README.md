@@ -14,4 +14,4 @@ Each of the 14 fixtures declares the input state, pressure, applicable truth sou
 
 This is a schema and policy consistency suite. It does not run an autonomous coding agent, measure drift reduction, compare models, simulate a genuinely long context, or prove that a host will automatically invoke the Skill. These checks are not independent agent forward tests and cannot justify a `1.0.0` claim.
 
-The public `0.2.0` release is therefore a preview. The repository preserves one synthetic baseline-versus-Skill comparative adjudication, but real multi-hour Codex and Claude project trials are still required before stronger claims are made. Future trials must report model and host versions, scenario artifacts, compliance, rationalizations, overhead, failures, and limitations.
+The public `0.2.1` release is therefore a preview. The repository preserves one synthetic baseline-versus-Skill comparative adjudication, but real multi-hour Codex and Claude project trials are still required before stronger claims are made. Future trials must report model and host versions, scenario artifacts, compliance, rationalizations, overhead, failures, and limitations.

@@ -407,6 +407,7 @@ test('init upgrades a legacy managed block and checkpoint without losing recover
   const checkpointPath = path.join(target, '.vibetether', 'state', 'current.yaml');
   const checkpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
   delete checkpoint.provider_selection;
+  delete checkpoint.experience_feedback;
   checkpoint.approved_decisions = ['Preserve this decision'];
   await writeFile(checkpointPath, YAML.stringify(checkpoint), 'utf8');
 
@@ -418,6 +419,12 @@ test('init upgrades a legacy managed block and checkpoint without losing recover
   assert.deepEqual(upgradedCheckpoint.approved_decisions, ['Preserve this decision']);
   assert.equal(upgradedCheckpoint.provider_selection.recommended, 'demo');
   assert.equal(upgradedCheckpoint.provider_selection.invocation_status, 'not-started');
+  assert.deepEqual(upgradedCheckpoint.experience_feedback, {
+    trigger: null,
+    disposition: 'pending',
+    reason: '',
+    artifacts: [],
+  });
 });
 
 test('identical user-installed providers are reused without claiming ownership', async () => {

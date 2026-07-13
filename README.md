@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/t01089572455/vibetether/actions/workflows/ci.yml/badge.svg)](https://github.com/t01089572455/vibetether/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Preview](https://img.shields.io/badge/release-0.2.0%20preview-orange.svg)](#preview-status)
+[![Preview](https://img.shields.io/badge/release-0.2.1%20preview-orange.svg)](#preview-status)
 
 VibeTether is a project-local control Skill, advisory Skill router, and reusable-success capture loop for long-running coding work. It helps capable agents keep the approved goal, project rules, current slice, required evidence, and proven operational paths visible after context compaction, handoffs, phase changes, and repeated corrections.
 
@@ -301,6 +301,12 @@ Use `--dry-run` first when changing profiles or bundles. A profile downgrade kee
 
 ## Troubleshooting
 
+### PowerShell blocks `npm.ps1`
+
+Some Windows execution policies block the PowerShell wrapper even though Node.js and npm are installed. Use the command shim explicitly, for example `npm.cmd test`, `npm.cmd run check`, or `npm.cmd version`, instead of weakening the machine execution policy for VibeTether.
+
+If npm reports `EPERM` while writing a cache under a protected installation directory such as `Program Files`, point `npm_config_cache` to a user-writable temporary or user cache directory for that command. Do not run the release as Administrator merely to make a shared npm cache writable.
+
 ### `doctor` reports a changed managed Skill
 
 VibeTether will not overwrite or remove the modified copy. Back up the customization, compare it with the pinned upstream version, then either restore the managed fingerprint or move the customization to a user-owned Skill name before re-running `init`.
@@ -354,7 +360,7 @@ Project instructions are a behavioral control layer, not a security sandbox. Vib
 
 ## Preview status
 
-This is a **0.2.0 preview**. The repository includes deterministic contract, lifecycle, catalog, license, routing, rollback, and scenario-matrix tests plus 14 static drift-pressure scenarios. Those static checks are **not independent agent forward tests** and cannot justify a stable `1.0.0` effectiveness claim.
+This is a **0.2.1 preview**. The repository includes deterministic contract, lifecycle, catalog, license, routing, rollback, and scenario-matrix tests plus 14 static drift-pressure scenarios. Those static checks are **not independent agent forward tests** and cannot justify a stable `1.0.0` effectiveness claim.
 
 A three-role comparative adjudication in the development session scored synthetic next-action responses. The VibeTether-enabled run scored **30/30**, versus **24/30** for an already strong baseline, with **35.0%** more words. The observed gain was explicit re-anchor, checkpoint, authority, and functional-versus-visual acceptance discipline. This is preview evidence from a synthetic response trial, not a real multi-hour Codex and Claude project trial. Read the [evaluation report](evals/results/preview-evaluation.md), [run metadata](evals/results/run-metadata.json), and [honesty boundary](evals/README.md).
 
