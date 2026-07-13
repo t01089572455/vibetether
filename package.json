@@ -2,6 +2,14 @@
   "name": "vibetether",
   "version": "0.1.0",
   "description": "Keep coding agents tethered to project truth.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/t01089572455/vibetether.git"
+  },
+  "homepage": "https://github.com/t01089572455/vibetether#readme",
+  "bugs": {
+    "url": "https://github.com/t01089572455/vibetether/issues"
+  },
   "type": "module",
   "bin": {
     "vibetether": "./bin/vibetether.mjs"
