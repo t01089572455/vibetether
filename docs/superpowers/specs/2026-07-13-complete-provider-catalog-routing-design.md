@@ -102,7 +102,14 @@ The default `standard` profile catalogs the complete Skill inventories of these 
 2. **mattpocock/skills** — complementary entry, orientation, specification, prototype, handoff, triage, architecture, and productivity capabilities.
 3. **multica-ai/andrej-karpathy-skills** — one short policy overlay for assumptions, simplicity, surgical changes, and verifiable goals.
 
-Every source must be pinned to an immutable commit. Tags are display metadata only. Each complete Skill directory and applicable license file receives a deterministic fingerprint before project writes begin.
+Every source must be pinned to an immutable commit. Tags are display metadata only. Each complete Skill directory and applicable license evidence receives a deterministic fingerprint before project writes begin.
+
+Provider license evidence has two explicit modes:
+
+1. `full-text` points to a complete upstream license file. VibeTether verifies and installs the exact text.
+2. `readme-declaration` is allowed only for an upstream repository that explicitly declares a recognized license in a pinned README and advertises user-initiated Skill installation, but omits a complete license file. VibeTether verifies the README fingerprint, records the declaration and limitation in the lock and public notices, warns during initialization, and never embeds that provider content in the VibeTether npm package.
+
+`readme-declaration` does not silently masquerade as complete license text. It is limited to explicit user-initiated provider fetches, and a changed or missing declaration fails before project writes. The reviewed Karpathy commit `2c606141936f1eeef17fa3043a72095b4765b9c2` and Vercel commit `f8a72b9603728bb92a217a879b7e62e43ad76c81` use this mode. The reviewed Addy commit `98967c45a42b88d6b8fb3a88b7ff6273920763d6` uses `full-text` MIT evidence.
 
 ### 6.2 Superpowers classification
 
@@ -284,6 +291,7 @@ Initialization stops before project writes when:
 - an upstream ref does not resolve to the pinned commit;
 - an expected Skill is missing from a complete catalog;
 - a Skill or license fingerprint differs;
+- a declared-license README is missing, changed, or no longer contains the pinned license declaration;
 - a Skill has no classification;
 - two exposed Skills collide by install name;
 - an automatic route has multiple equal primary providers;
@@ -305,7 +313,7 @@ Existing `0.2.0` installations migrate through the existing exact-fingerprint pa
 
 1. Preserve pre-existing identical provider Skills without claiming ownership.
 2. Build the new catalog and exposure plan in staging.
-3. Verify all sources, classifications, conflicts, fingerprints, and licenses.
+3. Verify all sources, classifications, conflicts, fingerprints, and explicit license-evidence modes.
 4. Atomically replace only VibeTether-owned unchanged surfaces.
 5. Regenerate the capability board and provider lock with catalog/exposure state.
 6. Keep `core` network-free and preserve existing `standard`/`extended` command compatibility.
@@ -334,6 +342,7 @@ Implementation follows test-first development. Required RED scenarios include:
 16. README scenario examples match registry routes and provider availability.
 17. README quick-start and lifecycle commands parse successfully, documented options exist in CLI help, and the manual acceptance tour remains executable in a temporary project.
 18. README claims about automatic routing, provider availability, offline behavior, and host limitations match generated artifacts and evaluation evidence.
+19. Full-text and README-declaration license evidence are reported distinctly; a changed declaration stops before catalog or exposure writes.
 
 Static routing tests are necessary but insufficient. The preview evaluation set must add forward scenarios for codebase orientation, huge-effort decomposition, prototype choice, compaction/handoff, React UI routing, production migration, and duplicate-provider pressure. Claims remain preview-level until real long-running Codex and Claude trials show that the router reduces drift without unacceptable overhead.
 
