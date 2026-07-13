@@ -44,6 +44,8 @@ Use project-declared precedence when present, but never weaken platform constrai
 
 Do not continue while chat and project truth remain inconsistent. Do not create a new "latest" document to hide the unresolved conflict.
 
+While awaiting direction, continue only separable, reversible preparation that does not encode the disputed direction, cross a gate, or create an external side effect. Do not turn a direction gate into unnecessary idleness when safe investigation or scaffolding remains authorized.
+
 ## Question Format
 
 Ask only after inspecting available code and documents. Use:
@@ -71,4 +73,3 @@ Classify every important reference:
 - reject or defer.
 
 Record what to adopt, what not to copy, intentional differences, license constraints, and acceptance evidence. A product name, screenshot, or popularity count is not a reference contract.
-

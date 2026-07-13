@@ -47,6 +47,8 @@ Lock:
 
 Before broad implementation, produce two or three low-cost directions or one representative golden screen/state family. Ask the user to approve the direction. Extract and lock tokens and component rules only after approval.
 
+Prefer one representative golden screen when an existing design system and a high-value representative workflow already constrain the solution. Produce two or three directions only when the user is choosing among genuinely different visual strategies and a cheap comparison reduces material direction risk.
+
 Do not build the full application, parallelize page generation, or spread a visual system before this gate passes.
 
 ## Implementation Loop
@@ -81,4 +83,3 @@ Do not activate multiple overlapping aesthetic Skills. Do not choose a provider 
 ## Stop Conditions
 
 Stop when the visual direction is unapproved, current screenshots are missing for a redesign, a reference conflicts with required capabilities, the agent proposes a full rewrite before a golden screen, visual feedback is not converted into observable differences, or visual simplification removes product behavior.
-

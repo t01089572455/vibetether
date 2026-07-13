@@ -175,6 +175,8 @@ Never promote:
 
 Record commands, exit codes, result summaries, artifact paths, scope review, and known evidence limitations. Do not expose private chain-of-thought, raw ReAct reasoning, credentials, sensitive data, or unfinished internal tool plans.
 
+Keep lifecycle labels, checkpoint mechanics, and control-kernel terminology internal unless they help the user decide. User-facing messages should state the conflict or result, impact, recommendation, and confirmation needed without narrating the whole control process.
+
 ## Drift Response
 
 - `L1_LOCAL`: correct a local, reversible deviation and record it.
@@ -221,4 +223,3 @@ Before claiming completion:
 5. Record independence limitations honestly.
 6. Update the correct durable source with accepted decisions or reusable failures.
 7. Write the final checkpoint and exact verdict.
-

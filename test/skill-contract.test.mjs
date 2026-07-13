@@ -81,6 +81,18 @@ test('the installed validator can validate its own public Skill', () => {
   assert.match(result.stdout, /VibeTether Skill: valid/);
 });
 
+test('pressure-test feedback keeps control strict without unnecessary process overhead', async () => {
+  const skill = await readFile(skillPath, 'utf8');
+  const authority = await readFile(path.join(skillDir, 'references', 'authority-and-conflicts.md'), 'utf8');
+  const ui = await readFile(path.join(skillDir, 'references', 'ui-control-loop.md'), 'utf8');
+
+  assert.match(skill, /keep .*lifecycle.*checkpoint.*internal.*user-facing/i);
+  assert.match(authority, /separable, reversible preparation/i);
+  assert.match(authority, /does not encode the disputed direction/i);
+  assert.match(ui, /prefer one representative golden screen/i);
+  assert.match(ui, /two or three directions only when/i);
+});
+
 test('no published Skill resource leaks project-private product terms', async () => {
   const entries = await readdir(skillDir, { recursive: true, withFileTypes: true });
   const textFiles = entries
