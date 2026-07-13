@@ -11,5 +11,5 @@
   },
   "enforcement": "behavioral",
   "overwrite_user_content": false,
-  "notes": "Automatic invocation depends on the host's Skill routing. Re-anchor triggers are also written into project instructions."
+  "notes": "Automatic invocation depends on the host. Project instructions point Claude Code to the advisory capability board and offline resolver at task and re-anchor boundaries."
 }

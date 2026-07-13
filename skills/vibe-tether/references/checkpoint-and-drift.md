@@ -32,6 +32,12 @@ negative_evidence: []
 open_risks: []
 next_intended_action: one concrete action
 alignment_reason: why the action serves the goal
+provider_selection:
+  capability: planning
+  recommended: writing-plans
+  selected: writing-plans
+  selection_reason: recommended provider is installed and fits the phase
+  invocation_status: completed
 ```
 
 Exclude prompts, credentials, sensitive tool output, raw reasoning, full provider responses, and private user data.
@@ -43,8 +49,9 @@ Exclude prompts, credentials, sensitive tool output, raw reasoning, full provide
 3. Compare checkpoint paths and scope with the working tree.
 4. Reload sources applicable to the next action.
 5. Resolve stale decisions or conflicts.
-6. Restate goal, phase, protected capabilities, evidence gap, and next action.
-7. Write a fresh checkpoint before acting.
+6. Consult the capability board and resolve the advisory route for the current phase and signals.
+7. Restate goal, phase, protected capabilities, provider selection, evidence gap, and next action.
+8. Write a fresh checkpoint before acting.
 
 Never resume directly from a compacted conversational summary.
 

@@ -10,87 +10,233 @@
   "capabilities": [
     {
       "id": "requirements-clarification",
+      "phases": ["DISCOVER", "ALIGN"],
       "purpose": "Turn an ambiguous request into an approved Intent Contract without guessing direction.",
+      "invoke_when": ["goal-unclear", "scope-unclear", "success-evidence-unclear", "direction-conflict"],
       "required_inputs": ["user_request", "applicable_truth_sources"],
       "required_outputs": ["goal", "success_evidence", "scope_boundaries", "open_direction_decisions"],
+      "exit_evidence": ["The user-owned direction is explicit enough for design or planning."],
       "fallback": "Use the built-in directional interview and stop on unresolved direction."
     },
     {
+      "id": "document-alignment",
+      "phases": ["ALIGN"],
+      "purpose": "Resolve conflicts and missing decisions against project truth before implementation.",
+      "invoke_when": ["truth-sources-exist", "documents-conflict", "decision-owner-needed"],
+      "required_inputs": ["applicable_truth_sources", "current_request"],
+      "required_outputs": ["authority_order", "resolved_decisions", "open_conflicts"],
+      "exit_evidence": ["Applicable sources have been read and material conflicts are resolved or escalated."],
+      "fallback": "Use the built-in authority and conflict loop."
+    },
+    {
+      "id": "explicit-requirements-interview",
+      "phases": ["DISCOVER"],
+      "purpose": "Expose the user-invoked grill-me alias for an explicit relentless interview.",
+      "invoke_when": ["user-explicitly-invokes-grill-me"],
+      "required_inputs": ["user_request"],
+      "required_outputs": ["clarified_decisions", "remaining_ambiguities"],
+      "exit_evidence": ["The explicit grilling session has produced user-owned decisions."],
+      "fallback": "Use the built-in directional interview."
+    },
+    {
+      "id": "explicit-document-alignment",
+      "phases": ["ALIGN"],
+      "purpose": "Expose the user-invoked grill-with-docs alias for clarification with durable domain documents.",
+      "invoke_when": ["user-explicitly-invokes-grill-with-docs"],
+      "required_inputs": ["user_request", "domain_documents"],
+      "required_outputs": ["clarified_decisions", "adr_updates", "glossary_updates"],
+      "exit_evidence": ["The user-owned decisions and requested durable documents agree."],
+      "fallback": "Use the built-in alignment interview and update approved truth directly."
+    },
+    {
+      "id": "domain-modeling",
+      "phases": ["ALIGN", "DESIGN"],
+      "purpose": "Create durable shared language and record consequential domain decisions.",
+      "invoke_when": ["terminology-unstable", "domain-boundaries-unclear", "durable-decision-needed"],
+      "required_inputs": ["project_truth", "domain_examples"],
+      "required_outputs": ["ubiquitous_language", "domain_boundaries", "decision_record"],
+      "exit_evidence": ["Terms and boundaries are usable by implementation and review."],
+      "fallback": "Use the built-in glossary and decision-record path."
+    },
+    {
       "id": "product-design",
+      "phases": ["DESIGN"],
       "purpose": "Map behavior and user experience choices to approved product outcomes.",
+      "invoke_when": ["behavior-choice-needed", "workflow-choice-needed", "multiple-valid-directions"],
       "required_inputs": ["intent_contract", "product_truth"],
       "required_outputs": ["approved_design", "acceptance_evidence"],
+      "exit_evidence": ["The user has approved a design direction and its acceptance evidence."],
       "fallback": "Use the built-in design brief and request approval before implementation."
     },
     {
       "id": "planning",
+      "phases": ["PLAN"],
       "purpose": "Convert approved direction into small, verifiable execution slices.",
+      "invoke_when": ["direction-approved", "multi-step-change", "multiple-files-or-phases"],
       "required_inputs": ["approved_design", "repository_state"],
       "required_outputs": ["ordered_slices", "verification_commands", "risk_gates"],
+      "exit_evidence": ["Every slice has scope, verification, dependencies, and applicable user gates."],
       "fallback": "Use the built-in slice plan with one in-progress slice at a time."
     },
     {
       "id": "implementation",
+      "phases": ["EXECUTE_ONE"],
       "purpose": "Implement one approved slice while preserving project constraints.",
+      "invoke_when": ["slice-approved", "low-risk-reversible-action", "constraints-known"],
       "required_inputs": ["current_slice", "applicable_constraints"],
       "required_outputs": ["bounded_change", "change_summary"],
+      "exit_evidence": ["The current slice is implemented without expanding direction or scope."],
       "fallback": "Use the built-in minimal-change execution loop."
     },
     {
+      "id": "git-isolation",
+      "phases": ["PLAN", "EXECUTE_ONE"],
+      "purpose": "Choose a host-native or Git worktree boundary before isolated feature execution.",
+      "invoke_when": ["isolation-needed", "feature-work-starting", "plan-execution-starting"],
+      "required_inputs": ["repository_state", "host_isolation_state"],
+      "required_outputs": ["isolation_choice", "verified_workspace"],
+      "exit_evidence": ["The execution workspace is isolated or a safe in-place choice is explicit."],
+      "fallback": "Use the built-in isolation check and stop if safe isolation is mandatory but unavailable."
+    },
+    {
+      "id": "plan-execution",
+      "phases": ["EXECUTE_ONE"],
+      "purpose": "Execute an approved plan one bounded and reviewed slice at a time.",
+      "invoke_when": ["written-plan-exists", "slice-ready", "verification-defined"],
+      "required_inputs": ["approved_plan", "current_slice", "repository_state"],
+      "required_outputs": ["implemented_slice", "fresh_verification", "checkpoint_update"],
+      "exit_evidence": ["The slice passes its declared checks and the next action is explicit."],
+      "fallback": "Use the built-in one-slice execution loop."
+    },
+    {
       "id": "tdd",
+      "phases": ["EXECUTE_ONE"],
       "purpose": "Prove behavior through an observed red-green-refactor cycle.",
+      "invoke_when": ["new-behavior", "bug-fix", "testable-contract"],
       "required_inputs": ["behavior_contract"],
       "required_outputs": ["red_evidence", "green_evidence", "refactor_evidence"],
+      "exit_evidence": ["The failure was observed before implementation and the focused test is now green."],
       "fallback": "Use the built-in red-green-refactor discipline."
     },
     {
+      "id": "parallel-execution",
+      "phases": ["EXECUTE_ONE"],
+      "purpose": "Delegate independent tasks without leaking shared state or bypassing review between results.",
+      "invoke_when": ["multiple-independent-tasks", "subagents-available", "delegation-authorized"],
+      "required_inputs": ["independent_task_set", "delegation_boundary"],
+      "required_outputs": ["isolated_results", "integration_review"],
+      "exit_evidence": ["Each delegated result is reviewed and integrated against the approved slice."],
+      "fallback": "Use the built-in sequential execution path."
+    },
+    {
       "id": "debugging",
+      "phases": ["DIAGNOSE"],
       "purpose": "Diagnose unexpected behavior before proposing a correction.",
+      "invoke_when": ["unexpected-behavior", "test-failure", "performance-regression", "root-cause-unknown"],
       "required_inputs": ["reproduction", "observed_evidence"],
       "required_outputs": ["root_cause", "minimal_fix", "regression_evidence"],
+      "exit_evidence": ["The root cause is supported by reproduction and discriminating evidence."],
       "fallback": "Use the built-in reproduce-isolate-hypothesize-verify loop."
     },
     {
       "id": "frontend-product-design",
+      "phases": ["DESIGN"],
       "purpose": "Lock visual intent, information hierarchy, interaction states, and a golden reference.",
+      "invoke_when": ["user-visible-ui", "visual-direction-unapproved", "reference-ui-provided"],
       "required_inputs": ["product_goal", "page_type", "brand_or_reference_assets"],
       "required_outputs": ["visual_direction", "golden_screen", "state_matrix"],
+      "exit_evidence": ["One representative visual direction or golden screen is approved."],
       "fallback": "Use the built-in UI Intent Contract and require visual approval."
     },
     {
       "id": "frontend-engineering",
+      "phases": ["EXECUTE_ONE"],
       "purpose": "Implement approved UI intent with responsive and accessible behavior.",
+      "invoke_when": ["approved-ui-contract", "responsive-states-needed", "accessibility-states-needed"],
       "required_inputs": ["approved_ui_contract", "existing_design_system"],
       "required_outputs": ["implemented_states", "accessibility_evidence", "responsive_evidence"],
+      "exit_evidence": ["Required states work at declared viewports and accessibility checks pass."],
       "fallback": "Use the built-in UI implementation checklist."
     },
     {
       "id": "browser-verification",
+      "phases": ["VERIFY"],
       "purpose": "Verify real rendered behavior and compare it with the golden reference.",
+      "invoke_when": ["user-visible-change", "browser-flow-changed", "visual-claim"],
       "required_inputs": ["running_product", "golden_screen", "critical_flows"],
       "required_outputs": ["functional_verdict", "visual_verdict", "captured_evidence"],
+      "exit_evidence": ["Functional and visual verdicts are recorded separately with current captures."],
       "fallback": "Use the built-in render-capture-compare loop."
     },
     {
       "id": "security-review",
+      "phases": ["REVIEW"],
       "purpose": "Inspect trust boundaries, permissions, secrets, and destructive operations.",
+      "invoke_when": ["permission-change", "security-boundary", "secret-handling", "destructive-operation"],
       "required_inputs": ["change_set", "threat_context"],
       "required_outputs": ["findings", "risk_verdict"],
+      "exit_evidence": ["Critical trust-boundary risks are resolved or explicitly accepted by the user."],
       "fallback": "Use the built-in high-risk checklist and stop on unreviewed critical risk."
     },
     {
       "id": "code-review",
+      "phases": ["REVIEW"],
       "purpose": "Review correctness, regressions, contracts, and maintainability against project truth.",
+      "invoke_when": ["implementation-complete", "before-merge", "consequential-diff"],
       "required_inputs": ["diff", "acceptance_contract"],
       "required_outputs": ["prioritized_findings", "review_verdict"],
+      "exit_evidence": ["Findings are prioritized and blocking issues are resolved or declared."],
       "fallback": "Use the built-in evidence-first review checklist."
     },
     {
+      "id": "review-feedback",
+      "phases": ["REVIEW", "EXECUTE_ONE"],
+      "purpose": "Evaluate review feedback technically before accepting or implementing it.",
+      "invoke_when": ["review-feedback-received", "feedback-unclear", "feedback-technically-questionable"],
+      "required_inputs": ["review_feedback", "code_and_contract_evidence"],
+      "required_outputs": ["verified_feedback", "accepted_or_rejected_items", "implementation_evidence"],
+      "exit_evidence": ["Every accepted suggestion is technically verified and every rejection is evidence-based."],
+      "fallback": "Use the built-in verify-before-accepting review loop."
+    },
+    {
+      "id": "skill-authoring",
+      "phases": ["DESIGN", "PLAN", "EXECUTE_ONE", "VERIFY"],
+      "purpose": "Create or revise an Agent Skill with trigger, resource, and forward-verification discipline.",
+      "invoke_when": ["skill-creation-or-update", "skill-trigger-change", "skill-release-verification"],
+      "required_inputs": ["skill_goal", "concrete_usage_examples"],
+      "required_outputs": ["skill_contract", "reusable_resources", "validation_evidence"],
+      "exit_evidence": ["The Skill validates and its target behaviors have been exercised without hidden context."],
+      "fallback": "Use the built-in Skill authoring and validation checklist."
+    },
+    {
+      "id": "completion-verification",
+      "phases": ["VERIFY"],
+      "purpose": "Require fresh evidence before any completion or correctness claim.",
+      "invoke_when": ["about-to-claim-complete", "fix-claimed", "tests-claimed-passing"],
+      "required_inputs": ["acceptance_contract", "changed_scope"],
+      "required_outputs": ["fresh_command_output", "scope_verdict", "known_limitations"],
+      "exit_evidence": ["Fresh verification output supports every material completion claim."],
+      "fallback": "Use the built-in evidence-before-claims gate."
+    },
+    {
       "id": "release-verification",
+      "phases": ["SHIP"],
       "purpose": "Prove release readiness and obtain confirmation before external publication.",
+      "invoke_when": ["release-candidate", "publish-requested", "deployment-requested"],
       "required_inputs": ["release_candidate", "release_contract"],
       "required_outputs": ["fresh_verification", "known_limitations", "release_decision"],
+      "exit_evidence": ["The release candidate is verified and the user has confirmed external publication."],
       "fallback": "Use the built-in release gate and require explicit confirmation."
+    },
+    {
+      "id": "branch-finish",
+      "phases": ["SHIP"],
+      "purpose": "Present explicit integration, publication, and cleanup choices for completed work.",
+      "invoke_when": ["branch-complete", "integration-choice-needed", "cleanup-choice-needed"],
+      "required_inputs": ["verified_branch", "base_branch", "release_constraints"],
+      "required_outputs": ["integration_options", "user_decision", "cleanup_result"],
+      "exit_evidence": ["The chosen integration path is complete and publication gates were respected."],
+      "fallback": "Use the built-in branch finish and publication gate."
     }
   ]
 }

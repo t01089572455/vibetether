@@ -12,6 +12,8 @@ project_id: example-project
 
 goal_source: docs/product-direction.md
 intent_contract: docs/intent-contract.md
+capability_board: .vibetether/capabilities.yaml
+provider_lock: .vibetether/providers.lock.yaml
 
 sources:
   always:
@@ -63,7 +65,8 @@ conflicts:
 4. Report duplicate, missing, stale, and conflicting candidates.
 5. Ask about ambiguities that can change direction.
 6. Write the manifest and lightweight Intent Contract after confirmation.
-7. Let `doctor` detect moved, deleted, or drifting sources later.
+7. Generate the advisory capability board and exact provider lock during explicit initialization.
+8. Let `doctor` detect moved, deleted, or drifting sources, providers, and licenses later.
 
 Never rewrite or consolidate existing project documents during initialization.
 
@@ -75,10 +78,10 @@ Adapters may write only a bounded block:
 <!-- vibetether:start -->
 ## VibeTether
 
-Run the lightweight preflight before consequential actions. Perform a full re-anchor through `.vibetether/project.yaml` when a trigger fires. Do not bypass unresolved direction, authority conflicts, or project gates.
+Run the lightweight preflight before consequential actions. Consult `.vibetether/capabilities.yaml`, treat optional provider routes as recommendations, and record the selected path. Perform a full re-anchor through `.vibetether/project.yaml` when a trigger fires. Do not bypass unresolved direction, authority conflicts, or project gates.
 <!-- vibetether:end -->
 ```
 
-Show a diff, create a backup before the first applied change, preserve user content, remain idempotent, stop on conflicting managed blocks, and remove only managed content during uninstall.
+Show a diff, create a backup before the first applied change, preserve user content, remain idempotent, stop on conflicting managed blocks, and remove only VibeTether-owned unchanged content during uninstall. Preserve pre-existing provider Skills.
 
 Instruction files are behavioral guidance, not a security boundary. Use platform permissions and explicit hooks for enforcement when supported and authorized.

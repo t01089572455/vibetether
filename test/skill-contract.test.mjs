@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { LEGACY_VIBETETHER_FINGERPRINTS } from '../src/skill-install.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const skillDir = path.join(root, 'skills', 'vibe-tether');
@@ -45,16 +46,28 @@ test('the public Skill exposes the VibeTether drift-control contract', async () 
   assert.equal(frontmatter.name, 'vibe-tether');
   assert.match(frontmatter.description, /^Use when /);
   assert.match(frontmatter.description, /long-running|long context/i);
+  assert.match(frontmatter.description, /vague coding request/i);
+  assert.match(frontmatter.description, /advisory capability routing/i);
   assert.match(skill, /directional uncertainty/i);
   assert.match(skill, /lightweight preflight/i);
   assert.match(skill, /full re-anchor/i);
   assert.match(skill, /project\.yaml/i);
   assert.match(skill, /one primary workflow provider/i);
+  assert.match(skill, /capabilities\.yaml/);
+  assert.match(skill, /resolve-route\.mjs/);
+  assert.match(skill, /do not force an optional provider/i);
   assert.match(skill, /DISCOVER[\s\S]*ALIGN[\s\S]*DESIGN[\s\S]*PLAN[\s\S]*EXECUTE_ONE/);
   assert.match(skill, /do not expose.*chain-of-thought|never expose.*chain-of-thought/i);
   assert.doesNotMatch(skill, /[\u3400-\u9fff]/);
   assert.doesNotMatch(skill, /(?:^|\s)[A-Za-z]:[\\/]/m);
   assert.ok(skill.split(/\r?\n/).length < 500, 'SKILL.md must stay below 500 lines');
+});
+
+test('the public 0.1.0 Skill fingerprint remains an explicit upgrade allowlist entry', () => {
+  assert.equal(
+    LEGACY_VIBETETHER_FINGERPRINTS.has('07e14f9aae4f66ed8baed16893f35a5730b9702174f72a04bf61dd5df45ca89d'),
+    true,
+  );
 });
 
 test('every Skill reference is direct, present, and intentionally routed', async () => {

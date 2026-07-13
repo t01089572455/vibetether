@@ -1,5 +1,6 @@
 import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import YAML from 'yaml';
 import { ADAPTERS, MANAGED_END, MANAGED_START } from './adapters.mjs';
 import { CliError } from './errors.mjs';
@@ -27,6 +28,44 @@ function issue(code, message) {
   return { level: 'error', code, message };
 }
 
+function warning(code, message) {
+  return { level: 'warning', code, message };
+}
+
+function projectPath(root, relativePath) {
+  const target = path.resolve(root, relativePath);
+  const relative = path.relative(root, target);
+  return relative.startsWith('..') || path.isAbsolute(relative) ? null : target;
+}
+
+function portablePath(value) {
+  return String(value ?? '').replaceAll('\\', '/');
+}
+
+async function readYamlArtifact(root, relativePath, label, issues) {
+  if (!relativePath) {
+    issues.push(issue(`missing-${label}-field`, `Manifest ${label.replaceAll('-', '_')} is required`));
+    return null;
+  }
+  const target = projectPath(root, relativePath);
+  if (!target) {
+    issues.push(issue(`${label}-escape`, `${label} path escapes the project: ${relativePath}`));
+    return null;
+  }
+  if (!(await exists(target))) {
+    issues.push(issue(`missing-${label}`, `Missing ${label}: ${relativePath}`));
+    return null;
+  }
+  try {
+    const value = YAML.parse(await readFile(target, 'utf8'));
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('document must be a mapping');
+    return value;
+  } catch (error) {
+    issues.push(issue(`invalid-${label}`, `Invalid ${label} YAML: ${error.message}`));
+    return null;
+  }
+}
+
 export async function inspectProject(options) {
   let root;
   try {
@@ -35,6 +74,7 @@ export async function inspectProject(options) {
     throw new CliError(`Project directory does not exist: ${options.project}`);
   }
   const issues = [];
+  const warnings = [];
   const manifestPath = path.join(root, '.vibetether', 'project.yaml');
   let manifest = null;
   if (!(await exists(manifestPath))) {
@@ -102,6 +142,127 @@ export async function inspectProject(options) {
       }
     }
 
+    const board = await readYamlArtifact(root, manifest.capability_board, 'capability-board', issues);
+    const lock = await readYamlArtifact(root, manifest.provider_lock, 'provider-lock', issues);
+    if (board) {
+      if (board.schema_version !== 1 || board.mode !== 'advisory-router') {
+        issues.push(issue('invalid-capability-board', 'Capability board must use schema_version 1 and advisory-router mode'));
+      }
+      if (board.selection_policy?.provider_selection !== 'advisory') {
+        issues.push(issue('invalid-capability-policy', 'Capability board provider selection must be advisory'));
+      }
+      if (!Array.isArray(board.capabilities) || !Array.isArray(board.providers) || !Array.isArray(board.routes)) {
+        issues.push(issue('invalid-capability-board', 'Capability board must declare capabilities, providers, and routes arrays'));
+      }
+    }
+    if (lock) {
+      if (lock.schema_version !== 1 || !Array.isArray(lock.sources) || !Array.isArray(lock.skills)) {
+        issues.push(issue('invalid-provider-lock', 'Provider lock must use schema_version 1 and declare sources and skills arrays'));
+      }
+    }
+    if (board && lock && board.profile !== lock.profile) {
+      issues.push(issue('provider-profile-mismatch', `Capability board profile ${board.profile} does not match provider lock profile ${lock.profile}`));
+    }
+
+    const activeProviders = (lock?.skills ?? []).filter((skill) => skill.active);
+    const activeSourceIds = new Set(activeProviders.map((skill) => skill.source_id));
+    for (const source of lock?.sources ?? []) {
+      const installation = source.license_installation;
+      if (!installation?.path || !source.license_sha256) {
+        if (activeSourceIds.has(source.id)) {
+          issues.push(issue('missing-provider-license-record', `Active provider source ${source.id} lacks an installed license record`));
+        }
+        continue;
+      }
+      const expectedLicensePath = `.vibetether/licenses/${source.id}.LICENSE.txt`;
+      if (portablePath(installation.path) !== expectedLicensePath) {
+        issues.push(issue('provider-license-path-mismatch', `Provider license path does not match source ${source.id}: ${installation.path}`));
+        continue;
+      }
+      const target = projectPath(root, installation.path);
+      if (!target) {
+        issues.push(issue('provider-license-path-escape', `Provider license path escapes the project: ${installation.path}`));
+        continue;
+      }
+      if (!(await exists(target))) {
+        if (activeSourceIds.has(source.id)) {
+          issues.push(issue('missing-provider-license', `Missing installed ${source.license} license for ${source.id}: ${installation.path}`));
+        }
+        continue;
+      }
+      const actual = createHash('sha256').update(await readFile(target)).digest('hex');
+      if (actual !== source.license_sha256) {
+        const managed = installation.ownership === 'vibetether';
+        (managed ? issues : warnings).push((managed ? issue : warning)(
+          managed ? 'changed-managed-provider-license' : 'changed-preexisting-provider-license',
+          `${managed ? 'VibeTether-managed' : 'Pre-existing'} provider license changed at ${installation.path}`,
+        ));
+      }
+    }
+    const availableProviders = new Set();
+    for (const skill of lock?.skills ?? []) {
+      if (!skill?.id || !skill?.install_name || !/^[a-f0-9]{64}$/.test(skill?.fingerprint ?? '')) {
+        issues.push(issue('invalid-provider-lock', `Provider lock contains an invalid Skill record: ${skill?.id ?? 'unknown'}`));
+        continue;
+      }
+      for (const [harness, installation] of Object.entries(skill.installations ?? {})) {
+        if (!installation?.path || !['vibetether', 'preexisting'].includes(installation?.ownership)) {
+          issues.push(issue('invalid-provider-installation', `Invalid ${skill.install_name} installation record for ${harness}`));
+          continue;
+        }
+        const adapter = ADAPTERS[harness];
+        const expectedPath = adapter
+          ? portablePath(path.join(path.dirname(adapter.skillDirectory), skill.install_name))
+          : null;
+        if (!expectedPath || portablePath(installation.path) !== expectedPath) {
+          issues.push(issue(
+            'provider-installation-path-mismatch',
+            `Provider install path does not match ${harness}/${skill.install_name}: ${installation.path}`,
+          ));
+          continue;
+        }
+        const target = projectPath(root, installation.path);
+        if (!target) {
+          issues.push(issue('provider-path-escape', `Provider path escapes the project: ${installation.path}`));
+          continue;
+        }
+        if (!(await exists(target))) {
+          if (skill.active) {
+            const fallbacks = (board?.routes ?? [])
+              .filter((route) => route.recommendation?.skill === skill.install_name)
+              .map((route) => route.fallback)
+              .filter(Boolean);
+            const fallback = [...new Set(fallbacks)].join(', ') || 'the capability board fallback';
+            warnings.push(warning(
+              'missing-optional-provider',
+              `Optional provider ${skill.install_name} is missing for ${harness}; use fallback ${fallback} and record the selection reason.`,
+            ));
+          }
+          continue;
+        }
+        try {
+          const installedFingerprint = await skillFingerprint(target);
+          if (installedFingerprint !== skill.fingerprint) {
+            const managed = installation.ownership === 'vibetether';
+            (managed ? issues : warnings).push((managed ? issue : warning)(
+              managed ? 'changed-managed-provider' : 'changed-preexisting-provider',
+              `${managed ? 'VibeTether-managed' : 'Pre-existing'} provider ${skill.install_name} changed at ${installation.path}`,
+            ));
+          } else if (skill.active) {
+            availableProviders.add(skill.id);
+          }
+        } catch (error) {
+          issues.push(issue('invalid-provider', `Cannot verify provider ${skill.install_name}: ${error.message}`));
+        }
+      }
+    }
+
+    manifest.__providerSummary = {
+      active: activeProviders.length,
+      available: availableProviders.size,
+      total: lock?.skills?.length ?? 0,
+    };
+
     const checkpoint = manifest.checkpoint;
     if (checkpoint?.path) {
       const checkpointPath = path.resolve(root, checkpoint.path);
@@ -147,12 +308,15 @@ export async function inspectProject(options) {
     project: root,
     harnesses,
     issues,
+    warnings,
+    providers: manifest?.__providerSummary ?? { active: 0, available: 0, total: 0 },
   };
+  if (manifest) delete manifest.__providerSummary;
   const output = options.json
     ? `${JSON.stringify(report, null, 2)}\n`
     : report.ok
-      ? `VibeTether doctor: healthy (${harnesses.join(' + ') || 'no harnesses'})\n`
-      : `VibeTether doctor found ${issues.length} issue(s):\n${issues.map((value) => `  - [${value.code}] ${value.message}`).join('\n')}\n`;
+      ? `VibeTether doctor: healthy (${harnesses.join(' + ') || 'no harnesses'})${warnings.length ? ` with ${warnings.length} warning(s):\n${warnings.map((value) => `  - [${value.code}] ${value.message}`).join('\n')}` : ''}\n`
+      : `VibeTether doctor found ${issues.length} issue(s)${warnings.length ? ` and ${warnings.length} warning(s)` : ''}:\n${[...issues, ...warnings].map((value) => `  - [${value.code}] ${value.message}`).join('\n')}\n`;
 
   if (!report.ok) throw new CliError('Project health check failed.', 4, output, options.json ? 'stdout' : 'stderr');
   return output;

@@ -2,6 +2,9 @@
   "schema_version": 1,
   "policy": {
     "remote_candidates_are_installed": false,
+    "curated_bundles_install_only_during_explicit_init": true,
+    "curated_bundle_registry": "../bundles.json",
+    "runtime_routing_installs_providers": false,
     "activation_requires_compatible_version_license_integrity_and_evaluation": true,
     "popularity_is_discovery_signal_only": true
   },

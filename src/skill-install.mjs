@@ -6,6 +6,9 @@ import { CliError } from './errors.mjs';
 
 export const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const sourceSkill = path.join(packageRoot, 'skills', 'vibe-tether');
+export const LEGACY_VIBETETHER_FINGERPRINTS = new Set([
+  '07e14f9aae4f66ed8baed16893f35a5730b9702174f72a04bf61dd5df45ca89d',
+]);
 
 async function fingerprintEntry(root, relativePath, hash) {
   const target = path.join(root, relativePath);
@@ -27,27 +30,41 @@ export async function skillFingerprint(root) {
   return hash.digest('hex');
 }
 
-export async function assertSkillInstallable(target, relativePath) {
+export async function inspectDirectoryInstall(source, target, relativePath, options = {}) {
   try {
-    const [canonical, installed] = await Promise.all([skillFingerprint(sourceSkill), skillFingerprint(target)]);
+    const [canonical, installed] = await Promise.all([skillFingerprint(source), skillFingerprint(target)]);
     if (canonical !== installed) {
-      throw new CliError(`Refusing to overwrite modified installed Skill at ${relativePath}. Back up the customization first.`, 3);
+      if (options.upgradeFingerprints?.has(installed)) {
+        return { needsInstall: true, ownership: 'vibetether', replacesExisting: true };
+      }
+      throw new CliError(`Refusing to overwrite different or modified installed Skill at ${relativePath}. Back up or remove it first.`, 3);
     }
-    return false;
+    return { needsInstall: false, ownership: 'preexisting' };
   } catch (error) {
-    if (error.code === 'ENOENT') return true;
+    if (error.code === 'ENOENT') return { needsInstall: true, ownership: 'vibetether' };
     if (error instanceof CliError) throw error;
     throw new CliError(`Cannot verify installed Skill at ${relativePath}: ${error.message}`, 3);
   }
 }
 
-export async function installSkill(target) {
+export async function inspectVibeTetherInstall(target, relativePath) {
+  return inspectDirectoryInstall(sourceSkill, target, relativePath, {
+    upgradeFingerprints: LEGACY_VIBETETHER_FINGERPRINTS,
+  });
+}
+
+export async function assertSkillInstallable(target, relativePath) {
+  const plan = await inspectVibeTetherInstall(target, relativePath);
+  return plan.needsInstall;
+}
+
+export async function installDirectory(source, target) {
   await mkdir(path.dirname(target), { recursive: true });
   const temporary = path.join(path.dirname(target), `.vibe-tether.${randomUUID()}.tmp`);
   const previous = `${target}.${randomUUID()}.previous`;
   let movedPrevious = false;
   try {
-    await cp(sourceSkill, temporary, { recursive: true, errorOnExist: true, force: false });
+    await cp(source, temporary, { recursive: true, errorOnExist: true, force: false });
     try {
       await rename(target, previous);
       movedPrevious = true;
@@ -76,4 +93,8 @@ export async function installSkill(target) {
   } finally {
     await rm(temporary, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+export async function installSkill(target) {
+  return installDirectory(sourceSkill, target);
 }

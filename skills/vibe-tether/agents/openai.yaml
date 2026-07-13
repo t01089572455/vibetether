@@ -1,4 +1,6 @@
 interface:
   display_name: "VibeTether"
-  short_description: "Keep long-running coding agents aligned"
-  default_prompt: "Use $vibe-tether to re-anchor this task to project truth before the next consequential action."
+  short_description: "Advisory routing for drift-resistant coding"
+  default_prompt: "Use $vibe-tether to re-anchor this task, inspect the capability board, and recommend the best next Skill or fallback."
+policy:
+  allow_implicit_invocation: true

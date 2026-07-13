@@ -23,7 +23,7 @@ export function enableHarnesses(manifest, adapters) {
   return { ...manifest, harnesses };
 }
 
-export function createInitialCheckpoint(goalSource) {
+export function createInitialCheckpoint(goalSource, recommendedProvider = 'vibe-tether') {
   return YAML.stringify(
     {
       schema_version: 1,
@@ -40,6 +40,13 @@ export function createInitialCheckpoint(goalSource) {
       open_risks: ['The project goal and success evidence are not yet confirmed.'],
       next_intended_action: 'Confirm the Intent Contract with the user.',
       alignment_reason: 'Initialization creates recovery state without assuming product direction.',
+      provider_selection: {
+        capability: 'requirements-clarification',
+        recommended: recommendedProvider,
+        selected: null,
+        selection_reason: null,
+        invocation_status: 'not-started',
+      },
     },
     { lineWidth: 0 },
   );

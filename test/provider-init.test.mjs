@@ -1,0 +1,286 @@
+import assert from 'node:assert/strict';
+import { cp, mkdtemp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import test from 'node:test';
+import YAML from 'yaml';
+import { initialize } from '../src/init.mjs';
+import { skillFingerprint } from '../src/skill-install.mjs';
+
+function git(cwd, args) {
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  return result.stdout.trim();
+}
+
+async function upstream() {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-init-upstream-'));
+  await mkdir(path.join(root, 'skills', 'demo'), { recursive: true });
+  await writeFile(path.join(root, 'skills', 'demo', 'SKILL.md'), '---\nname: demo\ndescription: Demo route.\n---\n', 'utf8');
+  await writeFile(path.join(root, 'skills', 'demo', 'guide.md'), '# Full provider content\n', 'utf8');
+  await writeFile(path.join(root, 'LICENSE'), 'MIT fixture license\n', 'utf8');
+  git(root, ['init', '-q']);
+  git(root, ['config', 'user.name', 'VibeTether Tests']);
+  git(root, ['config', 'user.email', 'tests@example.invalid']);
+  git(root, ['add', '.']);
+  git(root, ['commit', '-qm', 'fixture provider']);
+  return {
+    root,
+    commit: git(root, ['rev-parse', 'HEAD']),
+    fingerprint: await skillFingerprint(path.join(root, 'skills', 'demo')),
+  };
+}
+
+function registry(source) {
+  return {
+    schema_version: 1,
+    runtime_auto_install: false,
+    sources: [
+      {
+        id: 'fixture-source',
+        repository: source.root,
+        ref: source.commit,
+        commit: source.commit,
+        license: 'MIT',
+        license_path: 'LICENSE',
+        skills: [
+          {
+            id: 'fixture-demo',
+            install_name: 'demo',
+            path: 'skills/demo',
+            fingerprint: source.fingerprint,
+            capabilities: ['requirements-clarification'],
+          },
+        ],
+      },
+    ],
+    profiles: {
+      core: { skills: [] },
+      standard: { skills: ['fixture-demo'] },
+      extended: { extends: 'standard', skills: [] },
+    },
+    capability_catalog: [
+      {
+        id: 'requirements-clarification',
+        phases: ['DISCOVER', 'ALIGN'],
+        purpose: 'Turn an ambiguous request into an approved Intent Contract.',
+        invoke_when: ['goal-unclear', 'scope-unclear'],
+        required_inputs: ['user_request', 'applicable_truth_sources'],
+        required_outputs: ['goal', 'success_evidence'],
+        exit_evidence: ['The user has approved the goal and success evidence.'],
+        fallback: 'vibetether-built-in-alignment',
+      },
+    ],
+    routes: [
+      {
+        id: 'fixture-requirements',
+        profiles: ['standard', 'extended'],
+        phase: 'DISCOVER',
+        capability: 'requirements-clarification',
+        provider: 'demo',
+        workflow_role: 'primary',
+        selection: 'recommend',
+        required: false,
+        fallback: 'vibetether-built-in-alignment',
+        priority: 100,
+        reason: 'The request is unclear.',
+      },
+    ],
+  };
+}
+
+async function project(name) {
+  return mkdtemp(path.join(os.tmpdir(), `vibetether-provider-init-${name}-`));
+}
+
+async function exists(target) {
+  try {
+    await stat(target);
+    return true;
+  } catch (error) {
+    if (error.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+function options(root, overrides = {}) {
+  return { project: root, agent: 'both', profile: 'standard', dryRun: false, yes: true, ...overrides };
+}
+
+test('standard init installs complete providers and writes an advisory capability board and lock', async () => {
+  const source = await upstream();
+  const target = await project('standard');
+  const dependencies = { loadRegistry: async () => registry(source) };
+
+  const result = await initialize(options(target), dependencies);
+  assert.match(result, /standard profile/i);
+  for (const provider of [
+    path.join(target, '.agents', 'skills', 'demo'),
+    path.join(target, '.claude', 'skills', 'demo'),
+  ]) {
+    assert.equal(await readFile(path.join(provider, 'guide.md'), 'utf8'), '# Full provider content\n');
+    assert.equal(await skillFingerprint(provider), source.fingerprint);
+  }
+
+  const manifest = YAML.parse(await readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'));
+  const board = YAML.parse(await readFile(path.join(target, '.vibetether', 'capabilities.yaml'), 'utf8'));
+  const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
+  const checkpoint = YAML.parse(await readFile(path.join(target, '.vibetether', 'state', 'current.yaml'), 'utf8'));
+  assert.equal(manifest.capability_board, '.vibetether/capabilities.yaml');
+  assert.equal(manifest.provider_lock, '.vibetether/providers.lock.yaml');
+  assert.equal(board.selection_policy.provider_selection, 'advisory');
+  assert.equal(board.selection_policy.live_availability, 'check-recorded-installation-paths-before-selection');
+  assert.equal(board.capabilities[0].id, 'requirements-clarification');
+  assert.deepEqual(board.capabilities[0].invoke_when, ['goal-unclear', 'scope-unclear']);
+  assert.equal(board.routes[0].recommendation.skill, 'demo');
+  assert.deepEqual(board.routes[0].recommendation.available_in, ['codex', 'claude']);
+  assert.equal(board.routes[0].fallback, 'vibetether-built-in-alignment');
+  assert.deepEqual(board.routes[0].expected_outputs, ['goal', 'success_evidence']);
+  assert.deepEqual(board.routes[0].exit_evidence, ['The user has approved the goal and success evidence.']);
+  assert.equal(board.providers.length, 1);
+  assert.equal(board.providers[0].skill, 'demo');
+  assert.equal(board.providers[0].invocation_policy, 'advisory-auto-eligible');
+  assert.deepEqual(board.providers[0].routed_by, ['fixture-requirements']);
+  assert.equal(lock.skills[0].fingerprint, source.fingerprint);
+  assert.equal(lock.skills[0].installations.codex.ownership, 'vibetether');
+  assert.equal(lock.skills[0].installations.claude.ownership, 'vibetether');
+  assert.match(lock.sources[0].license_sha256, /^[a-f0-9]{64}$/);
+  assert.equal(lock.sources[0].license_installation.ownership, 'vibetether');
+  assert.equal(
+    await readFile(path.join(target, lock.sources[0].license_installation.path), 'utf8'),
+    'MIT fixture license\n',
+  );
+  assert.equal(checkpoint.provider_selection.recommended, 'demo');
+  assert.equal(checkpoint.provider_selection.selected, null);
+
+  const agents = await readFile(path.join(target, 'AGENTS.md'), 'utf8');
+  assert.match(agents, /consult.*\.vibetether\/capabilities\.yaml/i);
+  assert.match(agents, /recommend/i);
+  assert.doesNotMatch(agents, /must invoke every recommended provider/i);
+});
+
+test('provider-aware init is byte-for-byte idempotent and retains managed ownership', async () => {
+  const source = await upstream();
+  const target = await project('idempotent');
+  const dependencies = { loadRegistry: async () => registry(source) };
+  await initialize(options(target, { agent: 'codex' }), dependencies);
+  const paths = [
+    path.join(target, 'AGENTS.md'),
+    path.join(target, '.vibetether', 'project.yaml'),
+    path.join(target, '.vibetether', 'capabilities.yaml'),
+    path.join(target, '.vibetether', 'providers.lock.yaml'),
+  ];
+  const before = await Promise.all(paths.map((value) => readFile(value, 'utf8')));
+
+  await initialize(options(target, { agent: 'codex' }), dependencies);
+  const after = await Promise.all(paths.map((value) => readFile(value, 'utf8')));
+  assert.deepEqual(after, before);
+  const lock = YAML.parse(after[3]);
+  assert.equal(lock.skills[0].installations.codex.ownership, 'vibetether');
+});
+
+test('provider-aware dry-run is network-free and reports no changes after an identical init', async () => {
+  const source = await upstream();
+  const target = await project('idempotent-dry-run');
+  const dependencies = { loadRegistry: async () => registry(source) };
+  await initialize(options(target, { agent: 'codex' }), dependencies);
+
+  const output = await initialize(options(target, { agent: 'codex', dryRun: true, yes: false }), {
+    ...dependencies,
+    stageProviders: async () => {
+      throw new Error('idempotent dry-run must not fetch');
+    },
+  });
+
+  assert.match(output, /No changes required\./);
+  assert.doesNotMatch(output, /complete provider Skill/);
+});
+
+test('dry-run lists exact provider source and targets without fetching or writing', async () => {
+  const source = await upstream();
+  const target = await project('dry-run');
+  const output = await initialize(options(target, { dryRun: true, yes: false }), {
+    loadRegistry: async () => registry(source),
+    stageProviders: async () => {
+      throw new Error('dry-run must not fetch');
+    },
+  });
+
+  assert.match(output, /fixture-source/);
+  assert.match(output, new RegExp(source.commit));
+  assert.match(output, /\.agents\/skills\/demo/);
+  assert.match(output, /\.claude\/skills\/demo/);
+  assert.equal(await exists(path.join(target, '.vibetether')), false);
+});
+
+test('core init remains provider-network-free and still writes a built-in capability board', async () => {
+  const source = await upstream();
+  const target = await project('core');
+  await initialize(options(target, { agent: 'codex', profile: 'core' }), {
+    loadRegistry: async () => registry(source),
+    stageProviders: async () => {
+      throw new Error('core must not fetch');
+    },
+  });
+
+  assert.equal(await exists(path.join(target, '.agents', 'skills', 'demo')), false);
+  const board = YAML.parse(await readFile(path.join(target, '.vibetether', 'capabilities.yaml'), 'utf8'));
+  const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
+  assert.equal(board.profile, 'core');
+  assert.equal(board.selection_policy.provider_selection, 'advisory');
+  assert.equal(board.capabilities.length, 1);
+  assert.equal(board.capabilities[0].fallback, 'vibetether-built-in-alignment');
+  assert.deepEqual(lock.skills, []);
+});
+
+test('init upgrades a legacy managed block and checkpoint without losing recovery state', async () => {
+  const source = await upstream();
+  const target = await project('legacy-upgrade');
+  const dependencies = { loadRegistry: async () => registry(source) };
+  await initialize(options(target, { agent: 'codex', profile: 'core' }), dependencies);
+
+  const agentsPath = path.join(target, 'AGENTS.md');
+  const agents = await readFile(agentsPath, 'utf8');
+  const legacyBody = [
+    '## VibeTether drift control',
+    '',
+    'Invoke the `vibe-tether` Skill before each consequential action in a long-running task.',
+    'Re-read `.vibetether/project.yaml` and its applicable truth sources before choosing direction.',
+    'Ask the user when product direction, architecture, visual direction, destructive data changes, or release scope is ambiguous.',
+    'Make low-risk, reversible, goal-aligned technical choices autonomously and record material decisions.',
+    'After compaction, resume, handoff, repeated failure, or a phase change, perform a full VibeTether re-anchor before continuing.',
+  ].join('\n');
+  await writeFile(
+    agentsPath,
+    agents.replace(/<!-- vibetether:start -->[\s\S]*?<!-- vibetether:end -->/, `<!-- vibetether:start -->\n${legacyBody}\n<!-- vibetether:end -->`),
+    'utf8',
+  );
+
+  const checkpointPath = path.join(target, '.vibetether', 'state', 'current.yaml');
+  const checkpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
+  delete checkpoint.provider_selection;
+  checkpoint.approved_decisions = ['Preserve this decision'];
+  await writeFile(checkpointPath, YAML.stringify(checkpoint), 'utf8');
+
+  await initialize(options(target, { agent: 'codex', profile: 'standard' }), dependencies);
+
+  const upgradedAgents = await readFile(agentsPath, 'utf8');
+  const upgradedCheckpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
+  assert.match(upgradedAgents, /consult.*\.vibetether\/capabilities\.yaml/i);
+  assert.deepEqual(upgradedCheckpoint.approved_decisions, ['Preserve this decision']);
+  assert.equal(upgradedCheckpoint.provider_selection.recommended, 'demo');
+  assert.equal(upgradedCheckpoint.provider_selection.invocation_status, 'not-started');
+});
+
+test('identical user-installed providers are reused without claiming ownership', async () => {
+  const source = await upstream();
+  const target = await project('preexisting');
+  const provider = path.join(target, '.agents', 'skills', 'demo');
+  await mkdir(path.dirname(provider), { recursive: true });
+  await cp(path.join(source.root, 'skills', 'demo'), provider, { recursive: true });
+
+  await initialize(options(target, { agent: 'codex' }), { loadRegistry: async () => registry(source) });
+  const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
+  assert.equal(lock.skills[0].installations.codex.ownership, 'preexisting');
+});

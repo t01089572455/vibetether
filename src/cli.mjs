@@ -5,6 +5,7 @@ import { CliError } from './errors.mjs';
 import { initialize } from './init.mjs';
 import { inspectProject } from './doctor.mjs';
 import { uninstall } from './uninstall.mjs';
+import { showCapabilities } from './capabilities.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -13,6 +14,7 @@ const HELP = `VibeTether — keep coding agents tethered to project truth
 Usage:
   vibetether init [options]
   vibetether doctor [options]
+  vibetether capabilities [options]
   vibetether uninstall [options]
   vibetether --help
   vibetether --version
@@ -27,6 +29,14 @@ Init options:
 Doctor options:
   --project PATH                    Project directory (default: current directory)
   --json                            Print a machine-readable report
+
+Capabilities options:
+  --project PATH                    Project directory (default: current directory)
+  --phase PHASE                     Resolve one lifecycle phase (use with --capability)
+  --capability ID                   Resolve one capability (use with --phase)
+  --signal SIGNAL                   Add a routing signal (repeatable)
+  --agent codex|claude              Check availability for one harness
+  --json                            Print the dashboard or resolution as JSON
 
 Uninstall options:
   --project PATH                    Project directory (default: current directory)
@@ -82,6 +92,32 @@ function parseSimple(args, command) {
   return options;
 }
 
+function parseCapabilities(args) {
+  const options = {
+    project: process.cwd(),
+    phase: null,
+    capability: null,
+    signals: [],
+    agent: null,
+    json: false,
+  };
+  for (let index = 0; index < args.length; index += 1) {
+    const flag = args[index];
+    if (flag === '--project') options.project = valueAfter(args, index++, flag);
+    else if (flag === '--phase') options.phase = valueAfter(args, index++, flag);
+    else if (flag === '--capability') options.capability = valueAfter(args, index++, flag);
+    else if (flag === '--signal') options.signals.push(valueAfter(args, index++, flag));
+    else if (flag === '--agent') options.agent = valueAfter(args, index++, flag);
+    else if (flag === '--json') options.json = true;
+    else if (flag === '--help' || flag === '-h') return { help: true };
+    else throw new CliError(`Unknown option for capabilities: ${flag}`);
+  }
+  if (options.agent && !['codex', 'claude'].includes(options.agent)) {
+    throw new CliError(`Invalid --agent value: ${options.agent}`);
+  }
+  return options;
+}
+
 async function version() {
   const data = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
   return `${data.version}\n`;
@@ -99,6 +135,11 @@ export async function main(args = process.argv.slice(2)) {
     const options = parseSimple(args.slice(1), 'doctor');
     if (options.help) return HELP;
     return inspectProject(options);
+  }
+  if (args[0] === 'capabilities') {
+    const options = parseCapabilities(args.slice(1));
+    if (options.help) return HELP;
+    return showCapabilities(options);
   }
   if (args[0] === 'uninstall') {
     const options = parseSimple(args.slice(1), 'uninstall');

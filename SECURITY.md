@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-The `0.1.x` preview line receives security fixes. Preview interfaces may still change, but managed-file safety, path containment, dependency behavior, and sensitive-data handling are treated as security-relevant contracts.
+The `0.2.x` preview line receives security fixes. Preview interfaces may still change, but managed-file safety, path containment, provider supply-chain behavior, dependency behavior, and sensitive-data handling are treated as security-relevant contracts.
 
 ## Reporting a vulnerability
 
@@ -18,8 +18,11 @@ VibeTether:
 - uses bounded managed blocks and preserves user-authored instruction content;
 - creates a first-change backup before modifying existing managed surfaces;
 - refuses malformed markers and modified installed Skill copies;
+- fetches curated providers only during explicit initialization, with interactive Git credentials disabled;
+- pins provider sources to exact commits and verifies complete Skill fingerprints and license hashes;
+- installs upstream license copies and records source, integrity, path, and ownership in a project lock;
 - excludes local runtime checkpoints from version control by default;
-- does not install remote providers during an active task;
+- does not install remote providers during an active task or from runtime routing;
 - does not add telemetry, privileged hooks, MCP servers, deployment access, or external writes by default;
 - does not store private chain-of-thought in manifests or checkpoints.
 

@@ -1,25 +1,26 @@
 ---
 name: vibe-tether
-description: Use when a coding task is long-running, spans multiple phases or agents, resumes after context compaction, risks drifting from project instructions, has ambiguous product direction, or needs controlled autonomy before consequential actions.
+description: Use when starting a vague coding request, handling a long-running or multi-phase project, choosing whether and which specialist Skill should help, resuming after context compaction or handoff, detecting drift from project instructions, or checking direction before a consequential action. Provides advisory capability routing; it does not force optional Skill invocation.
 ---
 
 # VibeTether
 
 ## Overview
 
-Keep capable coding agents tethered to project truth. Re-anchor intent before consequential actions, route the current phase to one focused specialist capability, and require evidence before advancing.
+Keep capable coding agents tethered to project truth. Re-anchor intent before consequential actions, expose the available capability map, recommend one focused specialist when useful, and require evidence before advancing.
 
 Do not replace the coding agent's implementation ability. Control direction, authority, phase transitions, risk, recovery, and proof.
 
 ## Start Here
 
 1. Read the nearest project instruction file and `.vibetether/project.yaml` when present.
-2. Identify the approved goal, current lifecycle state, active task slice, and last checkpoint.
-3. Decide whether the next action needs a lightweight preflight or full re-anchor.
-4. Resolve applicable project sources and conflicts before choosing an implementation action.
-5. Classify uncertainty as directional, local technical, or structural technical.
-6. Select one primary workflow provider for the current phase.
-7. State the next gate, act within the approved slice, collect evidence, and checkpoint the result.
+2. Read `.vibetether/capabilities.yaml` and identify the phase, capability, observed signals, available providers, fallback, expected outputs, and exit evidence. Use the offline resolver for live availability before invoking a provider.
+3. Identify the approved goal, current lifecycle state, active task slice, and last checkpoint.
+4. Decide whether the next action needs a lightweight preflight or full re-anchor.
+5. Resolve applicable project sources and conflicts before choosing an implementation action.
+6. Classify uncertainty as directional, local technical, or structural technical.
+7. Treat the route as advice: invoke the recommended installed Skill when it fits, choose a better installed alternative when justified, or use the declared built-in fallback.
+8. Record the selected path and material reason in `provider_selection`; then act within the approved slice, collect evidence, and checkpoint the result.
 
 If no project manifest exists, run `vibetether init` or create one using [project-manifest.md](references/project-manifest.md) before long-running product work.
 
@@ -109,16 +110,26 @@ Read [authority-and-conflicts.md](references/authority-and-conflicts.md) wheneve
 
 ## Capability Routing
 
-Keep the control kernel stable and use replaceable specialist Skills for execution methods.
+Keep VibeTether as the stable information router and use replaceable specialist Skills for execution methods.
 
-- Select one primary workflow provider for the current phase.
+- Consult the generated capability board before a phase transition or consequential action.
+- Recommend one primary workflow provider for the current phase; do not force an optional provider.
 - Add a domain provider only when responsibilities do not overlap.
 - Prefer installed, approved, compatible, and evaluated providers.
 - Require structured outputs and phase exit evidence.
 - Do not let a provider override project authority.
 - Do not silently download an unplanned provider during an active task.
 - Use the minimal safe built-in path when an optional provider is absent.
+- Record `recommended`, `selected`, `selection_reason`, and `invocation_status` without exposing private reasoning.
 - Stop when a required safety, migration, UI-validation, or release capability is unavailable.
+
+For a deterministic local recommendation, run:
+
+```bash
+node .agents/skills/vibe-tether/scripts/resolve-route.mjs --project . --phase PLAN --capability planning --signal multi-step-change --agent codex
+```
+
+Use `.claude/skills/vibe-tether/scripts/resolve-route.mjs` for Claude projects. The script is offline and reads only the project capability board. `vibetether capabilities --project .` provides the human dashboard; add `--phase`, `--capability`, repeatable `--signal`, `--agent`, and `--json` for a query.
 
 Read [capability-routing.md](references/capability-routing.md) before selecting or changing a provider.
 

@@ -33,10 +33,24 @@ test('capability contracts are unique, complete, and forbid runtime auto-install
   assert.equal(new Set(ids).size, ids.length);
   for (const id of required) assert.equal(ids.includes(id), true, `missing capability ${id}`);
   for (const capability of registry.capabilities) {
+    assert.equal(Array.isArray(capability.phases), true);
+    assert.ok(capability.phases.length > 0);
+    assert.equal(Array.isArray(capability.invoke_when), true);
+    assert.ok(capability.invoke_when.length > 0);
     assert.equal(Array.isArray(capability.required_inputs), true);
     assert.equal(Array.isArray(capability.required_outputs), true);
+    assert.equal(Array.isArray(capability.exit_evidence), true);
+    assert.ok(capability.exit_evidence.length > 0);
     assert.match(capability.fallback, /built-in/i);
   }
+});
+
+test('curated bundles are separate from inert discovery candidates and never install at runtime', async () => {
+  const registry = await json('registry/providers/core.json');
+  assert.equal(registry.policy.remote_candidates_are_installed, false);
+  assert.equal(registry.policy.curated_bundles_install_only_during_explicit_init, true);
+  assert.equal(registry.policy.runtime_routing_installs_providers, false);
+  assert.equal(registry.policy.curated_bundle_registry, '../bundles.json');
 });
 
 test('every lifecycle phase has exactly one built-in primary workflow provider', async () => {

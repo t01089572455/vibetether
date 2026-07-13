@@ -1,7 +1,7 @@
 {
   "name": "vibetether",
-  "version": "0.1.0",
-  "description": "Keep coding agents tethered to project truth.",
+  "version": "0.2.0",
+  "description": "Advisory Skill routing and drift control for long-running coding agents.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/t01089572455/vibetether.git"
@@ -20,7 +20,8 @@
     "skills",
     "registry",
     "adapters",
-    "evals"
+    "evals",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "test": "node --test",
@@ -39,6 +40,7 @@
     "codex",
     "claude-code",
     "vibe-coding",
-    "drift-control"
+    "drift-control",
+    "skill-router"
   ]
 }

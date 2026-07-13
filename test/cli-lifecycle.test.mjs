@@ -29,7 +29,7 @@ async function exists(target) {
 
 test('doctor reports a healthy initialized project as machine-readable JSON', async () => {
   const target = await project('doctor-ok');
-  assert.equal(runCli(['init', '--project', target, '--agent', 'both', '--yes']).status, 0);
+  assert.equal(runCli(['init', '--project', target, '--agent', 'both', '--profile', 'core', '--yes']).status, 0);
 
   const result = runCli(['doctor', '--project', target, '--json']);
 
@@ -44,7 +44,7 @@ test('doctor exits 4 when a declared truth source is missing', async () => {
   const target = await project('doctor-fail');
   await mkdir(path.join(target, 'docs'), { recursive: true });
   await writeFile(path.join(target, 'docs', 'product-direction.md'), '# Product direction\n', 'utf8');
-  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--yes']).status, 0);
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
   await rm(path.join(target, '.vibetether', 'intent.md'));
 
   const result = runCli(['doctor', '--project', target, '--json']);
@@ -65,7 +65,7 @@ test('doctor exits 4 when a declared truth source is missing', async () => {
 
 test('doctor requires an explicit Intent Contract manifest field', async () => {
   const target = await project('doctor-intent-field');
-  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--yes']).status, 0);
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
   const manifestPath = path.join(target, '.vibetether', 'project.yaml');
   const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
   delete manifest.intent_contract;
@@ -80,7 +80,7 @@ test('doctor requires an explicit Intent Contract manifest field', async () => {
 
 test('doctor detects a stale runtime checkpoint without exposing private reasoning', async () => {
   const target = await project('doctor-stale');
-  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--yes']).status, 0);
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
   const checkpointPath = path.join(target, '.vibetether', 'state', 'current.yaml');
   const checkpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
   checkpoint.last_reanchor = '2000-01-01T00:00:00.000Z';
@@ -104,7 +104,7 @@ test('doctor detects a stale runtime checkpoint without exposing private reasoni
 
 test('doctor detects changed managed instructions and customized Skill copies', async () => {
   const target = await project('doctor-adapter-drift');
-  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--yes']).status, 0);
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
   const agentsPath = path.join(target, 'AGENTS.md');
   const agents = await readFile(agentsPath, 'utf8');
   await writeFile(
@@ -125,7 +125,7 @@ test('doctor detects changed managed instructions and customized Skill copies', 
 
 test('uninstall dry-run leaves the project unchanged', async () => {
   const target = await project('uninstall-dry');
-  assert.equal(runCli(['init', '--project', target, '--agent', 'both', '--yes']).status, 0);
+  assert.equal(runCli(['init', '--project', target, '--agent', 'both', '--profile', 'core', '--yes']).status, 0);
   const before = await readFile(path.join(target, 'AGENTS.md'), 'utf8');
 
   const result = runCli(['uninstall', '--project', target, '--dry-run']);
@@ -152,7 +152,7 @@ test('uninstall removes only VibeTether-managed content and preserves the Intent
   const target = await project('uninstall');
   const originalAgents = '# Team rules\n\nKeep me.\n';
   await writeFile(path.join(target, 'AGENTS.md'), originalAgents, 'utf8');
-  assert.equal(runCli(['init', '--project', target, '--agent', 'both', '--yes']).status, 0);
+  assert.equal(runCli(['init', '--project', target, '--agent', 'both', '--profile', 'core', '--yes']).status, 0);
 
   const result = runCli(['uninstall', '--project', target, '--yes']);
 
@@ -175,7 +175,7 @@ test('init preserves a no-final-newline gitignore rule while active and uninstal
   const original = 'dist/';
   await writeFile(gitignorePath, original, 'utf8');
 
-  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--yes']).status, 0);
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
   const active = await readFile(gitignorePath, 'utf8');
   assert.match(active, /^dist\/\r?\n<!-- vibetether:start -->/);
   assert.equal(active.split(/\r?\n/)[0], 'dist/');
@@ -186,7 +186,7 @@ test('init preserves a no-final-newline gitignore rule while active and uninstal
 
 test('uninstall refuses a modified installed Skill without changing project files', async () => {
   const target = await project('uninstall-conflict');
-  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--yes']).status, 0);
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
   const agentsBefore = await readFile(path.join(target, 'AGENTS.md'), 'utf8');
   const installedSkill = path.join(target, '.agents', 'skills', 'vibe-tether', 'SKILL.md');
   await writeFile(installedSkill, `${await readFile(installedSkill, 'utf8')}\nUser customization.\n`, 'utf8');

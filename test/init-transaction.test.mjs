@@ -46,3 +46,36 @@ test('initialization rolls back earlier text and Skill writes when a later opera
   assert.equal(await exists(firstSkill), false);
   assert.equal(await exists(secondSkill), false);
 });
+
+test('initialization restores a replaced legacy Skill when a later install fails', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-upgrade-transaction-'));
+  const legacySkill = path.join(root, '.agents', 'skills', 'vibe-tether');
+  const laterSkill = path.join(root, '.agents', 'skills', 'later');
+  await mkdir(legacySkill, { recursive: true });
+  await writeFile(path.join(legacySkill, 'SKILL.md'), 'legacy canonical bytes\n', 'utf8');
+
+  await assert.rejects(
+    applyInitialization(root, [], [
+      {
+        target: legacySkill,
+        needsInstall: true,
+        replacesExisting: true,
+        install: async (target) => {
+          await mkdir(target, { recursive: true });
+          await writeFile(path.join(target, 'SKILL.md'), 'new canonical bytes\n', 'utf8');
+        },
+      },
+      {
+        target: laterSkill,
+        needsInstall: true,
+        install: async () => {
+          throw new Error('injected post-upgrade failure');
+        },
+      },
+    ]),
+    /injected post-upgrade failure/,
+  );
+
+  assert.equal(await readFile(path.join(legacySkill, 'SKILL.md'), 'utf8'), 'legacy canonical bytes\n');
+  assert.equal(await exists(laterSkill), false);
+});

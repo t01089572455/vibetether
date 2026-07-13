@@ -53,6 +53,9 @@ async function validateSelf() {
       errors.push(`Missing reference: ${reference}`);
     }
   }
+  if (!(await exists(path.join(skillDir, 'scripts', 'resolve-route.mjs')))) {
+    errors.push('Missing deterministic route resolver: scripts/resolve-route.mjs');
+  }
   for (const file of await recursiveTextFiles(skillDir)) {
     const relative = path.relative(skillDir, file);
     const content = await readFile(file, 'utf8');
@@ -125,6 +128,8 @@ function parseManifest(source) {
     project_id: topLevelScalar(source, 'project_id'),
     goal_source: topLevelScalar(source, 'goal_source'),
     intent_contract: topLevelScalar(source, 'intent_contract'),
+    capability_board: topLevelScalar(source, 'capability_board'),
+    provider_lock: topLevelScalar(source, 'provider_lock'),
     sources,
     harnesses,
     checkpoint,
@@ -147,6 +152,8 @@ async function validateProject(projectRoot) {
   if (!manifest?.project_id) errors.push('Manifest project_id is required');
 
   if (!manifest?.intent_contract) errors.push('Manifest intent_contract is required');
+  if (!manifest?.capability_board) errors.push('Manifest capability_board is required');
+  if (!manifest?.provider_lock) errors.push('Manifest provider_lock is required');
   const declaredSources = [manifest?.goal_source, manifest?.intent_contract, ...manifest.sources].filter(Boolean);
   for (const source of [...new Set(declaredSources)]) {
     const sourcePath = path.resolve(projectRoot, source);
@@ -155,6 +162,40 @@ async function validateProject(projectRoot) {
       errors.push(`Source escapes project root: ${source}`);
     } else if (!(await exists(sourcePath))) {
       errors.push(`Missing declared source: ${source}`);
+    }
+  }
+
+  if (manifest.capability_board) {
+    const boardPath = path.resolve(projectRoot, manifest.capability_board);
+    const relative = path.relative(path.resolve(projectRoot), boardPath);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      errors.push(`Capability board escapes project root: ${manifest.capability_board}`);
+    } else if (!(await exists(boardPath))) {
+      errors.push(`Missing capability board: ${manifest.capability_board}`);
+    } else {
+      try {
+        const board = JSON.parse(await readFile(boardPath, 'utf8'));
+        if (board.schema_version !== 1 || board.mode !== 'advisory-router') {
+          errors.push('Capability board must use schema_version 1 and advisory-router mode');
+        }
+        if (board.selection_policy?.provider_selection !== 'advisory') {
+          errors.push('Capability board provider selection must be advisory');
+        }
+        if (!Array.isArray(board.capabilities) || !Array.isArray(board.providers) || !Array.isArray(board.routes)) {
+          errors.push('Capability board must declare capabilities, providers, and routes arrays');
+        }
+      } catch (error) {
+        errors.push(`Invalid capability board: ${error.message}`);
+      }
+    }
+  }
+  if (manifest.provider_lock) {
+    const lockPath = path.resolve(projectRoot, manifest.provider_lock);
+    const relative = path.relative(path.resolve(projectRoot), lockPath);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      errors.push(`Provider lock escapes project root: ${manifest.provider_lock}`);
+    } else if (!(await exists(lockPath))) {
+      errors.push(`Missing provider lock: ${manifest.provider_lock}`);
     }
   }
 
@@ -183,6 +224,11 @@ async function validateProject(projectRoot) {
       for (const field of ['goal', 'phase', 'slice', 'last_reanchor', 'next_intended_action']) {
         if (!new RegExp(`^${field}:\\s*.+$`, 'm').test(checkpointSource)) {
           errors.push(`Checkpoint is missing required field: ${field}`);
+        }
+      }
+      for (const field of ['capability', 'recommended', 'selected', 'selection_reason', 'invocation_status']) {
+        if (!new RegExp(`^  ${field}:`, 'm').test(checkpointSource)) {
+          errors.push(`Checkpoint provider_selection is missing field: ${field}`);
         }
       }
       const lastReanchor = checkpointSource.match(/^last_reanchor:\s*(.+)$/m)?.[1];

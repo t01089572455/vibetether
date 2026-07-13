@@ -1,5 +1,19 @@
 # Capability Routing
 
+## Generated Capability Board
+
+Treat `.vibetether/capabilities.yaml` as the project-local, advisory routing index. It lists every built-in capability, every installed Skill with invocation policy and availability, and the installed profile's community routes. Read it at task entry, phase changes, resume, compaction recovery, and before consequential actions.
+
+The board answers five questions without taking control away from the agent:
+
+1. Does the current signal set benefit from a specialist Skill?
+2. Which installed Skill is the best fit for the current phase and capability?
+3. Which alternative remains available if the preferred route cannot run?
+4. What built-in fallback keeps work safe without downloading anything?
+5. Which outputs and exit evidence are required before moving on?
+
+Recommendations are advisory. Select the recommended Skill when it fits, otherwise select an installed alternative or fallback and record the material reason. High-risk confirmation gates remain mandatory and are independent of ordinary provider selection.
+
 ## Contract
 
 Route by capability rather than provider name:
@@ -18,11 +32,11 @@ exit_gate:
   - no_unresolved_directional_ambiguity
 ```
 
-Every provider invocation records capability, phase, provider, version or source, selection reason, expected output, and exit evidence.
+Every provider decision records capability, phase, recommended provider, selected provider or fallback, version or source when invoked, selection reason, invocation status, expected output, and exit evidence.
 
 ## Phase Map
 
-| Observed state | Required capability | Exit evidence |
+| Observed state | Relevant capability | Exit evidence |
 | --- | --- | --- |
 | Goal, user, scope, or success unclear | Requirements clarification | Approved Intent Contract |
 | Project sources conflict | Document alignment | Conflict resolved in durable truth |
@@ -37,14 +51,16 @@ Every provider invocation records capability, phase, provider, version or source
 
 ## Provider Selection
 
-1. Honor an explicitly named applicable provider.
-2. Use one primary workflow provider per phase.
+1. Honor an explicitly named applicable provider when it does not conflict with project truth or a high-risk gate.
+2. Recommend one primary workflow provider per phase.
 3. Add only non-overlapping domain providers.
 4. Prefer installed, approved, compatible, evaluated, and pinned providers.
 5. Treat equivalent providers as alternatives, not a stack.
 6. Keep project truth above provider instructions.
-7. Use a minimal built-in safe path for absent optional capabilities.
+7. Use a minimal built-in safe path for absent optional providers.
 8. Stop for absent mandatory security, migration, UI-validation, or release capability.
+
+Resolve matching routes by phase and capability, require every `signals.all` item, require at least one `signals.any` item when present, then sort by descending priority. Prefer the first available match for the current harness. If the highest-priority recommendation is unavailable, use the next matching installed route; otherwise use its declared fallback. Record the choice rather than pretending the preferred Skill ran.
 
 Do not select by stars alone. Popularity is a discovery signal. Evaluate behavior, maintenance, license, compatibility, context cost, and trigger collision.
 
@@ -52,7 +68,7 @@ Do not select by stars alone. Popularity is a discovery signal. Evaluate behavio
 
 Resolve and install providers during an auditable initialization, update, or repair operation. Record source, immutable version, license, integrity, supported harnesses, capabilities, dependencies, conflicts, and evaluation status.
 
-Never silently download a new provider during an active coding task. Propose a repair plan when a required provider is missing.
+Never silently download a new provider during an active coding task. For an optional missing provider, use the declared fallback and continue. Propose a repair plan when a mandatory safety or release capability is missing.
 
 ## UI Provider Roles
 
