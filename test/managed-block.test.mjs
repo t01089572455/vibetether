@@ -18,3 +18,12 @@ test('managed block insertion and removal preserves every original byte', () => 
     assert.equal(removeManagedBlock(initialized), original, JSON.stringify(original));
   }
 });
+
+test('a managed block keeps a no-final-newline ignore rule on its own line', () => {
+  const original = 'dist/';
+  const initialized = applyManagedBlock(original, '.vibetether/state/');
+
+  assert.match(initialized, /^dist\/\r?\n<!-- vibetether:start -->/);
+  assert.equal(initialized.split(/\r?\n/)[0], 'dist/');
+  assert.equal(removeManagedBlock(initialized), original);
+});

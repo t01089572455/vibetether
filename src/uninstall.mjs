@@ -1,4 +1,4 @@
-import { access, realpath, rename, rm } from 'node:fs/promises';
+import { access, mkdir, realpath, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ADAPTERS } from './adapters.mjs';
@@ -23,12 +23,14 @@ async function exists(target) {
 }
 
 export async function applyUninstallPlans(textPlans, skillPlans, operations = {}) {
-  const run = { rename, rm, writeAtomic, ...operations };
+  const run = { mkdir, rename, rm, writeAtomic, ...operations };
   const quarantined = [];
   const appliedTexts = [];
   try {
     for (const plan of skillPlans) {
-      const quarantine = `${plan.target}.${randomUUID()}.remove`;
+      if (!plan.quarantineRoot) throw new CliError('A safe uninstall quarantine root is required.', 3);
+      await run.mkdir(plan.quarantineRoot, { recursive: true });
+      const quarantine = path.join(plan.quarantineRoot, `${randomUUID()}.remove`);
       await run.rename(plan.target, quarantine);
       quarantined.push({ ...plan, quarantine });
     }
@@ -85,6 +87,8 @@ export async function uninstall(options) {
   }
 
   const canonicalFingerprint = await skillFingerprint(sourceSkill);
+  await rejectSymlinkPath(root, '.vibetether/quarantine');
+  const quarantineRoot = resolveInside(root, '.vibetether/quarantine');
   const skillPlans = [];
   for (const adapter of Object.values(ADAPTERS)) {
     await rejectSymlinkPath(root, adapter.skillDirectory);
@@ -99,7 +103,7 @@ export async function uninstall(options) {
     if (installedFingerprint !== canonicalFingerprint) {
       throw new CliError(`Refusing to remove modified installed Skill at ${adapter.skillDirectory}. Back up the customization first.`, 3);
     }
-    skillPlans.push({ relativePath: adapter.skillDirectory, target });
+    skillPlans.push({ relativePath: adapter.skillDirectory, target, quarantineRoot });
   }
 
   const items = [
@@ -117,6 +121,6 @@ export async function uninstall(options) {
   const cleanupFailures = await applyUninstallPlans(textPlans, skillPlans);
   const warning = cleanupFailures.length === 0
     ? ''
-    : ` Warning: inactive quarantine cleanup failed for ${cleanupFailures.map((plan) => plan.relativePath).join(', ')}; a sibling .remove directory remains and can be deleted manually.`;
+    : ` Warning: inactive quarantine cleanup failed for ${cleanupFailures.map((plan) => plan.relativePath).join(', ')}; a copy remains under .vibetether/quarantine and can be deleted manually.`;
   return `VibeTether removed managed content from ${root}. The Intent Contract and backups were preserved.${warning}\n`;
 }

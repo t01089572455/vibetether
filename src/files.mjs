@@ -4,6 +4,21 @@ import { randomUUID } from 'node:crypto';
 import { CliError } from './errors.mjs';
 import { MANAGED_END, MANAGED_START } from './adapters.mjs';
 
+const OWNED_PREFIX_PATTERN = /^<!-- vibetether:owned-prefix-newlines=(0|1) -->/;
+
+function ownedPrefixCount(content, start, end) {
+  const inner = content.slice(start + MANAGED_START.length, end).trim();
+  const match = inner.match(OWNED_PREFIX_PATTERN);
+  return match ? Number(match[1]) : null;
+}
+
+function managedBlock(body, newline, prefixCount = null) {
+  const ownership = prefixCount === null
+    ? ''
+    : `<!-- vibetether:owned-prefix-newlines=${prefixCount} -->${newline}`;
+  return `${MANAGED_START}${newline}${ownership}${body}${newline}${MANAGED_END}`;
+}
+
 export async function readTextIfPresent(target) {
   try {
     return await readFile(target, 'utf8');
@@ -25,27 +40,39 @@ export function inspectManagedBlock(content, label) {
 export function applyManagedBlock(content, body) {
   const newline = content.includes('\r\n') ? '\r\n' : '\n';
   const normalizedBody = body.trim().replace(/\r?\n/g, newline);
-  const block = `${MANAGED_START}${newline}${normalizedBody}${newline}${MANAGED_END}`;
   if (content.includes(MANAGED_START)) {
     const start = content.indexOf(MANAGED_START);
-    const end = content.indexOf(MANAGED_END, start) + MANAGED_END.length;
+    const endStart = content.indexOf(MANAGED_END, start);
+    const end = endStart + MANAGED_END.length;
+    const block = managedBlock(normalizedBody, newline, ownedPrefixCount(content, start, endStart));
     return `${content.slice(0, start)}${block}${content.slice(end)}`;
   }
-  return `${content}${block}`;
+  const prefixCount = content && !content.endsWith(newline) ? 1 : 0;
+  const block = managedBlock(normalizedBody, newline, prefixCount);
+  return `${content}${newline.repeat(prefixCount)}${block}`;
 }
 
 export function managedBlockBody(content) {
   if (!content.includes(MANAGED_START) || !content.includes(MANAGED_END)) return null;
   const start = content.indexOf(MANAGED_START) + MANAGED_START.length;
   const end = content.indexOf(MANAGED_END, start);
-  return content.slice(start, end).trim();
+  return content.slice(start, end).trim().replace(OWNED_PREFIX_PATTERN, '').trim();
 }
 
 export function removeManagedBlock(content) {
   if (!content.includes(MANAGED_START)) return content;
   const start = content.indexOf(MANAGED_START);
-  const end = content.indexOf(MANAGED_END, start) + MANAGED_END.length;
-  const before = content.slice(0, start);
+  const endStart = content.indexOf(MANAGED_END, start);
+  const end = endStart + MANAGED_END.length;
+  const prefixCount = ownedPrefixCount(content, start, endStart);
+  const newline = content.slice(start, end).includes('\r\n') ? '\r\n' : '\n';
+  let before = content.slice(0, start);
+  if (prefixCount === 1) {
+    if (!before.endsWith(newline)) {
+      throw new CliError('Managed block ownership metadata does not match the surrounding content.', 3);
+    }
+    before = before.slice(0, -newline.length);
+  }
   const after = content.slice(end);
   return `${before}${after}`;
 }

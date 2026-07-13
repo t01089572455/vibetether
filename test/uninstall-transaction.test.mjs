@@ -21,6 +21,7 @@ test('quarantine cleanup failure happens after commit and is reported without ro
   await writeFile(instructions, '# Before\nmanaged\n', 'utf8');
   const firstSkill = path.join(root, '.agents', 'skills', 'vibe-tether');
   const secondSkill = path.join(root, '.claude', 'skills', 'vibe-tether');
+  const quarantineRoot = path.join(root, '.vibetether', 'quarantine');
   for (const skill of [firstSkill, secondSkill]) {
     await mkdir(skill, { recursive: true });
     await writeFile(path.join(skill, 'SKILL.md'), 'canonical\n', 'utf8');
@@ -41,7 +42,10 @@ test('quarantine cleanup failure happens after commit and is reported without ro
 
   const failures = await applyUninstallPlans(
     [{ target: instructions, original: '# Before\nmanaged\n', content: '# Before\n', removeFile: false }],
-    [{ target: firstSkill }, { target: secondSkill }],
+    [
+      { target: firstSkill, quarantineRoot },
+      { target: secondSkill, quarantineRoot },
+    ],
     operations,
   );
 
@@ -51,4 +55,7 @@ test('quarantine cleanup failure happens after commit and is reported without ro
   assert.equal(failures.length, 1);
   assert.equal(failures[0].error, cleanupFailure);
   assert.equal(await exists(failures[0].quarantine), true);
+  assert.equal(path.dirname(failures[0].quarantine), quarantineRoot);
+  assert.equal(failures[0].quarantine.includes(`${path.sep}.agents${path.sep}skills${path.sep}`), false);
+  assert.equal(failures[0].quarantine.includes(`${path.sep}.claude${path.sep}skills${path.sep}`), false);
 });

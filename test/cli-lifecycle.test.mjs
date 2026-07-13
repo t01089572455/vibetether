@@ -169,6 +169,21 @@ test('uninstall removes only VibeTether-managed content and preserves the Intent
   assert.equal(await exists(path.join(target, '.vibetether', 'intent.md')), true);
 });
 
+test('init preserves a no-final-newline gitignore rule while active and uninstall restores exact bytes', async () => {
+  const target = await project('gitignore-roundtrip');
+  const gitignorePath = path.join(target, '.gitignore');
+  const original = 'dist/';
+  await writeFile(gitignorePath, original, 'utf8');
+
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--yes']).status, 0);
+  const active = await readFile(gitignorePath, 'utf8');
+  assert.match(active, /^dist\/\r?\n<!-- vibetether:start -->/);
+  assert.equal(active.split(/\r?\n/)[0], 'dist/');
+
+  assert.equal(runCli(['uninstall', '--project', target, '--yes']).status, 0);
+  assert.equal(await readFile(gitignorePath, 'utf8'), original);
+});
+
 test('uninstall refuses a modified installed Skill without changing project files', async () => {
   const target = await project('uninstall-conflict');
   assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--yes']).status, 0);
