@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -13,14 +13,16 @@ function git(cwd, args) {
   return result.stdout.trim();
 }
 
-async function fixtureRepository(name = 'provider') {
+async function fixtureRepository(name = 'provider', skillNames = ['demo']) {
   const root = await mkdtemp(path.join(os.tmpdir(), `vibetether-${name}-`));
-  await mkdir(path.join(root, 'skills', 'demo'), { recursive: true });
-  await writeFile(
-    path.join(root, 'skills', 'demo', 'SKILL.md'),
-    '---\nname: demo\ndescription: Fixture provider.\n---\n\n# Demo\n',
-    'utf8',
-  );
+  for (const skillName of skillNames) {
+    await mkdir(path.join(root, 'skills', skillName), { recursive: true });
+    await writeFile(
+      path.join(root, 'skills', skillName, 'SKILL.md'),
+      `---\nname: ${skillName}\ndescription: Fixture provider.\n---\n\n# ${skillName}\n`,
+      'utf8',
+    );
+  }
   await writeFile(path.join(root, 'LICENSE'), 'MIT fixture license\n', 'utf8');
   git(root, ['init', '-q']);
   git(root, ['config', 'user.name', 'VibeTether Tests']);
@@ -79,6 +81,39 @@ test('stages an exact commit and verifies the complete skill and license', async
     await staged.cleanup();
   }
   assert.equal(await exists(staged.staging_root), false);
+});
+
+test('complete catalogs reject undeclared upstream Skill directories', async () => {
+  const fixture = await fixtureRepository('complete-catalog', ['demo', 'extra']);
+  const complete = source(fixture, { catalog_mode: 'complete', skill_root: 'skills' });
+
+  await assert.rejects(() => stageProviderSources([complete]), /undeclared.*extra/i);
+});
+
+test('stages a pinned README license declaration without fabricating full license text', async () => {
+  const fixture = await fixtureRepository('declared-license');
+  await rm(path.join(fixture.root, 'LICENSE'));
+  await writeFile(path.join(fixture.root, 'README.md'), '# Provider\n\n## License\n\nMIT\n', 'utf8');
+  git(fixture.root, ['add', '-A']);
+  git(fixture.root, ['commit', '-qm', 'declare license in readme']);
+  fixture.commit = git(fixture.root, ['rev-parse', 'HEAD']);
+  const declared = source(fixture, {
+    license_path: undefined,
+    license_evidence: {
+      mode: 'readme-declaration',
+      path: 'README.md',
+      declaration: '## License\n\nMIT',
+    },
+  });
+
+  const staged = await stageProviderSources([declared]);
+  try {
+    assert.equal(staged.repositories[0].license_evidence.mode, 'readme-declaration');
+    assert.equal(staged.repositories[0].license_content, undefined);
+    assert.match(staged.warnings[0], /complete license text is not present/i);
+  } finally {
+    await staged.cleanup();
+  }
 });
 
 test('rejects a source skill whose fingerprint differs from the audited registry', async () => {

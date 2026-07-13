@@ -1,4 +1,4 @@
-import { lstat, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
@@ -79,6 +79,26 @@ async function assertSkillDirectory(target, label) {
   await assertRegularFile(path.join(target, 'SKILL.md'), `Skill entry ${label}/SKILL.md`);
 }
 
+export async function enumerateSkillDirectories(repositoryRoot, relativeRoot) {
+  const skillRoot = resolveSourcePath(repositoryRoot, relativeRoot, 'Skill root');
+  const discovered = [];
+
+  async function walk(current) {
+    const entries = await readdir(current, { withFileTypes: true });
+    if (entries.some((entry) => entry.name === 'SKILL.md' && entry.isFile())) {
+      discovered.push(path.relative(repositoryRoot, current).split(path.sep).join('/'));
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+      await walk(path.join(current, entry.name));
+    }
+  }
+
+  await walk(skillRoot);
+  return discovered.sort();
+}
+
 export async function stageProviderSources(sources, options = {}) {
   const parent = options.tempRoot ?? os.tmpdir();
   await mkdir(parent, { recursive: true });
@@ -87,6 +107,7 @@ export async function stageProviderSources(sources, options = {}) {
   await mkdir(hooksPath, { recursive: true });
   const repositories = [];
   const skills = [];
+  const warnings = [];
 
   try {
     for (const [index, source] of sources.entries()) {
@@ -104,18 +125,63 @@ export async function stageProviderSources(sources, options = {}) {
         );
       }
 
-      const licensePath = resolveSourcePath(repositoryRoot, source.license_path, `License path for ${source.id}`);
-      await assertRegularFile(licensePath, `license for ${source.id}`);
-      const licenseBuffer = await readFile(licensePath);
+      if (source.catalog_mode === 'complete') {
+        const discovered = await enumerateSkillDirectories(repositoryRoot, source.skill_root);
+        const declared = new Set(source.skills.map((skill) => skill.path.replaceAll('\\', '/')));
+        const undeclared = discovered.filter((skillPath) => !declared.has(skillPath));
+        const missing = [...declared].filter((skillPath) => !discovered.includes(skillPath));
+        if (undeclared.length > 0) {
+          throw new CliError(`Complete provider catalog ${source.id} has undeclared Skill directories: ${undeclared.join(', ')}`, 3);
+        }
+        if (missing.length > 0) {
+          throw new CliError(`Complete provider catalog ${source.id} declares missing Skill directories: ${missing.join(', ')}`, 3);
+        }
+      }
+
+      const licenseEvidence = source.license_evidence ?? {
+        mode: 'full-text',
+        path: source.license_path,
+      };
+      if (!['full-text', 'readme-declaration'].includes(licenseEvidence.mode)) {
+        throw new CliError(`Unsupported license evidence mode for ${source.id}: ${licenseEvidence.mode}`, 3);
+      }
+      const evidencePath = resolveSourcePath(
+        repositoryRoot,
+        licenseEvidence.path,
+        `License evidence path for ${source.id}`,
+      );
+      await assertRegularFile(evidencePath, `license evidence for ${source.id}`);
+      const evidenceBuffer = await readFile(evidencePath);
+      const evidenceContent = evidenceBuffer.toString('utf8');
+      if (
+        licenseEvidence.mode === 'readme-declaration' &&
+        (!licenseEvidence.declaration || !evidenceContent.includes(licenseEvidence.declaration))
+      ) {
+        throw new CliError(`Pinned license declaration is missing or changed for ${source.id}.`, 3);
+      }
+      if (licenseEvidence.mode === 'readme-declaration') {
+        warnings.push(
+          `${source.id} declares ${source.license} in ${licenseEvidence.path}; complete license text is not present upstream.`,
+        );
+      }
       repositories.push({
         source_id: source.id,
         repository: source.repository,
         ref: source.ref,
         commit: actualCommit,
         license: source.license,
-        license_path: licensePath,
-        license_content: licenseBuffer.toString('utf8'),
-        license_sha256: createHash('sha256').update(licenseBuffer).digest('hex'),
+        license_evidence: {
+          ...licenseEvidence,
+          path: licenseEvidence.path,
+          sha256: createHash('sha256').update(evidenceBuffer).digest('hex'),
+        },
+        ...(licenseEvidence.mode === 'full-text'
+          ? {
+              license_path: evidencePath,
+              license_content: evidenceContent,
+              license_sha256: createHash('sha256').update(evidenceBuffer).digest('hex'),
+            }
+          : {}),
         root: repositoryRoot,
       });
 
@@ -150,6 +216,7 @@ export async function stageProviderSources(sources, options = {}) {
     staging_root: stagingRoot,
     repositories,
     skills,
+    warnings,
     async cleanup() {
       if (cleaned) return;
       cleaned = true;
