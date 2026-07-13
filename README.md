@@ -64,6 +64,82 @@ npx --yes github:t01089572455/vibetether uninstall --project . --yes
 
 Uninstall removes only unchanged VibeTether-owned files and managed instruction blocks. It preserves the Intent Contract, user documents, runtime checkpoint, backups, and every Skill that existed before VibeTether.
 
+## What gets installed?
+
+VibeTether does not require community Skills. Its control loop, readiness gate, checkpoint rules, risk gates, capability contracts, and built-in fallbacks work with the `core` profile. Community Skills are optional specialist providers that a reviewed non-core installation can make available to the router.
+
+VibeTether does not search GitHub by star count, install arbitrary repositories, follow floating upstream revisions, or fetch a new provider because a task happens to need one. Every curated source is declared in this repository, pinned to an exact commit, fingerprinted, and checked against recorded license evidence. Provider content is fetched only during an explicit non-core `init`; no provider is downloaded during active work.
+
+| Command or profile | Third-party network activity | Project result |
+| --- | --- | --- |
+| `npx skills add ... --skill vibe-tether` | Fetches the VibeTether package only | Installs the portable entry Skill; it does not initialize project instructions or community providers |
+| `init --profile core` | No provider fetch | Installs VibeTether, managed project instructions, a built-in capability board, checkpoint state, and provider-free fallbacks |
+| `init --profile standard` | Fetches pinned Matt Pocock, Superpowers, and Karpathy sources | Base inventory: 53 complete upstream Skills cataloged and 21 exposed Skills; repository evidence may also select `web` or `production` bundles |
+| `init --profile extended` | Standard sources plus pinned Anthropic source | Adds `frontend-design` without replacing the primary product-design workflow |
+| `init --bundle web` | Fetches the pinned Vercel catalog | Catalogs all 9 Vercel Skills and exposes only signal-matched Web specialists |
+| `init --bundle production` | Fetches the pinned Addy Osmani catalog | Catalogs all 24 Skills and exposes only approved production specialists; an explicit bundle exposes the approved seven |
+
+`standard` and `extended` scan the repository before installation. React, Next.js, React Native, Expo, or `vercel.json` can select the `web` bundle; GitHub Actions or a recognized migration directory can select `production`. Use `--no-auto-bundles` when you want the base profile only, and always run `--dry-run` first to see the exact catalogs, exposures, files, and license operations. The dry-run does not fetch provider content or write project files.
+
+The initial `npx` command may need network access to obtain VibeTether itself unless it is already cached. That package does not embed the community provider repositories; an explicit non-core `init` fetches the pinned sources directly and stages them before any project write.
+
+## How agents discover installed Skills
+
+A successful project initialization makes provider knowledge visible through four separate surfaces. This is what lets an agent know that a specialist exists without loading every downloaded Skill into every prompt.
+
+| Surface | Audience | What it tells them |
+| --- | --- | --- |
+| `.agents/skills/` and `.claude/skills/` | Codex and Claude Code host discovery | Complete verified copies of exposed Skills, including each upstream `SKILL.md` trigger and instructions |
+| `.vibetether/capabilities.yaml` | VibeTether and the coding agent | Scenarios, capability purpose, `When to use` signals, primary recommendation, overlays, alternatives, live installation paths, fallback, required outputs, and exit evidence |
+| `.vibetether/providers.lock.yaml` | Installer, `doctor`, maintainers, and the agent when provenance matters | Exact repository, commit, fingerprint, license evidence, catalog/exposure status, installation path, activity, and ownership |
+| `.vibetether/providers/catalog/` | Local inventory and deliberate lookup | Every complete audited upstream Skill; catalog-only entries stay outside host discovery to avoid trigger collisions and context noise |
+
+The installer also writes a marked block to `AGENTS.md`, `CLAUDE.md`, or both. That block tells the host agent to enter through VibeTether, read the capability board, refresh live availability, use a fitting installed recommendation or justified alternative, and record the selected path. VibeTether's own `SKILL.md` repeats that contract at task entry, phase changes, resume, handoff, and compaction recovery.
+
+Run the human-readable dashboard at any time:
+
+```sh
+npx --yes github:t01089572455/vibetether capabilities --project .
+```
+
+Its output includes an `Automatic work-readiness gate`, every capability with `When to use`, expected outputs and exit evidence, catalog-only alternatives, and an `Installed Skill inventory` with availability, capabilities, routes, and invocation policy. For a machine-readable live route, supply a phase, capability, signals, and harness:
+
+```sh
+npx --yes github:t01089572455/vibetether capabilities --project . --phase DIAGNOSE --capability debugging --signal bug-fix --agent codex --json
+```
+
+The resolver checks the recorded installation paths again before answering, so initialization-time state is not mistaken for live availability. If the preferred provider is missing, the result selects an installed alternative or the declared built-in fallback; it never downloads a replacement mid-task.
+
+### Default `standard` provider map
+
+The base `standard` profile exposes these 21 Skills to each enabled host. `Primary` owns a workflow phase, `domain` adds a non-overlapping specialty, `alternative` is selected only when its signals fit, `policy` is an overlay, and `explicit alias` preserves an upstream command while an automatic route covers the same behavior.
+
+| Skill | Source | Role and normal route |
+| --- | --- | --- |
+| `grilling` | `mattpocock/skills` | Primary requirements and document-alignment interview when goal, scope, constraints, or success evidence are unclear |
+| `grill-me` | `mattpocock/skills` | Explicit alias; automatic behavior is covered by `grilling` |
+| `grill-with-docs` | `mattpocock/skills` | Explicit alias; automatic behavior is covered by `grilling` plus `domain-modeling` |
+| `domain-modeling` | `mattpocock/skills` | Domain support for durable terminology, glossary, model, or ADR decisions |
+| `codebase-design` | `mattpocock/skills` | Alternative read-only orientation when repository entry points are unclear |
+| `prototype` | `mattpocock/skills` | Alternative throwaway experiment when testing is cheaper than debating uncertainty |
+| `research` | `mattpocock/skills` | Alternative primary-source research when a current external fact is required |
+| `brainstorming` | `obra/superpowers` | Primary product/design workflow after intent is ready for alternatives and trade-offs |
+| `dispatching-parallel-agents` | `obra/superpowers` | Domain workflow only when tasks are independent, subagents exist, and delegation is authorized |
+| `executing-plans` | `obra/superpowers` | Primary execution of one verified plan slice at a time |
+| `finishing-a-development-branch` | `obra/superpowers` | Primary integration and release-choice workflow after implementation is verified |
+| `receiving-code-review` | `obra/superpowers` | Domain check for incoming review feedback before accepting changes |
+| `requesting-code-review` | `obra/superpowers` | Primary separated review against request, diff, and evidence |
+| `subagent-driven-development` | `obra/superpowers` | Primary plan execution only when subagents are available and delegation is authorized |
+| `systematic-debugging` | `obra/superpowers` | Primary diagnosis for unexpected behavior before proposing a fix |
+| `test-driven-development` | `obra/superpowers` | Domain red-green-refactor workflow for new behavior and bug fixes |
+| `using-git-worktrees` | `obra/superpowers` | Domain isolation when a feature needs a separate worktree |
+| `verification-before-completion` | `obra/superpowers` | Primary fresh-evidence gate before completion claims |
+| `writing-plans` | `obra/superpowers` | Primary implementation planning after direction is approved |
+| `writing-skills` | `obra/superpowers` | Domain workflow for creating or revising an Agent Skill |
+| `karpathy-guidelines` | `multica-ai/andrej-karpathy-skills` | Policy overlay for simple, surgical, assumption-aware implementation |
+
+Downloading a complete catalog does not make every catalog entry automatically invokable. A catalog-only Skill is stored locally and may appear as a named alternative in the capability board, but it remains outside host discovery. This is intentional: exposing competing routers or every specialist at once would increase trigger collisions and context cost.
+
 ## How automatic routing works
 
 VibeTether separates automatic readiness from advisory provider choice:

@@ -71,6 +71,52 @@ test('README is a complete scenario-led product and operations guide', async () 
   assert.match(readme, /captured[\s\S]*already-encoded[\s\S]*not-reusable/i);
 });
 
+test('README makes provider fetching and Agent discovery explicit for beginners', async () => {
+  const readme = await text('README.md');
+  assert.match(readme, /## What gets installed\?/i);
+  assert.match(readme, /VibeTether does not require community Skills/i);
+  assert.match(readme, /does not search GitHub by star count/i);
+  assert.match(readme, /explicit non-core `init`/i);
+  assert.match(readme, /no provider is downloaded during active work/i);
+  assert.match(readme, /## How agents discover installed Skills/i);
+  for (const artifact of [
+    '.vibetether/capabilities.yaml',
+    '.vibetether/providers.lock.yaml',
+    '.vibetether/providers/catalog/',
+    '.agents/skills/',
+    '.claude/skills/',
+  ]) assert.match(readme, new RegExp(artifact.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(readme, /Installed Skill inventory/i);
+  assert.match(readme, /When to use/i);
+  assert.match(readme, /live availability/i);
+  for (const skill of [
+    'grilling',
+    'grill-me',
+    'grill-with-docs',
+    'domain-modeling',
+    'codebase-design',
+    'prototype',
+    'research',
+    'brainstorming',
+    'dispatching-parallel-agents',
+    'executing-plans',
+    'finishing-a-development-branch',
+    'receiving-code-review',
+    'requesting-code-review',
+    'subagent-driven-development',
+    'systematic-debugging',
+    'test-driven-development',
+    'using-git-worktrees',
+    'verification-before-completion',
+    'writing-plans',
+    'writing-skills',
+    'karpathy-guidelines',
+  ]) assert.match(readme, new RegExp('\\| `' + skill + '` \\|'), `README is missing the default provider ${skill}`);
+  assert.match(readme, /21 exposed Skills/i);
+  assert.match(readme, /53 complete upstream Skills/i);
+  assert.match(readme, /catalog-only[\s\S]*outside host discovery/i);
+});
+
 test('the public GitHub publishing runbook preserves the first proven path without credentials', async () => {
   const runbook = await text('docs/operations/github-publishing.md');
   assert.match(runbook, /first-proven-path/i);
