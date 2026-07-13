@@ -23,6 +23,8 @@ Init options:
   --project PATH                    Project directory (default: current directory)
   --agent codex|claude|both         Agent harnesses to install (default: both)
   --profile core|standard|extended  Control profile (default: standard)
+  --bundle web|production           Add a specialist bundle (repeatable)
+  --no-auto-bundles                 Disable repository-evidence bundle selection
   --dry-run                         Show the plan without changing files
   --yes                             Apply changes without an interactive prompt
 
@@ -56,6 +58,8 @@ function parseInit(args) {
     project: process.cwd(),
     agent: 'both',
     profile: 'standard',
+    bundles: [],
+    autoBundles: true,
     dryRun: false,
     yes: false,
   };
@@ -64,6 +68,8 @@ function parseInit(args) {
     if (flag === '--project') options.project = valueAfter(args, index++, flag);
     else if (flag === '--agent') options.agent = valueAfter(args, index++, flag);
     else if (flag === '--profile') options.profile = valueAfter(args, index++, flag);
+    else if (flag === '--bundle') options.bundles.push(valueAfter(args, index++, flag));
+    else if (flag === '--no-auto-bundles') options.autoBundles = false;
     else if (flag === '--dry-run') options.dryRun = true;
     else if (flag === '--yes') options.yes = true;
     else if (flag === '--help' || flag === '-h') return { help: true };
@@ -75,6 +81,9 @@ function parseInit(args) {
   if (!['core', 'standard', 'extended'].includes(options.profile)) {
     throw new CliError(`Invalid --profile value: ${options.profile}`);
   }
+  const invalidBundle = options.bundles.find((bundle) => !['web', 'production'].includes(bundle));
+  if (invalidBundle) throw new CliError(`Invalid --bundle value: ${invalidBundle}`);
+  options.bundles = [...new Set(options.bundles)];
   return options;
 }
 

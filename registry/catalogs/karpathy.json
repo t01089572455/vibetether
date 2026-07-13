@@ -1,0 +1,36 @@
+{
+  "id": "multica-karpathy-2c60614",
+  "repository": "https://github.com/multica-ai/andrej-karpathy-skills.git",
+  "ref": "commit:2c60614",
+  "commit": "2c606141936f1eeef17fa3043a72095b4765b9c2",
+  "license": "MIT",
+  "license_path": "README.md",
+  "catalog_mode": "complete",
+  "skill_root": "skills",
+  "catalog_group": "foundation",
+  "license_evidence": {
+    "mode": "readme-declaration",
+    "path": "README.md",
+    "sha256": "daf314efb31894b86d68b67786c820bd8470bb2126e578ba9cd0e3e2667883f8",
+    "declaration": "## License\\n\\nMIT"
+  },
+  "skills": [
+    {
+      "id": "karpathy-karpathy-guidelines",
+      "install_name": "karpathy-guidelines",
+      "path": "skills/karpathy-guidelines",
+      "fingerprint": "67e9dffa2c72bdb1ec96dfff8542e66b238cb3e48c2b3d05d7eea4c45e316250",
+      "catalog_status": "audited",
+      "workflow_role": "policy",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "standard",
+      "capabilities": [
+        "implementation"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-implementation",
+      "required_outputs": [],
+      "exit_evidence": []
+    }
+  ]
+}

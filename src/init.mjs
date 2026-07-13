@@ -223,9 +223,10 @@ export async function initialize(options, dependencies = {}) {
 
   const manifestTarget = resolveInside(root, '.vibetether/project.yaml');
   const manifestOriginal = await readTextIfPresent(manifestTarget);
+  const scanned = await scanProject(root, adapters, options.profile);
   let manifest;
   if (manifestOriginal === null) {
-    manifest = await scanProject(root, adapters, options.profile);
+    manifest = scanned;
   } else {
     try {
       manifest = {
@@ -236,8 +237,16 @@ export async function initialize(options, dependencies = {}) {
       throw new CliError(`Manifest conflict in .vibetether/project.yaml: ${error.message}`, 3);
     }
   }
+  const selectedBundles = new Set(options.bundles ?? []);
+  if (options.autoBundles !== false && options.profile !== 'core') {
+    for (const signal of scanned.bundle_signals ?? []) {
+      if (signal.confidence === 'high') selectedBundles.add(signal.bundle);
+    }
+  }
   manifest = {
     ...manifest,
+    bundles: [...selectedBundles].sort(),
+    bundle_signals: scanned.bundle_signals ?? [],
     capability_board: '.vibetether/capabilities.yaml',
     provider_lock: '.vibetether/providers.lock.yaml',
   };

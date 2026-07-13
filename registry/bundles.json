@@ -1,174 +1,7 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "runtime_auto_install": false,
-  "sources": [
-    {
-      "id": "mattpocock-skills-v1.1.0",
-      "repository": "https://github.com/mattpocock/skills.git",
-      "ref": "v1.1.0",
-      "commit": "d574778f94cf620fcc8ce741584093bc650a61d3",
-      "license": "MIT",
-      "license_path": "LICENSE",
-      "skills": [
-        {
-          "id": "mattpocock-grill-me",
-          "install_name": "grill-me",
-          "path": "skills/productivity/grill-me",
-          "fingerprint": "95d42a09fbde39e0801c6dc04d18605e3f28af72ea22e43c7eabf9e1fd9b6d65",
-          "capabilities": ["explicit-requirements-interview"],
-          "invocation_policy": "upstream-explicit-alias",
-          "auto_covered_by": ["grilling"],
-          "use_when": ["The user explicitly invokes the grill-me command alias; VibeTether automatically covers its readiness behavior through grilling."]
-        },
-        {
-          "id": "mattpocock-grilling",
-          "install_name": "grilling",
-          "path": "skills/productivity/grilling",
-          "fingerprint": "773ad7ba0bad00ac6443281aa2f787fc40bddda603dc1ebaf568180434edb595",
-          "capabilities": ["requirements-clarification", "document-alignment"]
-        },
-        {
-          "id": "mattpocock-grill-with-docs",
-          "install_name": "grill-with-docs",
-          "path": "skills/engineering/grill-with-docs",
-          "fingerprint": "e72b54b4032184ede733d420f1fee934f1ab5b14fc3b46e2cef7e024a3153dbc",
-          "capabilities": ["explicit-document-alignment"],
-          "invocation_policy": "upstream-explicit-alias",
-          "auto_covered_by": ["grilling", "domain-modeling"],
-          "use_when": ["The user explicitly invokes the grill-with-docs command alias; VibeTether automatically composes grilling with domain-modeling when readiness gaps require durable decisions."]
-        },
-        {
-          "id": "mattpocock-domain-modeling",
-          "install_name": "domain-modeling",
-          "path": "skills/engineering/domain-modeling",
-          "fingerprint": "70558bf8e482dcbf41aae2fe4257bf6e2fefa7c77cc1ea065bb8a4ccfe39cf14",
-          "capabilities": ["domain-modeling"]
-        }
-      ]
-    },
-    {
-      "id": "obra-superpowers-v5.1.0",
-      "repository": "https://github.com/obra/superpowers.git",
-      "ref": "v5.1.0",
-      "commit": "f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
-      "license": "MIT",
-      "license_path": "LICENSE",
-      "skills": [
-        {
-          "id": "superpowers-brainstorming",
-          "install_name": "brainstorming",
-          "path": "skills/brainstorming",
-          "fingerprint": "838fe67fad51b68f1b4139c9571063134614fb44e4cd5409b63dd5b06faec746",
-          "capabilities": ["product-design"]
-        },
-        {
-          "id": "superpowers-dispatching-parallel-agents",
-          "install_name": "dispatching-parallel-agents",
-          "path": "skills/dispatching-parallel-agents",
-          "fingerprint": "3cd804d2df7f2370af688ae25e367d2186a157d47b9c768a4a87cd271cebb905",
-          "capabilities": ["parallel-execution"],
-          "use_when": ["Two or more tasks are independent, share no mutable state, and delegated execution is authorized."]
-        },
-        {
-          "id": "superpowers-executing-plans",
-          "install_name": "executing-plans",
-          "path": "skills/executing-plans",
-          "fingerprint": "637f54427088584d4ce0f199ba7910819662e019ada467622f2b4558264bc430",
-          "capabilities": ["plan-execution"]
-        },
-        {
-          "id": "superpowers-finishing-a-development-branch",
-          "install_name": "finishing-a-development-branch",
-          "path": "skills/finishing-a-development-branch",
-          "fingerprint": "fd5bbecf689303db810aef4f6b35d0938664c7898c2843aa830cd96a216eca85",
-          "capabilities": ["branch-finish", "release-verification"]
-        },
-        {
-          "id": "superpowers-receiving-code-review",
-          "install_name": "receiving-code-review",
-          "path": "skills/receiving-code-review",
-          "fingerprint": "b2fd77c693202214c5aa973c5921ce2f7fdb7bd4fb06e280a85789d45e01cf50",
-          "capabilities": ["review-feedback"],
-          "use_when": ["Review feedback has arrived and must be verified before implementation."]
-        },
-        {
-          "id": "superpowers-requesting-code-review",
-          "install_name": "requesting-code-review",
-          "path": "skills/requesting-code-review",
-          "fingerprint": "0ee5f5da6611520c30dd4672498e15253545c58ed963dc8f26617a99e35b88b6",
-          "capabilities": ["code-review"]
-        },
-        {
-          "id": "superpowers-subagent-driven-development",
-          "install_name": "subagent-driven-development",
-          "path": "skills/subagent-driven-development",
-          "fingerprint": "0ec5ffc8cc5bc66c750af4c00d9e121b5be52ae8fde9b0d755535850ebe53b05",
-          "capabilities": ["plan-execution-with-subagents"]
-        },
-        {
-          "id": "superpowers-systematic-debugging",
-          "install_name": "systematic-debugging",
-          "path": "skills/systematic-debugging",
-          "fingerprint": "17f890ba39a4809bcae77e2e1f6b75099a5c0d78d481183636acec7c30eebafa",
-          "capabilities": ["debugging"]
-        },
-        {
-          "id": "superpowers-test-driven-development",
-          "install_name": "test-driven-development",
-          "path": "skills/test-driven-development",
-          "fingerprint": "e8ba014baebff4222583a818ef2a21b85cbc7e34cda1084cde692c5155ceb653",
-          "capabilities": ["tdd"]
-        },
-        {
-          "id": "superpowers-using-git-worktrees",
-          "install_name": "using-git-worktrees",
-          "path": "skills/using-git-worktrees",
-          "fingerprint": "a88f5977beebd4900e10833a4f899ccf3f196a7400e728e924750b6e9ca2f18c",
-          "capabilities": ["git-isolation"],
-          "use_when": ["Feature work or plan execution needs an isolated workspace."]
-        },
-        {
-          "id": "superpowers-verification-before-completion",
-          "install_name": "verification-before-completion",
-          "path": "skills/verification-before-completion",
-          "fingerprint": "8a071b9e7ceec30be19cf4846dbda1caa765fdc4445e07fe04c5b9d952b8defb",
-          "capabilities": ["completion-verification"]
-        },
-        {
-          "id": "superpowers-writing-plans",
-          "install_name": "writing-plans",
-          "path": "skills/writing-plans",
-          "fingerprint": "8bc6274dded4594f4fdb9b8f17351b9eb12e88f9d76d4bfd56335e5f15a666a3",
-          "capabilities": ["planning"]
-        },
-        {
-          "id": "superpowers-writing-skills",
-          "install_name": "writing-skills",
-          "path": "skills/writing-skills",
-          "fingerprint": "ea04f5c5798b148f04e22eb23d1a91532a821b46c26c0f778b96ec17685f62cf",
-          "capabilities": ["skill-authoring"],
-          "use_when": ["A Skill is being created, edited, or verified before deployment."]
-        }
-      ]
-    },
-    {
-      "id": "anthropic-skills-9d2f1ae",
-      "repository": "https://github.com/anthropics/skills.git",
-      "ref": "9d2f1ae187231d8199c64b5b762e1bdf2244733d",
-      "commit": "9d2f1ae187231d8199c64b5b762e1bdf2244733d",
-      "license": "Apache-2.0",
-      "license_path": "skills/frontend-design/LICENSE.txt",
-      "skills": [
-        {
-          "id": "anthropic-frontend-design",
-          "install_name": "frontend-design",
-          "path": "skills/frontend-design",
-          "fingerprint": "de17333d83546d3feeac51451ade2ee2d815ce57af38cf4e69da5ae097302352",
-          "capabilities": ["frontend-product-design"]
-        }
-      ]
-    }
-  ],
+  "sources": [],
   "profiles": {
     "core": {
       "skills": []
@@ -191,18 +24,53 @@
         "superpowers-using-git-worktrees",
         "superpowers-verification-before-completion",
         "superpowers-writing-plans",
-        "superpowers-writing-skills"
+        "superpowers-writing-skills",
+        "karpathy-karpathy-guidelines"
+      ],
+      "catalog_sources": [
+        "mattpocock-skills-v1.1.0",
+        "obra-superpowers-v5.1.0",
+        "multica-karpathy-2c60614"
       ]
     },
     "extended": {
       "extends": "standard",
-      "skills": ["anthropic-frontend-design"]
+      "skills": [
+        "anthropic-frontend-design"
+      ],
+      "catalog_sources": [
+        "anthropic-skills-9d2f1ae"
+      ]
     }
   },
   "routes": [
     {
+      "id": "standard-karpathy-policy",
+      "profiles": [
+        "standard",
+        "extended"
+      ],
+      "phase": "EXECUTE_ONE",
+      "capability": "implementation",
+      "provider": "karpathy-guidelines",
+      "workflow_role": "policy",
+      "selection": "recommend-overlay",
+      "required": false,
+      "fallback": "vibetether-built-in-minimal-change-policy",
+      "priority": 50,
+      "when_any": [
+        "new-behavior",
+        "bug-fix",
+        "refactor"
+      ],
+      "reason": "Keep implementation simple, surgical, assumption-aware, and tied to verifiable goals."
+    },
+    {
       "id": "standard-requirements-clarification",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "DISCOVER",
       "capability": "requirements-clarification",
       "provider": "grilling",
@@ -215,7 +83,10 @@
     },
     {
       "id": "standard-document-alignment",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "ALIGN",
       "capability": "document-alignment",
       "provider": "grilling",
@@ -228,7 +99,10 @@
     },
     {
       "id": "standard-domain-modeling",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "ALIGN",
       "capability": "domain-modeling",
       "provider": "domain-modeling",
@@ -241,7 +115,10 @@
     },
     {
       "id": "standard-product-design",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "DESIGN",
       "capability": "product-design",
       "provider": "brainstorming",
@@ -254,7 +131,9 @@
     },
     {
       "id": "extended-frontend-design",
-      "profiles": ["extended"],
+      "profiles": [
+        "extended"
+      ],
       "phase": "DESIGN",
       "capability": "frontend-product-design",
       "provider": "frontend-design",
@@ -263,12 +142,17 @@
       "required": false,
       "fallback": "vibetether-built-in-ui-contract",
       "priority": 100,
-      "when_any": ["user-visible-ui"],
+      "when_any": [
+        "user-visible-ui"
+      ],
       "reason": "A user-visible UI needs one intentional aesthetic director after product direction is approved."
     },
     {
       "id": "standard-planning",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "PLAN",
       "capability": "planning",
       "provider": "writing-plans",
@@ -281,7 +165,10 @@
     },
     {
       "id": "standard-subagent-plan-execution",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "EXECUTE_ONE",
       "capability": "plan-execution",
       "provider": "subagent-driven-development",
@@ -290,12 +177,18 @@
       "required": false,
       "fallback": "executing-plans",
       "priority": 200,
-      "when_all": ["subagents-available", "delegation-authorized"],
+      "when_all": [
+        "subagents-available",
+        "delegation-authorized"
+      ],
       "reason": "An approved plan can use isolated subagents and review between slices."
     },
     {
       "id": "standard-plan-execution",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "EXECUTE_ONE",
       "capability": "plan-execution",
       "provider": "executing-plans",
@@ -308,7 +201,10 @@
     },
     {
       "id": "standard-tdd",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "EXECUTE_ONE",
       "capability": "tdd",
       "provider": "test-driven-development",
@@ -321,7 +217,10 @@
     },
     {
       "id": "standard-parallel-execution",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "EXECUTE_ONE",
       "capability": "parallel-execution",
       "provider": "dispatching-parallel-agents",
@@ -330,12 +229,19 @@
       "required": false,
       "fallback": "vibetether-built-in-execution",
       "priority": 100,
-      "when_all": ["multiple-independent-tasks", "subagents-available", "delegation-authorized"],
+      "when_all": [
+        "multiple-independent-tasks",
+        "subagents-available",
+        "delegation-authorized"
+      ],
       "reason": "Multiple tasks are independent and can be delegated without shared state or sequential dependencies."
     },
     {
       "id": "standard-debugging",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "DIAGNOSE",
       "capability": "debugging",
       "provider": "systematic-debugging",
@@ -348,7 +254,10 @@
     },
     {
       "id": "standard-completion-verification",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "VERIFY",
       "capability": "completion-verification",
       "provider": "verification-before-completion",
@@ -361,7 +270,10 @@
     },
     {
       "id": "standard-code-review",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "REVIEW",
       "capability": "code-review",
       "provider": "requesting-code-review",
@@ -374,7 +286,10 @@
     },
     {
       "id": "standard-review-feedback",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "REVIEW",
       "capability": "review-feedback",
       "provider": "receiving-code-review",
@@ -383,12 +298,17 @@
       "required": false,
       "fallback": "vibetether-built-in-review",
       "priority": 100,
-      "when_all": ["review-feedback-received"],
+      "when_all": [
+        "review-feedback-received"
+      ],
       "reason": "Incoming review feedback must be checked for technical correctness before changes are accepted."
     },
     {
       "id": "standard-git-isolation",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "PLAN",
       "capability": "git-isolation",
       "provider": "using-git-worktrees",
@@ -397,12 +317,17 @@
       "required": false,
       "fallback": "vibetether-built-in-isolation-check",
       "priority": 100,
-      "when_all": ["isolation-needed"],
+      "when_all": [
+        "isolation-needed"
+      ],
       "reason": "The next feature or plan should run in an isolated workspace after checking host-native isolation."
     },
     {
       "id": "standard-skill-authoring",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "PLAN",
       "capability": "skill-authoring",
       "provider": "writing-skills",
@@ -411,12 +336,17 @@
       "required": false,
       "fallback": "vibetether-built-in-skill-authoring",
       "priority": 100,
-      "when_all": ["skill-creation-or-update"],
+      "when_all": [
+        "skill-creation-or-update"
+      ],
       "reason": "A Skill is being created or revised and needs process-level test-driven verification."
     },
     {
       "id": "standard-skill-authoring-design",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "DESIGN",
       "capability": "skill-authoring",
       "provider": "writing-skills",
@@ -425,12 +355,17 @@
       "required": false,
       "fallback": "vibetether-built-in-skill-authoring",
       "priority": 100,
-      "when_all": ["skill-creation-or-update"],
+      "when_all": [
+        "skill-creation-or-update"
+      ],
       "reason": "A Skill contract or trigger design needs concrete examples and process-level test criteria."
     },
     {
       "id": "standard-skill-authoring-execution",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "EXECUTE_ONE",
       "capability": "skill-authoring",
       "provider": "writing-skills",
@@ -439,12 +374,17 @@
       "required": false,
       "fallback": "vibetether-built-in-skill-authoring",
       "priority": 100,
-      "when_all": ["skill-creation-or-update"],
+      "when_all": [
+        "skill-creation-or-update"
+      ],
       "reason": "Skill instructions or resources are being implemented through a focused red-green iteration."
     },
     {
       "id": "standard-skill-authoring-verification",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "VERIFY",
       "capability": "skill-authoring",
       "provider": "writing-skills",
@@ -453,12 +393,17 @@
       "required": false,
       "fallback": "vibetether-built-in-skill-authoring",
       "priority": 100,
-      "when_all": ["skill-creation-or-update"],
+      "when_all": [
+        "skill-creation-or-update"
+      ],
       "reason": "A changed Skill needs validation and realistic forward evidence before deployment."
     },
     {
       "id": "standard-branch-finish",
-      "profiles": ["standard", "extended"],
+      "profiles": [
+        "standard",
+        "extended"
+      ],
       "phase": "SHIP",
       "capability": "branch-finish",
       "provider": "finishing-a-development-branch",
@@ -469,5 +414,27 @@
       "priority": 100,
       "reason": "A completed branch needs explicit integration, release, and cleanup choices."
     }
-  ]
+  ],
+  "catalogs": [
+    "catalogs/mattpocock.json",
+    "catalogs/superpowers.json",
+    "catalogs/karpathy.json",
+    "catalogs/anthropic.json",
+    "catalogs/vercel.json",
+    "catalogs/addy.json"
+  ],
+  "bundles": {
+    "web": {
+      "catalog_sources": [
+        "vercel-agent-skills-f8a72b9"
+      ],
+      "description": "React, React Native, Web UI, and Vercel specialists selected from repository evidence."
+    },
+    "production": {
+      "catalog_sources": [
+        "addy-agent-skills-98967c4"
+      ],
+      "description": "Browser, CI/CD, migration, observability, performance, security, and shipping specialists."
+    }
+  }
 }

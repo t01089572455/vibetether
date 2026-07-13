@@ -9,10 +9,11 @@ import {
 
 test('provider registry pins complete auditable upstream skill sources', async () => {
   const registry = await loadProviderRegistry();
-  assert.equal(registry.schema_version, 1);
+  assert.equal(registry.schema_version, 2);
   assert.equal(registry.runtime_auto_install, false);
 
-  const installNames = [];
+  const providerIds = [];
+  const exposedInstallNames = [];
   for (const source of registry.sources) {
     assert.match(source.repository, /^https:\/\/github\.com\//);
     assert.match(source.commit, /^[a-f0-9]{40}$/);
@@ -20,15 +21,73 @@ test('provider registry pins complete auditable upstream skill sources', async (
     assert.notEqual(source.ref, 'latest');
     assert.match(source.license, /^(MIT|Apache-2\.0)$/);
     assert.equal(typeof source.license_path, 'string');
+    assert.equal(['complete', 'selected'].includes(source.catalog_mode), true);
+    assert.equal(['full-text', 'readme-declaration'].includes(source.license_evidence.mode), true);
+    assert.equal(typeof source.license_evidence.path, 'string');
+    if (source.license_evidence.mode === 'readme-declaration') {
+      assert.match(source.license_evidence.declaration, /MIT/);
+      assert.match(source.license_evidence.sha256, /^[a-f0-9]{64}$/);
+    }
     assert.ok(source.skills.length > 0);
     for (const skill of source.skills) {
-      installNames.push(skill.install_name);
+      providerIds.push(skill.id);
+      if (skill.exposure !== 'catalog-only') exposedInstallNames.push(skill.install_name);
       assert.match(skill.path, /SKILL|skills/i);
       assert.match(skill.fingerprint, /^[a-f0-9]{64}$/);
       assert.ok(skill.capabilities.length > 0);
+      assert.equal(typeof skill.workflow_role, 'string');
+      assert.equal(typeof skill.invocation_policy, 'string');
+      assert.equal(typeof skill.exposure, 'string');
+      assert.equal(Array.isArray(skill.conflicts), true);
     }
   }
-  assert.equal(new Set(installNames).size, installNames.length);
+  assert.equal(new Set(providerIds).size, providerIds.length);
+  assert.equal(new Set(exposedInstallNames).size, exposedInstallNames.length);
+});
+
+test('foundation and specialist catalogs contain every Skill at the reviewed commits', async () => {
+  const registry = await loadProviderRegistry();
+  const counts = Object.fromEntries(registry.sources.map((source) => [source.repository, source.skills.length]));
+
+  assert.equal(counts['https://github.com/obra/superpowers.git'], 14);
+  assert.equal(counts['https://github.com/mattpocock/skills.git'], 38);
+  assert.equal(counts['https://github.com/multica-ai/andrej-karpathy-skills.git'], 1);
+  assert.equal(counts['https://github.com/vercel-labs/agent-skills.git'], 9);
+  assert.equal(counts['https://github.com/addyosmani/agent-skills.git'], 24);
+});
+
+test('catalog selection and exposure planning keep supply separate from automatic eligibility', async () => {
+  const module = await import('../src/provider-registry.mjs');
+  const registry = await loadProviderRegistry();
+  const catalogSources = module.resolveCatalogSources?.(registry, 'standard', ['web']) ?? [];
+  const standard = module.resolveExposurePlan?.(registry, 'standard', {
+    bundles: [],
+    explicit_bundles: [],
+    signals: [],
+  }) ?? [];
+  const web = module.resolveExposurePlan?.(registry, 'standard', {
+    bundles: ['web'],
+    explicit_bundles: [],
+    signals: ['react'],
+  }) ?? [];
+  const production = module.resolveExposurePlan?.(registry, 'standard', {
+    bundles: ['production'],
+    explicit_bundles: ['production'],
+    signals: [],
+  }) ?? [];
+
+  assert.deepEqual(catalogSources.map((source) => source.id), [
+    'mattpocock-skills-v1.1.0',
+    'obra-superpowers-v5.1.0',
+    'multica-karpathy-2c60614',
+    'vercel-agent-skills-f8a72b9',
+  ]);
+  assert.equal(standard.some((provider) => provider.install_name === 'karpathy-guidelines'), true);
+  assert.equal(standard.some((provider) => provider.install_name === 'using-superpowers'), false);
+  assert.equal(web.some((provider) => provider.install_name === 'vercel-react-best-practices'), true);
+  assert.equal(web.some((provider) => provider.install_name === 'deploy-to-vercel'), false);
+  assert.equal(production.some((provider) => provider.install_name === 'security-and-hardening'), true);
+  assert.equal(production.some((provider) => provider.install_name === 'using-agent-skills'), false);
 });
 
 test('standard installs the full grill entry and specialist workflow bundle without a competing router', async () => {
@@ -128,6 +187,27 @@ test('a route cannot recommend a Skill outside the selected profile', async () =
   assert.throws(() => buildRoutingDocument(registry, 'standard'), /route.*not-installed.*not.*profile/i);
 });
 
+test('a competing router can be cataloged but cannot be automatically exposed', async () => {
+  const registry = structuredClone(await loadProviderRegistry());
+  const brainstorming = registry.sources
+    .flatMap((source) => source.skills)
+    .find((provider) => provider.install_name === 'brainstorming');
+  brainstorming.workflow_role = 'competing-router';
+  brainstorming.exposure = 'auto';
+
+  assert.throws(() => buildRoutingDocument(registry, 'standard'), /competing router.*exposed/i);
+});
+
+test('equal-priority automatic primary routes fail closed', async () => {
+  const registry = structuredClone(await loadProviderRegistry());
+  const primary = registry.routes.find(
+    (route) => route.profiles.includes('standard') && route.workflow_role === 'primary',
+  );
+  registry.routes.push({ ...primary, id: 'ambiguous-primary', provider: 'writing-plans' });
+
+  assert.throws(() => buildRoutingDocument(registry, 'standard'), /ambiguous primary routes/i);
+});
+
 test('upstream explicit aliases declare the automatic routes that cover their behavior', async () => {
   const registry = await loadProviderRegistry();
   const providers = resolveProfileProviders(registry, 'standard');
@@ -201,6 +281,10 @@ test('registry validation fails closed when readiness or alias coverage is incom
     .find((provider) => provider.install_name === 'grill-with-docs');
   grillWithDocs.auto_covered_by.push('not-installed');
   assert.throws(() => buildRoutingDocument(unknownCoverage, 'standard'), /automatic coverage.*not-installed/i);
+
+  const missingClassification = structuredClone(await loadProviderRegistry());
+  delete missingClassification.sources.find((source) => source.catalog_mode === 'complete').skills[0].fallback;
+  assert.throws(() => buildRoutingDocument(missingClassification, 'standard'), /classification.*fallback/i);
 });
 
 test('auxiliary standard Skills have signal-driven advisory routes', async () => {

@@ -1,0 +1,449 @@
+{
+  "id": "addy-agent-skills-98967c4",
+  "repository": "https://github.com/addyosmani/agent-skills.git",
+  "ref": "commit:98967c4",
+  "commit": "98967c45a42b88d6b8fb3a88b7ff6273920763d6",
+  "license": "MIT",
+  "license_path": "LICENSE",
+  "catalog_mode": "complete",
+  "skill_root": "skills",
+  "catalog_group": "production",
+  "license_evidence": {
+    "mode": "full-text",
+    "path": "LICENSE",
+    "sha256": "6f202f8bd568cd730dbb2b0d1f8e243bc74c2fa1f64dbce9b2c7ea08bd5c9fd7"
+  },
+  "skills": [
+    {
+      "id": "addy-api-and-interface-design",
+      "install_name": "api-and-interface-design",
+      "path": "skills/api-and-interface-design",
+      "fingerprint": "6210bb3794c2cb37d9380d21fb13c694a3624065a055526c3bb787bf858b59c5",
+      "catalog_status": "audited",
+      "workflow_role": "alternative",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "product-design"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-product-design",
+      "required_outputs": [],
+      "exit_evidence": []
+    },
+    {
+      "id": "addy-browser-testing-with-devtools",
+      "install_name": "browser-testing-with-devtools",
+      "path": "skills/browser-testing-with-devtools",
+      "fingerprint": "2dd994905175b13f69e19dc63fbeb17f0e6f34a76f2f51fa6434ec070ce78f26",
+      "catalog_status": "audited",
+      "workflow_role": "domain",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "bundle",
+      "capabilities": [
+        "browser-verification"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-browser-verification",
+      "required_outputs": [],
+      "exit_evidence": [],
+      "when_any": [
+        "browser"
+      ]
+    },
+    {
+      "id": "addy-ci-cd-and-automation",
+      "install_name": "ci-cd-and-automation",
+      "path": "skills/ci-cd-and-automation",
+      "fingerprint": "9ae76e13193a594a93611282d0b42fdd1ebd7e22e8fc6d428fb5e0f0de062416",
+      "catalog_status": "audited",
+      "workflow_role": "domain",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "bundle",
+      "capabilities": [
+        "ci-cd"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-ci-cd",
+      "required_outputs": [],
+      "exit_evidence": [],
+      "when_any": [
+        "ci"
+      ]
+    },
+    {
+      "id": "addy-code-review-and-quality",
+      "install_name": "code-review-and-quality",
+      "path": "skills/code-review-and-quality",
+      "fingerprint": "bd130ba49bdfad599e88449d6bc088365f9bdf4bd1b650c8e071bc216a6777d3",
+      "catalog_status": "audited",
+      "workflow_role": "alternative",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "code-review"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-code-review",
+      "required_outputs": [],
+      "exit_evidence": []
+    },
+    {
+      "id": "addy-code-simplification",
+      "install_name": "code-simplification",
+      "path": "skills/code-simplification",
+      "fingerprint": "f26b9853dcbe4e4de4f1b5a93ee3f524648e37390a15e5ddcafce0ba2d548414",
+      "catalog_status": "audited",
+      "workflow_role": "alternative",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "production-engineering"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-production-engineering",
+      "required_outputs": [],
+      "exit_evidence": []
+    },
+    {
+      "id": "addy-context-engineering",
+      "install_name": "context-engineering",
+      "path": "skills/context-engineering",
+      "fingerprint": "2f94abdf14ecd47c97bd287c701419fb3846161f3f6afac7939e3db447a6c3cf",
+      "catalog_status": "audited",
+      "workflow_role": "alternative",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "production-engineering"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-production-engineering",
+      "required_outputs": [],
+      "exit_evidence": []
+    },
+    {
+      "id": "addy-debugging-and-error-recovery",
+      "install_name": "debugging-and-error-recovery",
+      "path": "skills/debugging-and-error-recovery",
+      "fingerprint": "5b03e408f922f690a915f27fc7a6f8ffad0962f15acb811aeb565eddfecba90a",
+      "catalog_status": "audited",
+      "workflow_role": "alternative",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "debugging"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-debugging",
+      "required_outputs": [],
+      "exit_evidence": []
+    },
+    {
+      "id": "addy-deprecation-and-migration",
+      "install_name": "deprecation-and-migration",
+      "path": "skills/deprecation-and-migration",
+      "fingerprint": "65f87682b1d08634f8b0cfb362d250e6c9b0680fd0b87193bde6de69e3f1aa9f",
+      "catalog_status": "audited",
+      "workflow_role": "domain",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "bundle",
+      "capabilities": [
+        "migration"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-migration",
+      "required_outputs": [],
+      "exit_evidence": [],
+      "when_any": [
+        "migration"
+      ]
+    },
+    {
+      "id": "addy-documentation-and-adrs",
+      "install_name": "documentation-and-adrs",
+      "path": "skills/documentation-and-adrs",
+      "fingerprint": "02c36888628cb8c14bc489a8d23b7111d1c476e761f1e80fdc11689809ee06aa",
+      "catalog_status": "audited",
+      "workflow_role": "alternative",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "production-engineering"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-production-engineering",
+      "required_outputs": [],
+      "exit_evidence": []
+    },
+    {
+      "id": "addy-doubt-driven-development",
+      "install_name": "doubt-driven-development",
+      "path": "skills/doubt-driven-development",
+      "fingerprint": "19f8c5f6f0c0b4558bd717c0aca16fce0a153e51048ce63903c19b01570287bb",
+      "catalog_status": "audited",
+      "workflow_role": "alternative",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "production-engineering"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-production-engineering",
+      "required_outputs": [],
+      "exit_evidence": []
+    },
+    {
+      "id": "addy-frontend-ui-engineering",
+      "install_name": "frontend-ui-engineering",
+      "path": "skills/frontend-ui-engineering",
+      "fingerprint": "ae51ebfc5765d1c5cd1fe01a07ae50118e5d18bfa90cba50db24d0d30a03e8f3",
+      "catalog_status": "audited",
+      "workflow_role": "alternative",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "frontend-engineering"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-frontend-engineering",
+      "required_outputs": [],
+      "exit_evidence": []
+    },
+    {
+      "id": "addy-git-workflow-and-versioning",
+      "install_name": "git-workflow-and-versioning",
+      "path": "skills/git-workflow-and-versioning",
+      "fingerprint": "a4789ec54b16e4351fb35bf299e7ecece7065bc49b87922023f9558d34dc9ff0",
+      "catalog_status": "audited",
+      "workflow_role": "alternative",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "production-engineering"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-production-engineering",
+      "required_outputs": [],
+      "exit_evidence": []
+    },
+    {
+      "id": "addy-idea-refine",
+      "install_name": "idea-refine",
+      "path": "skills/idea-refine",
+      "fingerprint": "622a819446a6ff66b045981687a86eef9ba86b3bc5859c5134dc803feac23724",
+      "catalog_status": "audited",
+      "workflow_role": "alternative",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "product-design"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-product-design",
+      "required_outputs": [],
+      "exit_evidence": []
+    },
+    {
+      "id": "addy-incremental-implementation",
+      "install_name": "incremental-implementation",
+      "path": "skills/incremental-implementation",
+      "fingerprint": "56bea177ca1e950a2534549aa5d81cbe63db70ec9f49115c90269dd5548618e3",
+      "catalog_status": "audited",
+      "workflow_role": "alternative",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "implementation"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-implementation",
+      "required_outputs": [],
+      "exit_evidence": []
+    },
+    {
+      "id": "addy-interview-me",
+      "install_name": "interview-me",
+      "path": "skills/interview-me",
+      "fingerprint": "7663b4422efb6eb5513c44f1220d6ecb74c050235fd71b2fa7c75be1e409f778",
+      "catalog_status": "audited",
+      "workflow_role": "alternative",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "production-engineering"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-production-engineering",
+      "required_outputs": [],
+      "exit_evidence": []
+    },
+    {
+      "id": "addy-observability-and-instrumentation",
+      "install_name": "observability-and-instrumentation",
+      "path": "skills/observability-and-instrumentation",
+      "fingerprint": "48700928c2d98ca16ea1b37f8f97eae0ec474f1b1b5e017f69a28bcac5bbe408",
+      "catalog_status": "audited",
+      "workflow_role": "domain",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "bundle",
+      "capabilities": [
+        "observability"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-observability",
+      "required_outputs": [],
+      "exit_evidence": [],
+      "when_any": [
+        "observability"
+      ]
+    },
+    {
+      "id": "addy-performance-optimization",
+      "install_name": "performance-optimization",
+      "path": "skills/performance-optimization",
+      "fingerprint": "138fd712d922ff651b539a1e0d4a252b3720dbab05439b5638cd688f3312fc3c",
+      "catalog_status": "audited",
+      "workflow_role": "domain",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "bundle",
+      "capabilities": [
+        "performance"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-performance",
+      "required_outputs": [],
+      "exit_evidence": [],
+      "when_any": [
+        "performance"
+      ]
+    },
+    {
+      "id": "addy-planning-and-task-breakdown",
+      "install_name": "planning-and-task-breakdown",
+      "path": "skills/planning-and-task-breakdown",
+      "fingerprint": "29301bbcb6473d8f30b0478ea65871aefe4ba2058053154de96998af6da53fa3",
+      "catalog_status": "audited",
+      "workflow_role": "alternative",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "planning"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-planning",
+      "required_outputs": [],
+      "exit_evidence": []
+    },
+    {
+      "id": "addy-security-and-hardening",
+      "install_name": "security-and-hardening",
+      "path": "skills/security-and-hardening",
+      "fingerprint": "8afa3dbdb04147b16087c1be082102decf4683a08a3fcf55c2efe22fbf18058f",
+      "catalog_status": "audited",
+      "workflow_role": "domain",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "bundle",
+      "capabilities": [
+        "security-review"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-security-review",
+      "required_outputs": [],
+      "exit_evidence": [],
+      "when_any": [
+        "security"
+      ]
+    },
+    {
+      "id": "addy-shipping-and-launch",
+      "install_name": "shipping-and-launch",
+      "path": "skills/shipping-and-launch",
+      "fingerprint": "ad19fcfaa4ea75ffc81c83579805304a0a9f0ba14746f4c1b59d544577658a30",
+      "catalog_status": "audited",
+      "workflow_role": "domain",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "bundle",
+      "capabilities": [
+        "release-verification"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-release-verification",
+      "required_outputs": [],
+      "exit_evidence": [],
+      "when_any": [
+        "release"
+      ]
+    },
+    {
+      "id": "addy-source-driven-development",
+      "install_name": "source-driven-development",
+      "path": "skills/source-driven-development",
+      "fingerprint": "580906b16dd006133da86bdd70c37ae31f4c34524a714ac917789a319bc0f02c",
+      "catalog_status": "audited",
+      "workflow_role": "alternative",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "production-engineering"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-production-engineering",
+      "required_outputs": [],
+      "exit_evidence": []
+    },
+    {
+      "id": "addy-spec-driven-development",
+      "install_name": "spec-driven-development",
+      "path": "skills/spec-driven-development",
+      "fingerprint": "4a333fac3b67ce2288591d9c6606cabed513ee4493f1b097a3103c3a9f9fd3d6",
+      "catalog_status": "audited",
+      "workflow_role": "alternative",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "product-design"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-product-design",
+      "required_outputs": [],
+      "exit_evidence": []
+    },
+    {
+      "id": "addy-test-driven-development",
+      "install_name": "test-driven-development",
+      "path": "skills/test-driven-development",
+      "fingerprint": "1ae22ea091c79d0f0ff882d6b5c4efba1fc5fec6a80eeee59cf1791314f71de8",
+      "catalog_status": "audited",
+      "workflow_role": "alternative",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "tdd"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-tdd",
+      "required_outputs": [],
+      "exit_evidence": []
+    },
+    {
+      "id": "addy-using-agent-skills",
+      "install_name": "using-agent-skills",
+      "path": "skills/using-agent-skills",
+      "fingerprint": "01c96489b0c3206a0605e5cbd84bf916f6ddd2a0a0ae12ead4dc5aa71429c685",
+      "catalog_status": "audited",
+      "workflow_role": "competing-router",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "production-engineering"
+      ],
+      "conflicts": [
+        "vibe-tether"
+      ],
+      "fallback": "vibetether-built-in-production-engineering",
+      "required_outputs": [],
+      "exit_evidence": []
+    }
+  ]
+}

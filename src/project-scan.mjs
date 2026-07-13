@@ -1,4 +1,4 @@
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { CliError } from './errors.mjs';
 
@@ -14,6 +14,10 @@ async function kind(root, relativePath) {
 
 export async function scanProject(root, enabledAdapters, profile) {
   const discovery = {};
+  const bundleSignals = [];
+  const addBundleSignal = (bundle, signal, signalPath, reason, confidence = 'high') => {
+    bundleSignals.push({ bundle, signal, path: signalPath, confidence, reason });
+  };
   const record = async (relativePath, role, confidence = 'high') => {
     const foundKind = await kind(root, relativePath);
     if (!foundKind) return false;
@@ -58,6 +62,30 @@ export async function scanProject(root, enabledAdapters, profile) {
     'release checklist',
   );
 
+  try {
+    const packageJson = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
+    const packages = { ...(packageJson.dependencies ?? {}), ...(packageJson.devDependencies ?? {}) };
+    if (packages.next) addBundleSignal('web', 'nextjs', 'package.json', 'Next.js dependency detected.');
+    if (packages.react) addBundleSignal('web', 'react', 'package.json', 'React dependency detected.');
+    if (packages['react-native'] || packages.expo) {
+      addBundleSignal('web', 'react-native', 'package.json', 'React Native or Expo dependency detected.');
+    }
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw new CliError(`Cannot inspect package.json for bundle evidence: ${error.message}`, 3);
+  }
+  if (await kind(root, 'vercel.json')) {
+    addBundleSignal('web', 'vercel', 'vercel.json', 'Vercel project configuration detected.');
+  }
+  if (await kind(root, '.github/workflows')) {
+    addBundleSignal('production', 'ci', '.github/workflows/', 'GitHub Actions workflows detected.');
+  }
+  for (const candidate of ['migrations', 'db/migrations', 'prisma/migrations']) {
+    if (await kind(root, candidate)) {
+      addBundleSignal('production', 'migration', `${candidate}/`, 'Database migration directory detected.');
+      break;
+    }
+  }
+
   const instructionFiles = enabledAdapters.map((name) => (name === 'codex' ? 'AGENTS.md' : 'CLAUDE.md'));
   for (const file of instructionFiles) {
     discovery[file] = { role: 'agent instructions', confidence: 'high', kind: 'file' };
@@ -80,6 +108,7 @@ export async function scanProject(root, enabledAdapters, profile) {
     schema_version: 1,
     project_id: path.basename(root).toLowerCase().replace(/[^a-z0-9._-]+/g, '-'),
     profile,
+    bundle_signals: bundleSignals,
     goal_source: goalSource,
     intent_contract: intentContract,
     sources: {

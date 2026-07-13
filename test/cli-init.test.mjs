@@ -252,3 +252,29 @@ test('init discovers requirement and testing sources but stops on competing prod
   assert.match(result.stderr, /competing product direction/i);
   assert.equal(await exists(path.join(ambiguous, '.vibetether')), false);
 });
+
+test('init records detected bundle evidence while --no-auto-bundles keeps optional packs inactive', async () => {
+  const target = await project('bundle-opt-out');
+  await writeFile(
+    path.join(target, 'package.json'),
+    JSON.stringify({ dependencies: { next: '^15.0.0', react: '^19.0.0' } }),
+    'utf8',
+  );
+
+  const result = runCli([
+    'init', '--project', target, '--agent', 'codex', '--profile', 'core', '--no-auto-bundles', '--yes',
+  ]);
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const manifest = YAML.parse(await readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'));
+  assert.deepEqual(manifest.bundles, []);
+  assert.deepEqual(manifest.bundle_signals.map((entry) => entry.signal), ['nextjs', 'react']);
+});
+
+test('init rejects an unknown specialist bundle', async () => {
+  const target = await project('unknown-bundle');
+  const result = runCli(['init', '--project', target, '--profile', 'core', '--bundle', 'database', '--dry-run']);
+
+  assert.equal(result.status, 2, result.stderr || result.stdout);
+  assert.match(result.stderr, /invalid --bundle/i);
+});

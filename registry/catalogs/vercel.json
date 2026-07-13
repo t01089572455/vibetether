@@ -1,0 +1,200 @@
+{
+  "id": "vercel-agent-skills-f8a72b9",
+  "repository": "https://github.com/vercel-labs/agent-skills.git",
+  "ref": "commit:f8a72b9",
+  "commit": "f8a72b9603728bb92a217a879b7e62e43ad76c81",
+  "license": "MIT",
+  "license_path": "README.md",
+  "catalog_mode": "complete",
+  "skill_root": "skills",
+  "catalog_group": "web",
+  "license_evidence": {
+    "mode": "readme-declaration",
+    "path": "README.md",
+    "sha256": "c0a05286fc2a9d52ec2480bf070867665b9357beef37c9c2812e5b2ece571b6a",
+    "declaration": "## License\\n\\nMIT"
+  },
+  "skills": [
+    {
+      "id": "vercel-vercel-composition-patterns",
+      "install_name": "vercel-composition-patterns",
+      "path": "skills/composition-patterns",
+      "fingerprint": "0c69229c7d5a8e06e1639161b8143e298d54492e3ed8bb0aaad5af679dd56c55",
+      "catalog_status": "audited",
+      "workflow_role": "domain",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "bundle",
+      "capabilities": [
+        "frontend-engineering"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-frontend-engineering",
+      "required_outputs": [],
+      "exit_evidence": [],
+      "when_any": [
+        "react",
+        "nextjs"
+      ]
+    },
+    {
+      "id": "vercel-deploy-to-vercel",
+      "install_name": "deploy-to-vercel",
+      "path": "skills/deploy-to-vercel",
+      "fingerprint": "55190c75403815f9fe17b0ef52bbc9e7446f11bda0ea989a6866a4a04c59994a",
+      "catalog_status": "audited",
+      "workflow_role": "domain",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "bundle",
+      "capabilities": [
+        "release-verification"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-release-verification",
+      "required_outputs": [],
+      "exit_evidence": [],
+      "when_any": [
+        "vercel"
+      ]
+    },
+    {
+      "id": "vercel-vercel-react-best-practices",
+      "install_name": "vercel-react-best-practices",
+      "path": "skills/react-best-practices",
+      "fingerprint": "91d0bb36ab9b6e4c023265f13446ec28275e7efec21e16bdb6b66b47edc2ca75",
+      "catalog_status": "audited",
+      "workflow_role": "domain",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "bundle",
+      "capabilities": [
+        "frontend-engineering"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-frontend-engineering",
+      "required_outputs": [],
+      "exit_evidence": [],
+      "when_any": [
+        "react",
+        "nextjs"
+      ]
+    },
+    {
+      "id": "vercel-vercel-react-native-skills",
+      "install_name": "vercel-react-native-skills",
+      "path": "skills/react-native-skills",
+      "fingerprint": "3c8c3a3ede4ab8da60ca672c86504324767213d3259347a297bdf597f3e98c1a",
+      "catalog_status": "audited",
+      "workflow_role": "domain",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "bundle",
+      "capabilities": [
+        "frontend-engineering"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-frontend-engineering",
+      "required_outputs": [],
+      "exit_evidence": [],
+      "when_any": [
+        "react-native"
+      ]
+    },
+    {
+      "id": "vercel-vercel-react-view-transitions",
+      "install_name": "vercel-react-view-transitions",
+      "path": "skills/react-view-transitions",
+      "fingerprint": "bcff53f236273125237930150e6d067205ae46bc211cc58e46c3b963b0755e91",
+      "catalog_status": "audited",
+      "workflow_role": "domain",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "bundle",
+      "capabilities": [
+        "frontend-engineering"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-frontend-engineering",
+      "required_outputs": [],
+      "exit_evidence": [],
+      "when_any": [
+        "react",
+        "nextjs"
+      ]
+    },
+    {
+      "id": "vercel-vercel-cli-with-tokens",
+      "install_name": "vercel-cli-with-tokens",
+      "path": "skills/vercel-cli-with-tokens",
+      "fingerprint": "2a50a7e771cdf36bffc47842dfcbde5da7e289f5a4e37a5a18b23e48cd00fc28",
+      "catalog_status": "audited",
+      "workflow_role": "domain",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "bundle",
+      "capabilities": [
+        "release-verification"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-release-verification",
+      "required_outputs": [],
+      "exit_evidence": [],
+      "when_any": [
+        "vercel"
+      ]
+    },
+    {
+      "id": "vercel-vercel-optimize",
+      "install_name": "vercel-optimize",
+      "path": "skills/vercel-optimize",
+      "fingerprint": "33bca646c6880337415649434e1b236760b342cce71601bf0a672158ba37e71f",
+      "catalog_status": "audited",
+      "workflow_role": "domain",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "bundle",
+      "capabilities": [
+        "performance"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-performance",
+      "required_outputs": [],
+      "exit_evidence": [],
+      "when_any": [
+        "vercel"
+      ]
+    },
+    {
+      "id": "vercel-web-design-guidelines",
+      "install_name": "web-design-guidelines",
+      "path": "skills/web-design-guidelines",
+      "fingerprint": "bbad81765ade502e57964cec303c3b2291f1132001ca709b8dbcdea512348f12",
+      "catalog_status": "audited",
+      "workflow_role": "domain",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "bundle",
+      "capabilities": [
+        "browser-verification"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-browser-verification",
+      "required_outputs": [],
+      "exit_evidence": [],
+      "when_any": [
+        "react",
+        "nextjs"
+      ]
+    },
+    {
+      "id": "vercel-writing-guidelines",
+      "install_name": "writing-guidelines",
+      "path": "skills/writing-guidelines",
+      "fingerprint": "8c2a1b4731625857c99a688546c8260ac63a41e9d643d2aef2159a810bda68f7",
+      "catalog_status": "audited",
+      "workflow_role": "domain",
+      "invocation_policy": "advisory-auto-eligible",
+      "exposure": "catalog-only",
+      "capabilities": [
+        "catalog-reference"
+      ],
+      "conflicts": [],
+      "fallback": "vibetether-built-in-catalog-reference",
+      "required_outputs": [],
+      "exit_evidence": []
+    }
+  ]
+}
