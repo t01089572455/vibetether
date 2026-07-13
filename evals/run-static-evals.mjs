@@ -22,6 +22,7 @@ const ROUTES = {
   'production-migration': { preflight: 'full-reanchor', gate: 'destructive-data-confirmation-required' },
   'duplicate-primary-route': { preflight: 'lightweight', gate: 'registry-validation-fails-closed' },
   'changed-license-declaration': { preflight: 'lightweight', gate: 'stop-before-project-write' },
+  'first-proven-path': { preflight: 'full-reanchor', gate: 'success-capture-required' },
 };
 
 const REQUIRED_FIELDS = [

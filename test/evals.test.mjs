@@ -22,6 +22,7 @@ test('preview scenarios cover the approved drift-pressure classes with complete 
     'context-compaction',
     'document-conflict',
     'duplicate-primary-route',
+    'first-proven-path',
     'huge-effort',
     'production-migration',
     'prototype-choice',
@@ -47,6 +48,11 @@ test('preview scenarios cover the approved drift-pressure classes with complete 
   for (const evidence of ['readiness-verdict', 'missing-facts', 'user-owned-decisions', 'selected-route']) {
     assert.equal(vague.required_evidence.includes(evidence), true, `vague-project-routing is missing ${evidence}`);
   }
+  const firstProven = values.find((scenario) => scenario.id === 'first-proven-path');
+  assert.equal(firstProven.expected_gate, 'success-capture-required');
+  for (const evidence of ['verified-success', 'first-path-classification', 'durable-artifact', 'redaction-check']) {
+    assert.equal(firstProven.required_evidence.includes(evidence), true, `first-proven-path is missing ${evidence}`);
+  }
 });
 
 test('static runner validates every scenario and states the preview honesty boundary', () => {
@@ -56,7 +62,7 @@ test('static runner validates every scenario and states the preview honesty boun
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /13\/13 static scenario contracts passed/);
+  assert.match(result.stdout, /14\/14 static scenario contracts passed/);
   assert.match(result.stdout, /not independent agent forward tests/i);
   assert.match(result.stdout, /cannot justify a 1\.0\.0 claim/i);
 });

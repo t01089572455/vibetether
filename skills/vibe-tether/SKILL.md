@@ -216,6 +216,16 @@ Record commands, exit codes, result summaries, artifact paths, scope review, and
 
 Keep lifecycle labels, checkpoint mechanics, and control-kernel terminology internal unless they help the user decide. User-facing messages should state the conflict or result, impact, recommendation, and confirmation needed without narrating the whole control process.
 
+## Success Capture Gate
+
+After every verified user-level or engineering-level success, determine whether the outcome establishes or changes a reusable workflow. A first verified reusable workflow is a `first-proven-path` and must be captured immediately even when its first attempt succeeded. Recovered or materially changed paths must update their durable artifacts; unchanged repeated paths must point to existing encoding without duplicate documentation; routine non-paths create no document.
+
+Use exactly one final disposition: `captured`, `already-encoded`, or `not-reusable`. Record the trigger, reason, and artifact paths in checkpoint `experience_feedback`. Fresh tests, runtime, remote, browser, deployment, or CI evidence proves success; the checkpoint only records the disposition.
+
+Before completion, handoff, the next slice, merge, release, or publication, run `vibetether doctor`. Do not advance while the disposition is `pending`. Never persist credentials, private keys, one-time codes, private reasoning, sensitive tool output, or full transcripts.
+
+Read [success-capture.md](references/success-capture.md) for first, recovered, changed, repeated, and routine path classification; durable destination routing; deduplication; redaction; and revalidation rules.
+
 ## Drift Response
 
 - `L1_LOCAL`: correct a local, reversible deviation and record it.
@@ -260,5 +270,5 @@ Before claiming completion:
 3. Run every applicable verification command.
 4. Check functional, visual, safety, and release evidence separately.
 5. Record independence limitations honestly.
-6. Update the correct durable source with accepted decisions or reusable failures.
-7. Write the final checkpoint and exact verdict.
+6. Run the Success Capture Gate and update the correct durable source for accepted decisions, reusable failures, and first, recovered, or changed Proven Paths.
+7. Write `experience_feedback`, run `vibetether doctor`, and record the exact verdict.

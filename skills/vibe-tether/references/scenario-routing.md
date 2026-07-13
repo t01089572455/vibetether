@@ -19,6 +19,7 @@ The IDs below are contract-linked to `registry/scenarios.json`. The generated `.
 | `triage-qa` | Several issues need reproduction and priority | Use the built-in evidence-first triage path; `triage` and `qa` remain catalog alternatives. |
 | `architecture-improvement` | Structural friction suggests a durable change | Investigate and recommend, then obtain user confirmation before changing architecture. |
 | `production-migration` | A migration or deprecation is proposed | Route to `deprecation-and-migration` and retain destructive-data confirmation gates. |
+| `first-proven-path` | A reusable workflow succeeds for the first verified time | Capture a sanitized durable Proven Path immediately; do not wait for a future failure. |
 | `completion` | A completion claim is imminent | Route to `verification-before-completion` and require fresh evidence. |
 
 ## How to choose

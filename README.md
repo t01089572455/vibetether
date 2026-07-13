@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Preview](https://img.shields.io/badge/release-0.2.0%20preview-orange.svg)](#preview-status)
 
-VibeTether is a project-local control Skill and advisory Skill router for long-running coding work. It helps capable agents keep the approved goal, project rules, current slice, and required evidence visible after context compaction, handoffs, phase changes, and repeated corrections.
+VibeTether is a project-local control Skill, advisory Skill router, and reusable-success capture loop for long-running coding work. It helps capable agents keep the approved goal, project rules, current slice, required evidence, and proven operational paths visible after context compaction, handoffs, phase changes, and repeated corrections.
 
 Users do not need to memorize community Skill names. VibeTether checks whether the task is ready, infers observable scenario signals, recommends one installed specialist plus compatible overlays and alternatives, and keeps a safe built-in fallback. Product direction and high-risk decisions still belong to the user; low-risk, reversible technical work remains autonomous.
 
@@ -74,6 +74,7 @@ VibeTether separates automatic readiness from advisory provider choice:
 4. The project board returns a `primary` recommendation, compatible `overlays`, ordered `alternatives`, a `fallback`, required outputs, and exit evidence.
 5. The agent uses the recommendation when it fits, or records why another installed path is better. No provider is downloaded during active work.
 6. High-risk gates remain mandatory regardless of which provider is selected.
+7. After verified success, the agent captures a first, recovered, or changed reusable path, deduplicates unchanged repeats, records the disposition, and runs `doctor` before a completion-like transition.
 
 ```mermaid
 flowchart LR
@@ -89,13 +90,30 @@ flowchart LR
     P --> E["Execute one approved slice"]
     O --> E
     A --> E
-    E --> V["Fresh verification and checkpoint"]
-    V --> K
+    E --> V["Fresh verification"]
+    V --> S["Success Capture Gate"]
+    S --> C["Durable artifact and checkpoint"]
+    C --> K
 ```
 
 Implementation waits for `READY_FOR_IMPLEMENT_ONE`. A clear, low-risk task can pass in one compact check. A vague request routes to clarification automatically; the user does not need to type `grill-me` or know that it exists.
 
 The router is explainable, not coercive. A JSON resolution includes detected signals, rationale, live harness availability, primary, overlays, alternatives, fallback, required outputs, exit evidence, and any confirmation gate. VibeTether cannot guarantee that every host model invokes a Skill before every step; initialized project instructions and broad Skill metadata make the route visible, while host behavior remains host-controlled.
+
+### How reusable success is captured
+
+Initialized `AGENTS.md` and `CLAUDE.md` blocks tell the agent to apply VibeTether automatically at task entry and completion boundaries. After every verified user-level or engineering-level success, the agent checks whether it established a reusable workflow.
+
+- `first-proven-path`: the workflow succeeded for the first verified time, even on the first attempt; create a durable record immediately.
+- `recovered-path` or `changed-proven-path`: update the existing record with the verified condition or recovery path.
+- `repeat-proven-path`: point to the unchanged existing record without creating a duplicate.
+- `routine-non-path`: create no document.
+
+The checkpoint disposition is deliberately small: `captured`, `already-encoded`, or `not-reusable`. Tests, runtime output, remote refs, browser acceptance, deployment checks, or CI prove success; the checkpoint only records how the experience was handled. `vibetether doctor` checks that a completion-like checkpoint is no longer pending and that required artifact paths exist. Semantic classification remains model judgment, so the preview does not claim perfect automatic recognition.
+
+Durable knowledge goes to its natural source: tests or validators for deterministic behavior, runbooks for build/deployment/local-environment procedures, ADRs for architecture, product specifications for product decisions, and Skill references plus evals for cross-project agent methods. VibeTether does not create a universal success ledger and never records credentials, private keys, one-time codes, private reasoning, or sensitive tool output.
+
+See the [GitHub publishing Proven Path](docs/operations/github-publishing.md) for the first real operational example.
 
 ## Profiles and bundles
 
@@ -147,6 +165,7 @@ The agent-facing version of this table is contract-linked to [`registry/scenario
 | `triage-qa` | Several issues need reproduction and priority | Built-in evidence-first triage; catalog alternatives remain visible |
 | `architecture-improvement` | Structural friction suggests a durable change | Evidence-led recommendation, then user confirmation |
 | `production-migration` | A migration or deprecation is proposed | `deprecation-and-migration` plus destructive-data gate |
+| `first-proven-path` | A reusable workflow succeeds for the first verified time | Capture a sanitized durable Proven Path immediately |
 | `completion` | The agent is about to claim completion | `verification-before-completion` with fresh evidence |
 
 ## Walkthroughs
@@ -186,6 +205,10 @@ flowchart LR
 ### Release or migration
 
 `production-migration` can recommend the Addy migration specialist, but it cannot approve destructive data work. Release preparation can recommend `shipping-and-launch`; publication still requires fresh verification and explicit user confirmation. Provider choice never weakens migration, permission, security, privacy, merge, deploy, release, or publish gates.
+
+### First successful build, deployment, or publication
+
+The first verified reusable workflow is not treated as a routine success. VibeTether classifies it as `first-proven-path`, creates a concise runbook or other durable artifact, records how success was verified, and indexes the artifact in the checkpoint. A later recovered or environment-specific success updates that artifact. An unchanged repeat points to the existing encoding instead of creating another document.
 
 ## Catalog vs exposure
 
@@ -327,11 +350,11 @@ Provider content is fetched only during an explicit non-core `init`. It remains 
 | Claude Code | Official preview | Project Skill, `CLAUDE.md`, board, offline resolver |
 | Other Agent Skills hosts | Portable Skill; not release-tested | Host-dependent discovery and routing |
 
-Project instructions are a behavioral control layer, not a security sandbox. VibeTether does not add privileged hooks, MCP servers, telemetry, deployment access, or remote execution. It reduces the risk and propagation cost of drift; it cannot guarantee zero drift, correct user decisions, provider quality, or host-level automatic invocation.
+Project instructions are a behavioral control layer, not a security sandbox. VibeTether does not add privileged hooks, MCP servers, telemetry, deployment access, or remote execution. It reduces the risk and propagation cost of drift; it cannot guarantee zero drift, perfect success classification, correct user decisions, provider quality, or host-level automatic invocation. The checkpoint and `doctor` prove that a disposition was recorded, not that the model's semantic judgment was infallible.
 
 ## Preview status
 
-This is a **0.2.0 preview**. The repository includes deterministic contract, lifecycle, catalog, license, routing, rollback, and scenario-matrix tests plus 13 static drift-pressure scenarios. Those static checks are **not independent agent forward tests** and cannot justify a stable `1.0.0` effectiveness claim.
+This is a **0.2.0 preview**. The repository includes deterministic contract, lifecycle, catalog, license, routing, rollback, and scenario-matrix tests plus 14 static drift-pressure scenarios. Those static checks are **not independent agent forward tests** and cannot justify a stable `1.0.0` effectiveness claim.
 
 A three-role comparative adjudication in the development session scored synthetic next-action responses. The VibeTether-enabled run scored **30/30**, versus **24/30** for an already strong baseline, with **35.0%** more words. The observed gain was explicit re-anchor, checkpoint, authority, and functional-versus-visual acceptance discipline. This is preview evidence from a synthetic response trial, not a real multi-hour Codex and Claude project trial. Read the [evaluation report](evals/results/preview-evaluation.md), [run metadata](evals/results/run-metadata.json), and [honesty boundary](evals/README.md).
 

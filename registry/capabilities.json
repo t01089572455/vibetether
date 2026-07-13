@@ -384,6 +384,16 @@
       "fallback": "Use the built-in catalog search and keep VibeTether as the workflow owner."
     },
     {
+      "id": "success-capture",
+      "phases": ["VERIFY", "REVIEW", "SHIP"],
+      "purpose": "Preserve a first, recovered, or changed reusable workflow without duplicating routine success records.",
+      "invoke_when": ["first-proven-path", "recovered-path", "changed-proven-path", "about-to-claim-complete"],
+      "required_inputs": ["verified_success_evidence", "applicable_project_artifacts"],
+      "required_outputs": ["trigger_class", "experience_disposition", "durable_artifacts", "redaction_check"],
+      "exit_evidence": ["The experience disposition is non-pending, internally consistent, sanitized, and points to existing durable artifacts when required."],
+      "fallback": "Use the built-in Success Capture Gate and validate the checkpoint with doctor."
+    },
+    {
       "id": "completion-verification",
       "phases": ["VERIFY"],
       "purpose": "Require fresh evidence before any completion or correctness claim.",

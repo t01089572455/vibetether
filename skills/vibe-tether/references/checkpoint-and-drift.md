@@ -9,6 +9,7 @@ Durable project truth may be version controlled:
 - architecture decisions;
 - UI design contract;
 - accepted user overrides;
+- reusable first, recovered, and changed Proven Paths;
 - reusable failure knowledge and regression tests.
 
 Runtime checkpoints are local by default. Team sharing is explicit. Never auto-commit either layer.
@@ -38,6 +39,12 @@ provider_selection:
   selected: writing-plans
   selection_reason: recommended provider is installed and fits the phase
   invocation_status: completed
+experience_feedback:
+  trigger: first-proven-path
+  disposition: captured
+  reason: First verified publication workflow for this repository.
+  artifacts:
+    - docs/operations/publication.md
 ```
 
 Exclude prompts, credentials, sensitive tool output, raw reasoning, full provider responses, and private user data.
@@ -50,8 +57,9 @@ Exclude prompts, credentials, sensitive tool output, raw reasoning, full provide
 4. Reload sources applicable to the next action.
 5. Resolve stale decisions or conflicts.
 6. Consult the capability board and resolve the advisory route for the current phase and signals.
-7. Restate goal, phase, protected capabilities, provider selection, evidence gap, and next action.
-8. Write a fresh checkpoint before acting.
+7. Read applicable Proven Paths before inventing a new operational route.
+8. Restate goal, phase, protected capabilities, provider selection, experience disposition, evidence gap, and next action.
+9. Write a fresh checkpoint before acting.
 
 Never resume directly from a compacted conversational summary.
 
@@ -95,3 +103,5 @@ Do not run destructive rollback automatically. Preserve user work and request ex
 - a new dependency or architecture appears without a decision;
 - the checkpoint and working tree disagree;
 - release evidence predates the final diff.
+- a verified first reusable path reaches completion with `experience_feedback` still pending;
+- a known Proven Path is ignored without evidence that it is stale or inapplicable.

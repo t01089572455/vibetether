@@ -58,6 +58,10 @@ test('the public Skill exposes the VibeTether drift-control contract', async () 
   assert.match(skill, /capabilities\.yaml/);
   assert.match(skill, /resolve-route\.mjs/);
   assert.match(skill, /do not force an optional provider/i);
+  assert.match(skill, /first-proven-path/i);
+  assert.match(skill, /first verified reusable (workflow|path)[\s\S]*captur/i);
+  assert.match(skill, /captured[\s\S]*already-encoded[\s\S]*not-reusable/i);
+  assert.match(skill, /vibetether doctor[\s\S]*pending/i);
   assert.match(skill, /DISCOVER[\s\S]*ALIGN[\s\S]*DESIGN[\s\S]*PLAN[\s\S]*EXECUTE_ONE/);
   assert.match(skill, /do not expose.*chain-of-thought|never expose.*chain-of-thought/i);
   assert.doesNotMatch(skill, /[\u3400-\u9fff]/);
@@ -91,6 +95,7 @@ test('every Skill reference is direct, present, and intentionally routed', async
     'references/checkpoint-and-drift.md',
     'references/project-manifest.md',
     'references/scenario-routing.md',
+    'references/success-capture.md',
     'references/ui-control-loop.md',
   ];
 

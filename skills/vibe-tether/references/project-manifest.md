@@ -30,6 +30,8 @@ sources:
       - docs/design-system.md
     release:
       - docs/release-checklist.md
+    operations:
+      - docs/operations/
 
 project_gates:
   - changing_public_api
@@ -78,10 +80,12 @@ Adapters may write only a bounded block:
 <!-- vibetether:start -->
 ## VibeTether
 
-Run the lightweight preflight before consequential actions. Consult `.vibetether/capabilities.yaml`, treat optional provider routes as recommendations, and record the selected path. Perform a full re-anchor through `.vibetether/project.yaml` when a trigger fires. Do not bypass unresolved direction, authority conflicts, or project gates.
+Automatically apply VibeTether at task entry, consequential actions, phase transitions, resume, compaction recovery, and completion boundaries. Consult `.vibetether/capabilities.yaml`, treat optional provider routes as recommendations, and record the selected path. Perform a full re-anchor through `.vibetether/project.yaml` when a trigger fires. After every verified user-level or engineering-level success, capture a first, recovered, or changed Proven Path; deduplicate unchanged repeats; record `experience_feedback`; and pass `vibetether doctor` before completion. Never persist credentials, private keys, one-time codes, private reasoning, or sensitive tool output. Do not bypass unresolved direction, authority conflicts, or project gates.
 <!-- vibetether:end -->
 ```
 
 Show a diff, create a backup before the first applied change, preserve user content, remain idempotent, stop on conflicting managed blocks, and remove only VibeTether-owned unchanged content during uninstall. Preserve pre-existing provider Skills.
 
 Instruction files are behavioral guidance, not a security boundary. Use platform permissions and explicit hooks for enforcement when supported and authorized.
+
+New runbooks, ADRs, product decisions, or other Proven Paths must be routed from existing manifest source groups so future re-anchors can find them. Do not create a universal VibeTether success ledger.

@@ -47,7 +47,7 @@ function portablePath(value) {
   return String(value ?? '').replaceAll('\\', '/');
 }
 
-async function validateExperienceFeedback(root, state, issues) {
+async function validateExperienceFeedback(root, state, manifest, issues) {
   const feedback = state.experience_feedback;
   const completionLike = COMPLETION_PHASES.has(String(state.phase ?? '').toUpperCase());
   if (!feedback || feedback.disposition === 'pending') {
@@ -96,6 +96,21 @@ async function validateExperienceFeedback(root, state, issues) {
       issues.push(issue('experience-artifact-escape', `Experience artifact path escapes the project: ${artifact}`));
     } else if (!(await exists(target))) {
       issues.push(issue('missing-experience-artifact', `Missing experience artifact: ${artifact}`));
+    }
+    if (/\.md$/i.test(artifact)) {
+      const normalizedArtifact = portablePath(artifact).replace(/^\.\//, '');
+      const declaredSources = [manifest.goal_source, manifest.intent_contract, ...flattenSources(manifest.sources)]
+        .filter(Boolean)
+        .map((source) => portablePath(source).replace(/^\.\//, '').replace(/\/+$/, ''));
+      const routed = declaredSources.some(
+        (source) => normalizedArtifact === source || normalizedArtifact.startsWith(`${source}/`),
+      );
+      if (!routed) {
+        issues.push(issue(
+          'unrouted-experience-artifact',
+          `Captured Markdown experience artifact is not routed by the project manifest: ${artifact}`,
+        ));
+      }
     }
   }
 }
@@ -398,7 +413,7 @@ export async function inspectProject(options) {
             } else if (Date.now() - updatedAt > maxAge) {
               issues.push(issue('stale-checkpoint', `Runtime checkpoint is older than ${checkpoint.max_age_hours ?? 168} hours`));
             }
-            await validateExperienceFeedback(root, state, issues);
+            await validateExperienceFeedback(root, state, manifest, issues);
           }
         } catch (error) {
           issues.push(issue('invalid-checkpoint', `Cannot parse runtime checkpoint: ${error.message}`));

@@ -106,6 +106,14 @@
       "expected_path": "deprecation-and-migration plus the mandatory destructive-data confirmation gate"
     },
     {
+      "id": "first-proven-path",
+      "situation": "A reusable user-level or engineering-level workflow succeeds for the first verified time in the current project or environment.",
+      "phase": "VERIFY",
+      "capability": "success-capture",
+      "signals": ["first-proven-path"],
+      "expected_path": "VibeTether captures a sanitized durable Proven Path immediately, records its checkpoint disposition, and does not wait for a future failure"
+    },
+    {
       "id": "completion",
       "situation": "The agent is about to claim the requested work is complete.",
       "phase": "VERIFY",

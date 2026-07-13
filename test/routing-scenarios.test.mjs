@@ -109,4 +109,10 @@ test('the agent-facing scenario guide is contract-linked to the registry scenari
     assert.ok(scenario.signals.length > 0);
     assert.equal(typeof scenario.expected_path, 'string');
   }
+
+  const firstProven = registry.scenario_catalog.find((scenario) => scenario.id === 'first-proven-path');
+  assert.equal(firstProven.phase, 'VERIFY');
+  assert.equal(firstProven.capability, 'success-capture');
+  assert.deepEqual(firstProven.signals, ['first-proven-path']);
+  assert.match(firstProven.expected_path, /captur.*durable|durable.*captur/i);
 });

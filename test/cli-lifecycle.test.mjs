@@ -138,11 +138,38 @@ test('doctor rejects first-proven capture without a durable artifact', async () 
   assert.equal(report.issues.some((issue) => issue.code === 'invalid-experience-feedback'), true);
 });
 
-test('doctor accepts a captured first-proven path with a durable project artifact', async () => {
+test('doctor rejects a captured Markdown Proven Path that is not manifest-routed', async () => {
+  const target = await project('doctor-unrouted-success');
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
+  await mkdir(path.join(target, 'docs', 'operations'), { recursive: true });
+  await writeFile(path.join(target, 'docs', 'operations', 'publication.md'), '# Publication\n', 'utf8');
+  const checkpointPath = path.join(target, '.vibetether', 'state', 'current.yaml');
+  const checkpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
+  checkpoint.phase = 'REVIEW';
+  checkpoint.experience_feedback = {
+    trigger: 'first-proven-path',
+    disposition: 'captured',
+    reason: 'The first verified publication path is reusable.',
+    artifacts: ['docs/operations/publication.md'],
+  };
+  await writeFile(checkpointPath, YAML.stringify(checkpoint), 'utf8');
+
+  const result = runCli(['doctor', '--project', target, '--json']);
+
+  assert.equal(result.status, 4, result.stderr || result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.issues.some((issue) => issue.code === 'unrouted-experience-artifact'), true);
+});
+
+test('doctor accepts a captured first-proven path with a manifest-routed durable artifact', async () => {
   const target = await project('doctor-captured-success');
   assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
   await mkdir(path.join(target, 'docs', 'operations'), { recursive: true });
   await writeFile(path.join(target, 'docs', 'operations', 'publication.md'), '# Publication\n', 'utf8');
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
+  manifest.sources.conditional.operations = ['docs/operations/'];
+  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
   const checkpointPath = path.join(target, '.vibetether', 'state', 'current.yaml');
   const checkpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
   checkpoint.phase = 'REVIEW';

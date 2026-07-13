@@ -1,6 +1,6 @@
 # VibeTether Preview Evaluations
 
-The preview suite checks whether VibeTether's deterministic control contract routes known drift pressures to the expected preflight and gate. It covers context compaction, document conflicts, safe reversible preparation while a direction gate is pending, structural technical decisions, multi-screen UI propagation, vague project readiness, unfamiliar-codebase orientation, huge-effort decomposition, bounded prototype choice, React routing, production migration, duplicate-primary rejection, and changed declared-license evidence.
+The preview suite checks whether VibeTether's deterministic control contract routes known drift pressures to the expected preflight and gate. It covers context compaction, document conflicts, safe reversible preparation while a direction gate is pending, structural technical decisions, multi-screen UI propagation, vague project readiness, unfamiliar-codebase orientation, huge-effort decomposition, bounded prototype choice, React routing, production migration, duplicate-primary rejection, changed declared-license evidence, and first verified reusable-path capture.
 
 Run it with:
 
@@ -8,7 +8,7 @@ Run it with:
 npm run eval
 ```
 
-Each of the 13 fixtures declares the input state, pressure, applicable truth sources, isolated routing signal, expected preflight class, expected gate, prohibited action, and required evidence. The runner validates those declarations against the stable control-kernel routing table. Separate unit and lifecycle tests exercise actual capability-board selection, overlays, live availability, catalog/exposure transactions, rollback, doctor, and uninstall behavior.
+Each of the 14 fixtures declares the input state, pressure, applicable truth sources, isolated routing signal, expected preflight class, expected gate, prohibited action, and required evidence. The runner validates those declarations against the stable control-kernel routing table. Separate unit and lifecycle tests exercise actual capability-board selection, overlays, live availability, catalog/exposure transactions, rollback, doctor, and uninstall behavior.
 
 ## Honesty boundary
 

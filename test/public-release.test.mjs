@@ -67,6 +67,22 @@ test('README is a complete scenario-led product and operations guide', async () 
   assert.match(readme, /readme-declaration/);
   assert.match(readme, /catalog-only/i);
   assert.match(readme, /competing router/i);
+  assert.match(readme, /first-proven-path/i);
+  assert.match(readme, /captured[\s\S]*already-encoded[\s\S]*not-reusable/i);
+});
+
+test('the public GitHub publishing runbook preserves the first proven path without credentials', async () => {
+  const runbook = await text('docs/operations/github-publishing.md');
+  assert.match(runbook, /first-proven-path/i);
+  assert.match(runbook, /ssh\.github\.com/i);
+  assert.match(runbook, /443/);
+  assert.match(runbook, /IdentityFile|\s-i\s/i);
+  assert.match(runbook, /remote ref/i);
+  assert.match(runbook, /CI/i);
+  assert.match(runbook, /cleanup|remove.*key/i);
+  assert.match(runbook, /core\.autocrlf=false/i);
+  assert.doesNotMatch(runbook, /BEGIN (?:OPENSSH|RSA|EC) PRIVATE KEY/);
+  assert.doesNotMatch(runbook, /(?:token|password|one-time code)\s*[:=]\s*["']?[A-Za-z0-9_-]{6,}/i);
 });
 
 test('README explains support, architecture, UI control, and preview limitations without overclaiming', async () => {

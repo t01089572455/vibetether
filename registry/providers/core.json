@@ -47,7 +47,7 @@
       "kind": "built-in",
       "workflow_role": "primary",
       "phases": ["verify"],
-      "capabilities": ["browser-verification", "release-verification"],
+      "capabilities": ["browser-verification", "release-verification", "success-capture"],
       "enabled_by_default": true
     },
     {
@@ -55,7 +55,7 @@
       "kind": "built-in",
       "workflow_role": "primary",
       "phases": ["review"],
-      "capabilities": ["code-review", "security-review"],
+      "capabilities": ["code-review", "security-review", "success-capture"],
       "enabled_by_default": true
     },
     {
@@ -63,7 +63,7 @@
       "kind": "built-in",
       "workflow_role": "primary",
       "phases": ["ship"],
-      "capabilities": ["release-verification"],
+      "capabilities": ["release-verification", "success-capture"],
       "enabled_by_default": true
     },
     {
