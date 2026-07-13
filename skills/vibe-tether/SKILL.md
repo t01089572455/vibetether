@@ -159,6 +159,7 @@ node .agents/skills/vibe-tether/scripts/resolve-route.mjs --project . --phase PL
 Use `.claude/skills/vibe-tether/scripts/resolve-route.mjs` for Claude projects. The script is offline and reads only the project capability board. `vibetether capabilities --project .` provides the human dashboard; add `--phase`, `--capability`, repeatable `--signal`, `--agent`, and `--json` for a query.
 
 Read [capability-routing.md](references/capability-routing.md) before selecting or changing a provider.
+Read [scenario-routing.md](references/scenario-routing.md) when translating a plain-language situation into phase, capability, signals, primary provider, overlays, alternatives, and fallback.
 
 ## UI Branch
 

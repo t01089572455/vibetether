@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const registryPath = path.join(packageRoot, 'registry', 'bundles.json');
 const capabilityPath = path.join(packageRoot, 'registry', 'capabilities.json');
+const scenarioPath = path.join(packageRoot, 'registry', 'scenarios.json');
 const registryRoot = path.dirname(registryPath);
 
 function catalogPath(relativePath) {
@@ -17,9 +18,10 @@ function catalogPath(relativePath) {
 }
 
 export async function loadProviderRegistry() {
-  const [registry, capabilities] = await Promise.all([
+  const [registry, capabilities, scenarios] = await Promise.all([
     JSON.parse(await readFile(registryPath, 'utf8')),
     JSON.parse(await readFile(capabilityPath, 'utf8')),
+    JSON.parse(await readFile(scenarioPath, 'utf8')),
   ]);
   const catalogSources = await Promise.all(
     (registry.catalogs ?? []).map(async (relativePath) => JSON.parse(await readFile(catalogPath(relativePath), 'utf8'))),
@@ -28,6 +30,7 @@ export async function loadProviderRegistry() {
     ...registry,
     sources: [...(registry.sources ?? []), ...catalogSources],
     capability_catalog: capabilities.capabilities ?? [],
+    scenario_catalog: scenarios.scenarios ?? [],
     readiness_gate: capabilities.readiness_gate,
   };
 }

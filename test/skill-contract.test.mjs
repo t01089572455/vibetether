@@ -90,6 +90,7 @@ test('every Skill reference is direct, present, and intentionally routed', async
     'references/capability-routing.md',
     'references/checkpoint-and-drift.md',
     'references/project-manifest.md',
+    'references/scenario-routing.md',
     'references/ui-control-loop.md',
   ];
 

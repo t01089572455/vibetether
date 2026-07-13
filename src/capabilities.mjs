@@ -76,24 +76,45 @@ export function resolveBoardRoute(board, request) {
     .filter((route) => String(route.phase).toUpperCase() === phase && route.capability === request.capability)
     .filter((route) => routeMatches(route, signals))
     .sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0));
-  const preferred = matches[0] ?? null;
-  const available = matches.find((route) => routeAvailable(route, request.harness)) ?? null;
+  const overlayMatches = matches.filter(
+    (route) => route.workflow_role === 'policy' || route.selection === 'recommend-overlay',
+  );
+  const primaryMatches = matches.filter((route) => !overlayMatches.includes(route));
+  const preferred = primaryMatches[0] ?? null;
+  const available = primaryMatches.find((route) => routeAvailable(route, request.harness)) ?? null;
   const confirmationGates = (board.high_risk_gates ?? []).filter((gate) => signals.has(gate));
+  const overlays = overlayMatches.map((route) => ({
+    id: route.id,
+    skill: route.recommendation.skill,
+    available: routeAvailable(route, request.harness),
+    available_in: route.recommendation.available_in ?? [],
+    reason: route.recommendation.reason,
+    expected_outputs: route.expected_outputs ?? [],
+    exit_evidence: route.exit_evidence ?? [],
+  }));
 
   if (!preferred) {
+    const rationale = capability.fallback;
     return {
       advisory: true,
       phase,
       capability: request.capability,
       signals: [...signals],
+      detected_signals: [...signals],
       recommendation: null,
+      primary: null,
+      overlays,
       selection: {
         skill: 'vibe-tether',
         source: 'built-in-fallback',
-        reason: capability.fallback,
+        reason: rationale,
       },
-      should_invoke_provider: false,
+      should_invoke_provider: overlays.some((overlay) => overlay.available),
+      alternatives: [],
+      rationale,
+      fallback: capability.fallback,
       expected_outputs: capability.expected_outputs ?? [],
+      required_outputs: capability.expected_outputs ?? [],
       exit_evidence: capability.exit_evidence ?? [],
       confirmation_required: confirmationGates.length > 0,
       confirmation_gates: confirmationGates,
@@ -105,33 +126,42 @@ export function resolveBoardRoute(board, request) {
   const selectionSource = available
     ? available.id === preferred.id ? 'recommended' : 'available-alternative'
     : 'declared-fallback';
+  const rationale = selectionSource === 'available-alternative'
+    ? `The preferred Skill is unavailable in ${request.harness ?? 'enabled harnesses'}; use the next matching installed route.`
+    : selectionSource === 'declared-fallback'
+      ? 'No matching provider is available; use the declared fallback and record why.'
+      : 'The preferred matching Skill is available.';
+  const primary = {
+    skill: preferred.recommendation.skill,
+    available: preferredAvailable,
+    available_in: preferred.recommendation.available_in ?? [],
+    reason: preferred.recommendation.reason,
+  };
+  const requiredOutputs = preferred.expected_outputs ?? capability.expected_outputs ?? [];
   return {
     advisory: true,
     phase,
     capability: request.capability,
     signals: [...signals],
-    recommendation: {
-      skill: preferred.recommendation.skill,
-      available: preferredAvailable,
-      available_in: preferred.recommendation.available_in ?? [],
-      reason: preferred.recommendation.reason,
-    },
+    detected_signals: [...signals],
+    recommendation: primary,
+    primary,
+    overlays,
     selection: {
       skill: selectedSkill,
       source: selectionSource,
-      reason: selectionSource === 'available-alternative'
-        ? `The preferred Skill is unavailable in ${request.harness ?? 'enabled harnesses'}; use the next matching installed route.`
-        : selectionSource === 'declared-fallback'
-          ? `No matching provider is available; use the declared fallback and record why.`
-          : 'The preferred matching Skill is available.',
+      reason: rationale,
     },
-    should_invoke_provider: Boolean(available),
-    alternatives: matches.slice(1).map((route) => ({
+    should_invoke_provider: Boolean(available) || overlays.some((overlay) => overlay.available),
+    alternatives: primaryMatches.slice(1).map((route) => ({
       skill: route.recommendation.skill,
       available: routeAvailable(route, request.harness),
       reason: route.recommendation.reason,
     })),
-    expected_outputs: preferred.expected_outputs ?? capability.expected_outputs ?? [],
+    rationale,
+    fallback: preferred.fallback ?? capability.fallback,
+    expected_outputs: requiredOutputs,
+    required_outputs: requiredOutputs,
     exit_evidence: preferred.exit_evidence ?? capability.exit_evidence ?? [],
     confirmation_required: confirmationGates.length > 0,
     confirmation_gates: confirmationGates,
@@ -198,12 +228,22 @@ function humanResolution(result) {
   const recommended = result.recommendation
     ? `${result.recommendation.skill} (${result.recommendation.available ? 'available' : 'unavailable'})`
     : 'no external provider; use VibeTether built-in control';
+  const overlays = result.overlays?.length
+    ? result.overlays.map((overlay) => `${overlay.skill} (${overlay.available ? 'available' : 'unavailable'})`).join(', ')
+    : 'none';
+  const alternatives = result.alternatives?.length
+    ? result.alternatives.map((alternative) => `${alternative.skill} (${alternative.available ? 'available' : 'unavailable'})`).join(', ')
+    : 'none';
   return [
     `VibeTether advisory route: ${result.phase} / ${result.capability}`,
+    `Detected signals: ${(result.detected_signals ?? result.signals ?? []).join(', ') || 'none'}`,
     `Recommended: ${recommended}`,
+    `Policy/domain overlays: ${overlays}`,
+    `Alternatives: ${alternatives}`,
     `Selected path: ${result.selection.skill} [${result.selection.source}]`,
-    `Reason: ${result.selection.reason}`,
-    `Expected outputs: ${result.expected_outputs.join(', ')}`,
+    `Reason: ${result.rationale ?? result.selection.reason}`,
+    `Fallback: ${result.fallback ?? 'vibe-tether'}`,
+    `Required outputs: ${(result.required_outputs ?? result.expected_outputs).join(', ')}`,
     `Exit evidence: ${result.exit_evidence.join(' ')}`,
     `User confirmation required: ${result.confirmation_required ? `yes (${result.confirmation_gates.join(', ')})` : 'no route-level gate detected'}`,
   ].join('\n') + '\n';

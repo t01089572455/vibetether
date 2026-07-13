@@ -14,6 +14,8 @@ The board answers five questions without taking control away from the agent:
 
 Recommendations are advisory. Select the recommended Skill when it fits, otherwise select an installed alternative or fallback and record the material reason. High-risk confirmation gates remain mandatory and are independent of ordinary provider selection.
 
+The resolver separates `primary`, compatible `overlays`, and ordered `alternatives`. It also returns `detected_signals`, `rationale`, `fallback`, `required_outputs`, and `exit_evidence`, so the choice remains inspectable without exposing private reasoning. A policy overlay such as `karpathy-guidelines` may shape an implementation path but never owns the lifecycle phase.
+
 ## Automatic Readiness Before Provider Selection
 
 The board's `readiness_gate` is automatic even though specialist recommendations remain advisory. At task entry and every re-anchor boundary, classify all readiness dimensions before implementation. Investigate discoverable facts autonomously; route unresolved direction to requirements clarification, document conflicts to document alignment, missing design decisions to product or UI design, and missing slices or evidence to planning. Implementation may start only at `READY_FOR_IMPLEMENT_ONE`.
@@ -54,6 +56,8 @@ Every provider decision records capability, phase, recommended provider, selecte
 | Running interface | Browser verification | Tasks, states, console/network, desktop/narrow evidence |
 | Implementation claims readiness | Code or security review | Findings resolved or explicitly accepted |
 | Merge or release is proposed | Completion and release verification | Fresh full gate evidence |
+
+For the full plain-language map—including unfamiliar codebases, huge efforts, prototypes, handoffs, triage, Web work, and production migrations—read [scenario-routing.md](scenario-routing.md).
 
 ## Provider Selection
 

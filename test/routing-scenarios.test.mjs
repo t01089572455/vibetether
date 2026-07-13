@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { resolveBoardRoute } from '../src/capabilities.mjs';
 import { createCapabilityBoard } from '../src/provider-plan.mjs';
 import { loadProviderRegistry, resolveExposurePlan } from '../src/provider-registry.mjs';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 async function completeBoard() {
   const registry = await loadProviderRegistry();
@@ -74,4 +79,34 @@ test('high-risk scenario signals add confirmation without disabling advisory rou
   assert.equal(result.selection.skill, 'deprecation-and-migration');
   assert.equal(result.confirmation_required, true);
   assert.deepEqual(result.confirmation_gates, ['destructive-data-change']);
+});
+
+test('Karpathy guidance is composed as an implementation overlay, never as the workflow primary', async () => {
+  const board = await completeBoard();
+  const result = resolveBoardRoute(board, {
+    phase: 'EXECUTE_ONE',
+    capability: 'implementation',
+    signals: ['new-behavior'],
+    harness: 'codex',
+  });
+
+  assert.equal(result.primary, null);
+  assert.equal(result.selection.skill, 'vibe-tether');
+  assert.equal(result.overlays.some((overlay) => overlay.skill === 'karpathy-guidelines' && overlay.available), true);
+  assert.equal(result.should_invoke_provider, true);
+});
+
+test('the agent-facing scenario guide is contract-linked to the registry scenario catalog', async () => {
+  const registry = await loadProviderRegistry();
+  const board = await completeBoard();
+  const guide = await readFile(path.join(root, 'skills', 'vibe-tether', 'references', 'scenario-routing.md'), 'utf8');
+
+  assert.ok(registry.scenario_catalog.length >= 14);
+  assert.deepEqual(board.scenarios, registry.scenario_catalog);
+  for (const scenario of registry.scenario_catalog) {
+    assert.match(guide, new RegExp(`\\b${scenario.id}\\b`));
+    assert.equal(typeof scenario.situation, 'string');
+    assert.ok(scenario.signals.length > 0);
+    assert.equal(typeof scenario.expected_path, 'string');
+  }
 });

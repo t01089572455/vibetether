@@ -70,6 +70,12 @@ test('route resolution recommends the best fit but falls through to an available
   assert.equal(result.selection.skill, 'executing-plans');
   assert.equal(result.selection.source, 'available-alternative');
   assert.equal(result.should_invoke_provider, true);
+  assert.equal(result.primary.skill, 'subagent-driven-development');
+  assert.deepEqual(result.overlays, []);
+  assert.deepEqual(result.detected_signals, ['subagents-available', 'delegation-authorized']);
+  assert.equal(result.fallback, 'executing-plans');
+  assert.deepEqual(result.required_outputs, ['verified_slice']);
+  assert.equal(typeof result.rationale, 'string');
 });
 
 test('runtime availability refresh removes deleted providers before route selection', async () => {

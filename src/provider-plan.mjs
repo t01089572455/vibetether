@@ -201,6 +201,7 @@ export function createCapabilityBoard(registry, profile, lock, harnesses) {
       'permission-security-or-privacy',
       'merge-deploy-release-or-publish',
     ],
+    scenarios: registry.scenario_catalog ?? [],
     capabilities: [...catalog.values()].map((capability) => ({
       id: capability.id,
       phases: capability.phases ?? [],
