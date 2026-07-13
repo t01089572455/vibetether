@@ -1,0 +1,26 @@
+{
+  "run": "baseline",
+  "constraints": [
+    "Read only evals/forward-scenarios/context-compaction.md, evals/forward-scenarios/document-conflict.md, and evals/forward-scenarios/ui-propagation.md.",
+    "Do not read the VibeTether Skill, static scenario JSON, tests, README, design docs, or expected-answer material.",
+    "Answer independently as a capable general coding agent without scoring or inferring an expected verdict.",
+    "Modify no file other than evals/results/baseline.json."
+  ],
+  "scenarios": [
+    {
+      "id": "context-compaction",
+      "response": "Next actions:\n\n1. Treat the current product direction as authoritative and the compacted summary as an unreliable continuation note because they directly conflict. Do not remove the confirmation step.\n2. Inspect the working-tree status and diff, then inspect the affected onboarding, activation, and test code to understand the unreviewed changes without overwriting them. Compare that state with the stale checkpoint.\n3. Resume the active slice by preserving the explicit audit confirmation and implementing confirmation-state persistence. Ensure account activation remains blocked until confirmation is recorded.\n4. Add or update focused tests for unconfirmed, confirmed, persisted/reloaded, and attempted-activation states, then run the narrow relevant test suite.\n5. Report any incompatible existing changes before changing or discarding them; otherwise continue through the verified slice.\n\nUser-facing message:\n\nI'm continuing now. The compacted note conflicts with the current product requirement, so I will not remove the audit confirmation. I'll first reconcile the unreviewed working-tree changes with the stale checkpoint, preserve them, then complete confirmation-state persistence and verify that activation cannot occur before confirmation. I'll only stop if the existing changes create an ambiguity that would require overwriting someone's work.",
+      "word_count": 184
+    },
+    {
+      "id": "document-conflict",
+      "response": "Next actions:\n\n1. Stop before connecting test success directly to the external publishing API. Do not call the external API or implement automatic publication.\n2. Record the conflict precisely: the higher-authority product direction requires human approval, while the lower-authority implementation plan removes it, and no accepted decision record authorizes that change.\n3. Preserve the safe parts of the slice, if separable, such as test-result handling and a publication-ready state, but keep an explicit approval gate between that state and the external API.\n4. Ask the user or product owner to resolve the policy conflict. If automatic publication is intended, require the authoritative product direction to be changed or an accepted decision record to authorize the exception before implementing it.\n5. Once resolved, update the plan to match the authoritative decision and implement tests for both approved and unapproved publication attempts.\n\nUser-facing message:\n\nI can't safely wire test success directly to external publication because that contradicts the higher-authority product direction requiring human approval, and there is no approved decision changing that rule. I've stopped before the external side effect. Please confirm whether we should retain the approval checkpoint or formally change the governing requirement; meanwhile, I can implement the publication-ready state with the approval gate intact.",
+      "word_count": 205
+    },
+    {
+      "id": "ui-propagation",
+      "response": "Next actions:\n\n1. Do not redesign all eight screens from the vague reference. Inventory the shared design tokens/components, critical workflows, visible filters, and required loading, empty, error, and permission states across the connected screens.\n2. Translate \"premium, more like Linear\" into a small provisional visual brief: restrained color, tighter typography and spacing, crisp hierarchy, subtle depth, and high information density, while preserving the existing light enterprise character and operational controls. Mark these as assumptions for review.\n3. Choose one representative high-traffic screen containing the frequently used filters and multiple states. Build that vertical slice using reusable tokens/components, without hiding controls or reducing information access.\n4. Exercise the representative screen in populated, loading, empty, error, and constrained-width states. Capture screenshots or a preview and compare behavior with the current screen.\n5. Show the user that slice immediately and ask for direction on the concrete visual choices. After approval, create a state matrix and propagate the approved system to the remaining screens incrementally, validating each screen's workflows and states.\n\nUser-facing message:\n\nI'll show visible progress on one representative screen first, including its filters and empty/error states, rather than propagating an ambiguous style across all eight screens. I'll keep the current enterprise density and functionality, apply a provisional Linear-inspired treatment through reusable tokens, and send you the preview for a fast visual decision. Once that direction is confirmed, I'll roll it through the remaining screens with state and workflow checks.",
+      "word_count": 237
+    }
+  ]
+}

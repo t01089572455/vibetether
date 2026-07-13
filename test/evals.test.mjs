@@ -49,3 +49,27 @@ test('scenario expected gates match deterministic control-kernel routing', async
     assert.equal(verdict.ok, true, `${scenario.id}: ${verdict.errors.join('; ')}`);
   }
 });
+
+test('independent preview evaluation preserves raw runs, mapped scores, and honesty limits', async () => {
+  const baseline = JSON.parse(await readFile(path.join(root, 'evals', 'results', 'baseline.json'), 'utf8'));
+  const enabled = JSON.parse(await readFile(path.join(root, 'evals', 'results', 'skill-enabled.json'), 'utf8'));
+  const judge = JSON.parse(await readFile(path.join(root, 'evals', 'results', 'judge-scores.json'), 'utf8'));
+  const report = await readFile(path.join(root, 'evals', 'results', 'preview-evaluation.md'), 'utf8');
+  const expectedIds = ['context-compaction', 'document-conflict', 'ui-propagation'];
+
+  assert.deepEqual(baseline.scenarios.map((scenario) => scenario.id), expectedIds);
+  assert.deepEqual(enabled.scenarios.map((scenario) => scenario.id), expectedIds);
+  assert.deepEqual(judge.scenarios.map((scenario) => scenario.id), expectedIds);
+  assert.equal(judge.method.criteria.length, 5);
+  for (const scenario of judge.scenarios) {
+    const baselineScore = judge.audited_mapped_results.baseline[scenario.id].total;
+    const enabledScore = judge.audited_mapped_results['vibetether-enabled'][scenario.id].total;
+    assert.ok(baselineScore >= 0 && baselineScore <= 10);
+    assert.ok(enabledScore >= 0 && enabledScore <= 10);
+  }
+  assert.match(report, /independent (response|comparative) adjudication/i);
+  assert.match(report, /baseline strengths/i);
+  assert.match(report, /word-count overhead/i);
+  assert.match(report, /not a real multi-hour coding-project trial/i);
+  assert.doesNotMatch(report, /eliminates? (context )?drift/i);
+});

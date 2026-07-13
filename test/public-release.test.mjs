@@ -28,6 +28,9 @@ test('README explains support, architecture, UI control, and preview limitations
   assert.match(readme, /```mermaid[\s\S]*golden screen/i);
   assert.match(readme, /0\.1\.0 preview/i);
   assert.match(readme, /not independent agent forward tests/i);
+  assert.match(readme, /30\/30[\s\S]*24\/30/);
+  assert.match(readme, /35\.0%/);
+  assert.match(readme, /preview-evaluation\.md/);
   assert.doesNotMatch(readme, /eliminates? (context )?drift/i);
   assert.match(readme, /reduces the risk/i);
 });

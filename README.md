@@ -167,6 +167,8 @@ No upstream workflow is silently bundled or made authoritative. Popularity is a 
 
 This is a **0.1.0 preview**. The repository includes deterministic contract tests and four static drift-pressure scenarios. Those checks are not independent agent forward tests: they do not measure model behavior across genuinely long contexts, and they cannot justify a `1.0.0` claim.
 
+An authorized three-Agent comparative adjudication also scored synthetic next-action responses. The VibeTether-enabled run scored **30/30**, versus **24/30** for an already strong baseline, while using **35.0%** more words. The observed gain was in explicit re-anchor, checkpoint, authority, and dual-acceptance discipline; both runs remained directionally safe. This is useful preview evidence, but it is still a single synthetic response trial rather than a real multi-hour project execution. Read the [full evaluation, raw limitations, and post-test findings](evals/results/preview-evaluation.md).
+
 VibeTether aims to reduce the risk and propagation cost of drift. It cannot guarantee host-level automatic invocation, perfect source quality, or correct user decisions. See [the evaluation boundary](evals/README.md) for what is and is not measured.
 
 ## Development
