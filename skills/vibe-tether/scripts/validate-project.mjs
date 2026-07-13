@@ -124,6 +124,7 @@ function parseManifest(source) {
     schema_version: topLevelScalar(source, 'schema_version'),
     project_id: topLevelScalar(source, 'project_id'),
     goal_source: topLevelScalar(source, 'goal_source'),
+    intent_contract: topLevelScalar(source, 'intent_contract'),
     sources,
     harnesses,
     checkpoint,
@@ -145,7 +146,8 @@ async function validateProject(projectRoot) {
   if (manifest?.schema_version !== 1) errors.push('Manifest schema_version must be 1');
   if (!manifest?.project_id) errors.push('Manifest project_id is required');
 
-  const declaredSources = [manifest?.goal_source, ...manifest.sources].filter(Boolean);
+  if (!manifest?.intent_contract) errors.push('Manifest intent_contract is required');
+  const declaredSources = [manifest?.goal_source, manifest?.intent_contract, ...manifest.sources].filter(Boolean);
   for (const source of [...new Set(declaredSources)]) {
     const sourcePath = path.resolve(projectRoot, source);
     const relative = path.relative(path.resolve(projectRoot), sourcePath);

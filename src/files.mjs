@@ -31,12 +31,7 @@ export function applyManagedBlock(content, body) {
     const end = content.indexOf(MANAGED_END, start) + MANAGED_END.length;
     return `${content.slice(0, start)}${block}${content.slice(end)}`;
   }
-
-  if (!content) return `${block}${newline}`;
-  let separator = '';
-  if (!content.endsWith(newline)) separator += newline;
-  if (!`${content}${separator}`.endsWith(`${newline}${newline}`)) separator += newline;
-  return `${content}${separator}${block}${newline}`;
+  return `${content}${block}`;
 }
 
 export function managedBlockBody(content) {
@@ -52,7 +47,6 @@ export function removeManagedBlock(content) {
   const end = content.indexOf(MANAGED_END, start) + MANAGED_END.length;
   const before = content.slice(0, start);
   const after = content.slice(end);
-  if (!before && /^(\r?\n)?$/.test(after)) return '';
   return `${before}${after}`;
 }
 

@@ -52,6 +52,9 @@ export async function inspectProject(options) {
   }
 
   if (manifest) {
+    if (!manifest.intent_contract) {
+      issues.push(issue('missing-intent-contract', 'Manifest intent_contract is required'));
+    }
     const declared = [manifest.goal_source, manifest.intent_contract, ...flattenSources(manifest.sources)].filter(Boolean);
     for (const source of [...new Set(declared)]) {
       const sourcePath = path.resolve(root, source);

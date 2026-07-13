@@ -40,8 +40,23 @@ test('dry-run reports the initialization plan without changing the project', asy
   assert.match(result.stdout, /DRY RUN/);
   assert.match(result.stdout, /AGENTS\.md/);
   assert.match(result.stdout, /CLAUDE\.md/);
+  assert.match(result.stdout, /--- AGENTS\.md[\s\S]*\+\+\+ AGENTS\.md[\s\S]*vibetether:start/);
+  assert.match(result.stdout, /--- \/dev\/null[\s\S]*\+\+\+ \.vibetether\/project\.yaml[\s\S]*profile: standard/);
   assert.equal(await exists(path.join(target, '.vibetether')), false);
   assert.equal(await readFile(path.join(target, 'AGENTS.md'), 'utf8'), '# Existing instructions\n');
+});
+
+test('dry-run shows old and new managed values for an existing project', async () => {
+  const target = await project('dry-run-update');
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const before = await readFile(manifestPath, 'utf8');
+
+  const result = runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'extended', '--dry-run']);
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /--- \.vibetether\/project\.yaml[\s\S]*-profile: core[\s\S]*\+profile: extended/);
+  assert.equal(await readFile(manifestPath, 'utf8'), before);
 });
 
 test('init installs Codex and Claude project Skills and preserves user instructions', async () => {
@@ -104,7 +119,13 @@ test('init discovers existing truth sources with explicit confidence', async () 
   const manifest = YAML.parse(await readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'));
   assert.equal(manifest.schema_version, 1);
   assert.equal(manifest.goal_source, 'docs/product-direction.md');
-  assert.deepEqual(manifest.sources.always, ['AGENTS.md', 'CONTEXT.md', 'docs/product-direction.md']);
+  assert.equal(manifest.intent_contract, '.vibetether/intent.md');
+  assert.deepEqual(manifest.sources.always, [
+    'AGENTS.md',
+    'CONTEXT.md',
+    'docs/product-direction.md',
+    '.vibetether/intent.md',
+  ]);
   assert.deepEqual(manifest.sources.conditional.architecture, ['docs/adr/']);
   assert.deepEqual(manifest.sources.conditional.ui, ['docs/ui-spec.md']);
   assert.equal(manifest.discovery['docs/product-direction.md'].confidence, 'high');
@@ -208,6 +229,7 @@ test('repeated init preserves curated manifest fields and existing harnesses', a
   assert.deepEqual(after.project_gates, ['changing-public-api']);
   assert.deepEqual(after.verification, { test: 'npm test' });
   assert.equal(after.sources.always.includes('docs/curated.md'), true);
+  assert.equal(after.profile, 'extended');
   assert.equal(after.harnesses.codex.enabled, true);
   assert.equal(after.harnesses.claude.enabled, true);
 });

@@ -64,9 +64,11 @@ export async function scanProject(root, enabledAdapters, profile) {
   }
 
   const goalSource = direction || '.vibetether/intent.md';
+  const intentContract = '.vibetether/intent.md';
   const always = [...instructionFiles];
   always.push(...contexts);
   if (!always.includes(goalSource)) always.push(goalSource);
+  if (!always.includes(intentContract)) always.push(intentContract);
 
   discovery['.vibetether/intent.md'] = {
     role: 'intent contract',
@@ -79,6 +81,7 @@ export async function scanProject(root, enabledAdapters, profile) {
     project_id: path.basename(root).toLowerCase().replace(/[^a-z0-9._-]+/g, '-'),
     profile,
     goal_source: goalSource,
+    intent_contract: intentContract,
     sources: {
       always,
       conditional: {

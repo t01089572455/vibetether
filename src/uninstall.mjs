@@ -22,6 +22,47 @@ async function exists(target) {
   }
 }
 
+export async function applyUninstallPlans(textPlans, skillPlans, operations = {}) {
+  const run = { rename, rm, writeAtomic, ...operations };
+  const quarantined = [];
+  const appliedTexts = [];
+  try {
+    for (const plan of skillPlans) {
+      const quarantine = `${plan.target}.${randomUUID()}.remove`;
+      await run.rename(plan.target, quarantine);
+      quarantined.push({ ...plan, quarantine });
+    }
+    for (const plan of textPlans) {
+      if (plan.removeFile) await run.rm(plan.target, { force: true });
+      else await run.writeAtomic(plan.target, plan.content);
+      appliedTexts.push(plan);
+    }
+  } catch (error) {
+    const rollbackErrors = [];
+    for (const plan of appliedTexts.reverse()) {
+      await run.writeAtomic(plan.target, plan.original).catch((failure) => rollbackErrors.push(failure.message));
+    }
+    for (const plan of quarantined.reverse()) {
+      await run.rename(plan.quarantine, plan.target).catch((failure) => rollbackErrors.push(failure.message));
+    }
+    if (rollbackErrors.length === 0) throw error;
+    throw new CliError(
+      `Uninstall failed and rollback was incomplete (${rollbackErrors.join('; ')}). Quarantined Skills were preserved where possible.`,
+      3,
+    );
+  }
+
+  const cleanupFailures = [];
+  for (const plan of quarantined) {
+    try {
+      await run.rm(plan.quarantine, { recursive: true, force: true });
+    } catch (error) {
+      cleanupFailures.push({ ...plan, error });
+    }
+  }
+  return cleanupFailures;
+}
+
 export async function uninstall(options) {
   let root;
   try {
@@ -73,23 +114,9 @@ export async function uninstall(options) {
     throw new CliError('Refusing to change the project without --yes. Use --dry-run to inspect the plan.');
   }
 
-  const quarantined = [];
-  try {
-    for (const plan of skillPlans) {
-      const quarantine = `${plan.target}.${randomUUID()}.remove`;
-      await rename(plan.target, quarantine);
-      quarantined.push({ ...plan, quarantine });
-    }
-    for (const plan of textPlans) {
-      if (plan.removeFile) await rm(plan.target, { force: true });
-      else await writeAtomic(plan.target, plan.content);
-    }
-    for (const plan of quarantined) await rm(plan.quarantine, { recursive: true, force: true });
-  } catch (error) {
-    for (const plan of textPlans) await writeAtomic(plan.target, plan.original).catch(() => {});
-    for (const plan of quarantined.reverse()) await rename(plan.quarantine, plan.target).catch(() => {});
-    throw error;
-  }
-
-  return `VibeTether removed managed content from ${root}. The Intent Contract and backups were preserved.\n`;
+  const cleanupFailures = await applyUninstallPlans(textPlans, skillPlans);
+  const warning = cleanupFailures.length === 0
+    ? ''
+    : ` Warning: inactive quarantine cleanup failed for ${cleanupFailures.map((plan) => plan.relativePath).join(', ')}; a sibling .remove directory remains and can be deleted manually.`;
+  return `VibeTether removed managed content from ${root}. The Intent Contract and backups were preserved.${warning}\n`;
 }

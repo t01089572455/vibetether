@@ -1,6 +1,6 @@
 import { mkdir, realpath, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { ADAPTERS, GITIGNORE_BODY, selectedAdapters } from './adapters.mjs';
+import { ADAPTERS, GITIGNORE_BODY, MANAGED_END, MANAGED_START, selectedAdapters } from './adapters.mjs';
 import { CliError } from './errors.mjs';
 import {
   applyManagedBlock,
@@ -18,6 +18,45 @@ import { assertSkillInstallable, installSkill } from './skill-install.mjs';
 
 function instructionBody(adapter) {
   return ADAPTERS[adapter].managedBody;
+}
+
+function managedPreview(relativePath, content) {
+  if (!['AGENTS.md', 'CLAUDE.md', '.gitignore'].includes(relativePath)) return content;
+  const start = content.indexOf(MANAGED_START);
+  const end = content.indexOf(MANAGED_END, start);
+  if (start === -1 || end === -1) return '';
+  return content.slice(start, end + MANAGED_END.length);
+}
+
+function diffLines(prefix, content) {
+  if (!content) return '';
+  return content
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => `${prefix}${line}`)
+    .join('\n');
+}
+
+function formatDryRun(root, textPlans, skillPlans) {
+  const sections = [];
+  for (const plan of textPlans) {
+    if (plan.original === plan.content) continue;
+    const before = plan.original === null ? null : managedPreview(plan.relativePath, plan.original);
+    const after = managedPreview(plan.relativePath, plan.content);
+    const removed = before === null || before === after ? '' : diffLines('-', before);
+    const added = diffLines('+', after);
+    sections.push(
+      [`--- ${plan.original === null ? '/dev/null' : plan.relativePath}`, `+++ ${plan.relativePath}`, removed, added]
+        .filter(Boolean)
+        .join('\n'),
+    );
+  }
+  for (const plan of skillPlans) {
+    if (!plan.needsInstall) continue;
+    sections.push(`--- /dev/null\n+++ ${plan.relativePath}\n+<canonical VibeTether Skill directory>`);
+  }
+  const details = sections.length > 0 ? `\n${sections.join('\n\n')}\n` : '\nNo changes required.\n';
+  return `DRY RUN - VibeTether would initialize ${root}:${details}`;
 }
 
 export async function applyInitialization(root, textPlans, skillPlans, installSkillOperation = installSkill) {
@@ -114,7 +153,10 @@ export async function initialize(options) {
     manifest = await scanProject(root, adapters, options.profile);
   } else {
     try {
-      manifest = enableHarnesses(parseManifest(manifestOriginal), adapters);
+      manifest = {
+        ...enableHarnesses(parseManifest(manifestOriginal), adapters),
+        profile: options.profile,
+      };
     } catch (error) {
       throw new CliError(`Manifest conflict in .vibetether/project.yaml: ${error.message}`, 3);
     }
@@ -155,8 +197,7 @@ export async function initialize(options) {
   for (const plan of skillPlans) plan.needsInstall = await assertSkillInstallable(plan.target, plan.relativePath);
 
   if (options.dryRun) {
-    const items = [...textPlans.map((item) => item.relativePath), ...skillPlans.map((item) => item.relativePath)];
-    return `DRY RUN — VibeTether would initialize ${root}:\n${items.map((item) => `  - ${item}`).join('\n')}\n`;
+    return formatDryRun(root, textPlans, skillPlans);
   }
 
   if (!options.yes) {

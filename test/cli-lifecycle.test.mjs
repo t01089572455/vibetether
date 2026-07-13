@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -42,6 +42,8 @@ test('doctor reports a healthy initialized project as machine-readable JSON', as
 
 test('doctor exits 4 when a declared truth source is missing', async () => {
   const target = await project('doctor-fail');
+  await mkdir(path.join(target, 'docs'), { recursive: true });
+  await writeFile(path.join(target, 'docs', 'product-direction.md'), '# Product direction\n', 'utf8');
   assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--yes']).status, 0);
   await rm(path.join(target, '.vibetether', 'intent.md'));
 
@@ -51,6 +53,29 @@ test('doctor exits 4 when a declared truth source is missing', async () => {
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, false);
   assert.equal(report.issues.some((issue) => issue.code === 'missing-source'), true);
+
+  const installedValidator = path.join(target, '.agents', 'skills', 'vibe-tether', 'scripts', 'validate-project.mjs');
+  const validator = spawnSync(process.execPath, [installedValidator, '--project', target], {
+    cwd: target,
+    encoding: 'utf8',
+  });
+  assert.equal(validator.status, 1, validator.stderr || validator.stdout);
+  assert.match(validator.stderr, /missing declared source.*intent\.md/i);
+});
+
+test('doctor requires an explicit Intent Contract manifest field', async () => {
+  const target = await project('doctor-intent-field');
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--yes']).status, 0);
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
+  delete manifest.intent_contract;
+  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+
+  const result = runCli(['doctor', '--project', target, '--json']);
+
+  assert.equal(result.status, 4, result.stderr || result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.issues.some((issue) => issue.code === 'missing-intent-contract'), true);
 });
 
 test('doctor detects a stale runtime checkpoint without exposing private reasoning', async () => {
@@ -125,13 +150,15 @@ test('uninstall rejects reversed markers without changing user content', async (
 
 test('uninstall removes only VibeTether-managed content and preserves the Intent Contract', async () => {
   const target = await project('uninstall');
-  await writeFile(path.join(target, 'AGENTS.md'), '# Team rules\n\nKeep me.\n', 'utf8');
+  const originalAgents = '# Team rules\n\nKeep me.\n';
+  await writeFile(path.join(target, 'AGENTS.md'), originalAgents, 'utf8');
   assert.equal(runCli(['init', '--project', target, '--agent', 'both', '--yes']).status, 0);
 
   const result = runCli(['uninstall', '--project', target, '--yes']);
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const agents = await readFile(path.join(target, 'AGENTS.md'), 'utf8');
+  assert.equal(agents, originalAgents);
   assert.match(agents, /# Team rules/);
   assert.match(agents, /Keep me\./);
   assert.doesNotMatch(agents, /vibetether:start/);
