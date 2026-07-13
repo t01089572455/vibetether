@@ -244,6 +244,28 @@ test('profile downgrade retains inactive ownership so managed providers remain s
   assert.equal(await exists(provider), false);
 });
 
+test('reinitializing one harness preserves managed ownership for the other harness', async () => {
+  const source = await fixture();
+  const target = await mkdtemp(path.join(os.tmpdir(), 'vibetether-provider-lifecycle-harness-retention-'));
+  const dependencies = { loadRegistry: async () => registry(source) };
+  await initialize(
+    { project: target, agent: 'both', profile: 'standard', dryRun: false, yes: true },
+    dependencies,
+  );
+  await initialize(
+    { project: target, agent: 'codex', profile: 'standard', dryRun: false, yes: true },
+    dependencies,
+  );
+
+  const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
+  assert.equal(lock.exposures[0].installations.codex.ownership, 'vibetether');
+  assert.equal(lock.exposures[0].installations.claude.ownership, 'vibetether');
+
+  await uninstall({ project: target, dryRun: false, yes: true });
+  assert.equal(await exists(path.join(target, '.agents', 'skills', 'demo')), false);
+  assert.equal(await exists(path.join(target, '.claude', 'skills', 'demo')), false);
+});
+
 test('doctor and uninstall reject lock paths that do not match the declared harness and Skill', async () => {
   const { target } = await initialized('tampered-lock-path');
   const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');

@@ -126,7 +126,7 @@ Disable repository-evidence bundle selection:
 npx --yes github:t01089572455/vibetether init --profile standard --no-auto-bundles --yes
 ```
 
-An explicit bundle is an install-time decision, not permission to deploy, migrate data, change secrets, or publish. Those actions keep their separate user gates.
+`core` rejects `--bundle` so its provider path stays offline. An explicit bundle is an install-time decision, not permission to deploy, migrate data, change secrets, or publish. Those actions keep their separate user gates.
 
 ## When should I use what?
 
@@ -349,6 +349,7 @@ The tour creates a temporary project, initializes the `core` profile for Codex, 
 For a manual provider tour in a disposable project, preview before applying:
 
 ```sh
+mkdir vibetether-smoke
 npx --yes github:t01089572455/vibetether init --project ./vibetether-smoke --agent both --profile standard --bundle web --dry-run
 ```
 

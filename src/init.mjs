@@ -65,6 +65,28 @@ function formatDryRun(root, textPlans, skillPlans) {
   const sections = [];
   for (const plan of textPlans) {
     if (plan.original === plan.content) continue;
+    if (plan.relativePath === '.vibetether/capabilities.yaml') {
+      const board = JSON.parse(plan.content);
+      sections.push(
+        `--- ${plan.original === null ? '/dev/null' : plan.relativePath}\n+++ ${plan.relativePath}\n+<generated capability board: ${board.capabilities?.length ?? 0} capabilities, ${board.providers?.filter((provider) => provider.active).length ?? 0} active providers, ${board.routes?.length ?? 0} routes, ${board.scenarios?.length ?? 0} scenarios>`,
+      );
+      continue;
+    }
+    if (plan.relativePath === '.vibetether/providers.lock.yaml') {
+      const lock = YAML.parse(plan.content);
+      const sourceLines = (lock.sources ?? []).map(
+        (source) => `+  source ${source.id}@${source.commit} | ${source.license} | ${source.license_evidence?.mode ?? 'full-text'}`,
+      );
+      sections.push(
+        [
+          `--- ${plan.original === null ? '/dev/null' : plan.relativePath}`,
+          `+++ ${plan.relativePath}`,
+          `+<generated provider lock: ${lock.catalog?.filter((skill) => skill.active).length ?? 0} catalog entries, ${(lock.exposures ?? lock.skills ?? []).filter((skill) => skill.active).length} active exposures, ${(lock.sources ?? []).length} pinned sources>`,
+          ...sourceLines,
+        ].join('\n'),
+      );
+      continue;
+    }
     const before = plan.original === null ? null : managedPreview(plan.relativePath, plan.original);
     const after = managedPreview(plan.relativePath, plan.content);
     const removed = before === null || before === after ? '' : diffLines('-', before);

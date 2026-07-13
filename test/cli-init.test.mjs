@@ -280,6 +280,15 @@ test('init rejects an unknown specialist bundle', async () => {
   assert.match(result.stderr, /invalid --bundle/i);
 });
 
+test('core rejects optional bundles so its provider path remains offline', async () => {
+  const target = await project('core-bundle');
+  const result = runCli(['init', '--project', target, '--profile', 'core', '--bundle', 'web', '--dry-run']);
+
+  assert.equal(result.status, 2, result.stderr || result.stdout);
+  assert.match(result.stderr, /core.*bundle|bundle.*core/i);
+  assert.equal(await exists(path.join(target, '.vibetether')), false);
+});
+
 test('standard dry-run auto-selects the Web catalog and exposes only signal-matched specialists', async () => {
   const target = await project('web-bundle-dry-run');
   await writeFile(
@@ -295,4 +304,7 @@ test('standard dry-run auto-selects the Web catalog and exposes only signal-matc
   assert.match(result.stdout, /\.vibetether\/providers\/catalog\/vercel-agent-skills-f8a72b9\/vercel-react-best-practices/);
   assert.match(result.stdout, /\.agents\/skills\/vercel-react-best-practices/);
   assert.doesNotMatch(result.stdout, /\.agents\/skills\/deploy-to-vercel/);
+  assert.match(result.stdout, /generated capability board/i);
+  assert.match(result.stdout, /generated provider lock/i);
+  assert.ok(result.stdout.length < 50_000, `dry-run output is too large: ${result.stdout.length} bytes`);
 });

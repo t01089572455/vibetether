@@ -303,6 +303,13 @@ test('a competing router can be cataloged but cannot be automatically exposed', 
   assert.throws(() => buildRoutingDocument(registry, 'standard'), /competing router.*exposed/i);
 });
 
+test('every provider capability must resolve to a declared board contract', async () => {
+  const registry = structuredClone(await loadProviderRegistry());
+  registry.sources[0].skills[0].capabilities = ['missing-capability-contract'];
+
+  assert.throws(() => buildRoutingDocument(registry, 'standard'), /unknown capability.*missing-capability-contract/i);
+});
+
 test('equal-priority automatic primary routes fail closed', async () => {
   const registry = structuredClone(await loadProviderRegistry());
   const primary = registry.routes.find(

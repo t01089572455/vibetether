@@ -117,6 +117,7 @@ export function resolveExposurePlan(registry, profileName, options = {}) {
 export function validateProviderRegistry(registry) {
   const ids = new Set();
   const exposedNames = new Set();
+  const capabilityIds = new Set((registry.capability_catalog ?? []).map((capability) => capability.id));
   for (const source of registry.sources ?? []) {
     if (registry.schema_version >= 2) {
       if (!['complete', 'selected'].includes(source.catalog_mode) || !source.skill_root) {
@@ -143,6 +144,11 @@ export function validateProviderRegistry(registry) {
           if (!Array.isArray(skill[field])) {
             throw new Error(`Provider classification for ${skill.id} is missing ${field}`);
           }
+        }
+      }
+      for (const capability of skill.capabilities ?? []) {
+        if (!capabilityIds.has(capability)) {
+          throw new Error(`Provider ${skill.id} references unknown capability ${capability}`);
         }
       }
       if (

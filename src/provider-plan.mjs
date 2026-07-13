@@ -52,6 +52,12 @@ export function createProviderLock({
         ownership: value.ownership,
       };
     }
+    const previous = (existingLock?.exposures ?? existingLock?.skills ?? []).find(
+      (skill) => skill.id === provider.id && skill.fingerprint === provider.fingerprint,
+    );
+    for (const [harness, installation] of Object.entries(previous?.installations ?? {})) {
+      if (!skillInstallations[harness]) skillInstallations[harness] = { ...installation };
+    }
     return {
       id: provider.id,
       install_name: provider.install_name,

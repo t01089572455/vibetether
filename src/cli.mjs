@@ -84,6 +84,9 @@ function parseInit(args) {
   const invalidBundle = options.bundles.find((bundle) => !['web', 'production'].includes(bundle));
   if (invalidBundle) throw new CliError(`Invalid --bundle value: ${invalidBundle}`);
   options.bundles = [...new Set(options.bundles)];
+  if (options.profile === 'core' && options.bundles.length > 0) {
+    throw new CliError('The core profile cannot be combined with --bundle because core is provider-free.');
+  }
   return options;
 }
 
