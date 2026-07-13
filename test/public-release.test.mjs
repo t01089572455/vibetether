@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -18,10 +19,54 @@ test('README gives exact install, bootstrap, routing, health, and uninstall comm
   assert.match(readme, /vibetether doctor/);
   assert.match(readme, /vibetether capabilities/);
   assert.match(readme, /vibetether uninstall --dry-run/);
-  assert.match(readme, /17 complete.*Skill/i);
+  assert.match(readme, /53 complete.*Skill/i);
+  assert.match(readme, /21.*exposed.*Skill/i);
+  assert.match(readme, /--bundle web/);
+  assert.match(readme, /--bundle production/);
+  assert.match(readme, /--no-auto-bundles/);
+  assert.match(readme, /re-run.*init|run.*init again/i);
   assert.match(readme, /exact commit/i);
   assert.match(readme, /advisory/i);
   assert.doesNotMatch(readme, /<github-owner>|your-username|OWNER\/vibetether/i);
+});
+
+test('README is a complete scenario-led product and operations guide', async () => {
+  const readme = await text('README.md');
+  for (const heading of [
+    'Quick start',
+    'How automatic routing works',
+    'Profiles and bundles',
+    'When should I use what?',
+    'Walkthroughs',
+    'Catalog vs exposure',
+    'Codex and Claude',
+    'Upgrade and repair',
+    'Troubleshooting',
+    'Provider provenance and licensing',
+    'Personal acceptance tour',
+  ]) {
+    assert.match(readme, new RegExp(`## ${heading}`, 'i'), `README is missing ${heading}`);
+  }
+  for (const scenario of [
+    'vague-project',
+    'unfamiliar-codebase',
+    'huge-effort',
+    'prototype-choice',
+    'bug-diagnosis',
+    'ui-direction',
+    'web-implementation',
+    'compaction-handoff',
+    'triage-qa',
+    'production-migration',
+    'completion',
+  ]) assert.match(readme, new RegExp(scenario));
+  for (const source of ['mattpocock/skills', 'obra/superpowers', 'andrej-karpathy-skills', 'vercel-labs/agent-skills', 'addyosmani/agent-skills']) {
+    assert.match(readme, new RegExp(source.replace('/', '\\/'), 'i'));
+  }
+  assert.match(readme, /full-text/);
+  assert.match(readme, /readme-declaration/);
+  assert.match(readme, /catalog-only/i);
+  assert.match(readme, /competing router/i);
 });
 
 test('README explains support, architecture, UI control, and preview limitations without overclaiming', async () => {
@@ -60,9 +105,22 @@ test('third-party notices identify every curated source and license boundary', a
   assert.match(notices, /mattpocock\/skills/i);
   assert.match(notices, /obra\/superpowers/i);
   assert.match(notices, /anthropics\/skills/i);
+  assert.match(notices, /andrej-karpathy-skills/i);
+  assert.match(notices, /vercel-labs\/agent-skills/i);
+  assert.match(notices, /addyosmani\/agent-skills/i);
+  assert.match(notices, /readme-declaration/i);
   assert.match(notices, /MIT/);
   assert.match(notices, /Apache-2\.0/);
   assert.match(notices, /providers\.lock\.yaml/);
+});
+
+test('the documented personal acceptance tour runs without network access', () => {
+  const result = spawnSync(process.execPath, [path.join(root, 'scripts', 'manual-acceptance-tour.mjs')], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /acceptance tour passed/i);
 });
 
 test('CI verifies the release on Windows and Ubuntu with supported Node versions', async () => {

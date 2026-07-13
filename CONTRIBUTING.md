@@ -19,6 +19,7 @@ Use Node.js 20 or newer:
 
 ```sh
 npm ci
+npm run acceptance:tour
 npm run check
 ```
 
@@ -28,12 +29,19 @@ Before opening a pull request, run:
 
 ```sh
 npm run check
+npm run acceptance:tour
 npm pack --dry-run
 ```
 
-## Provider bundles and candidates
+## Provider catalogs, exposures, and bundles
 
-A curated provider proposal must identify its capabilities, lifecycle phases, workflow role, supported page types when applicable, source repository, exact commit, complete Skill fingerprint, license path, agent compatibility, evaluation evidence, trigger conflicts, and safe fallback. Add it to a profile only after fetch, fingerprint-mismatch, license, idempotence, doctor, and managed-only uninstall tests pass.
+A curated provider proposal must identify its capabilities, lifecycle phases, workflow role, invocation policy, catalog status, exposure policy, source repository, exact commit, complete Skill fingerprint, license-evidence mode, agent compatibility, evaluation evidence, trigger conflicts, required outputs, exit evidence, and safe fallback.
+
+For a complete catalog, run the deterministic source audit and prove that every upstream Skill directory is declared. Keep catalog storage separate from Codex and Claude discovery. A catalog-only Skill must never become exposed merely because it was downloaded.
+
+Use `full-text` only when a pinned full license file is available and verified. Use `readme-declaration` only for the explicitly supported declaration boundary: pin the README hash and exact declaration, emit a warning, avoid synthetic license text, and test changed-declaration failure before project writes.
+
+Add a provider to a profile or bundle only after fetch, inventory, fingerprint-mismatch, license, route-collision, idempotence, doctor, rollback, and managed-only uninstall tests pass. Update the README scenario table, provider counts, notices, and `registry/scenarios.json` in the same change.
 
 Do not enable a provider because it is popular. Discovery-only candidates stay inert until the required metadata and evaluation are complete. Runtime routing must never fetch or install a provider.
 

@@ -27,6 +27,7 @@
     "test": "node --test",
     "eval": "node evals/run-static-evals.mjs",
     "audit:provider": "node scripts/audit-provider-source.mjs",
+    "acceptance:tour": "node scripts/manual-acceptance-tour.mjs",
     "check": "npm test && npm run eval && node skills/vibe-tether/scripts/validate-project.mjs --self"
   },
   "engines": {
