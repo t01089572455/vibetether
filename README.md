@@ -473,7 +473,7 @@ npx --yes github:t01089572455/vibetether init --project ./vibetether-smoke --age
 
 Replace `--dry-run` with VibeTether's trailing `--yes`, then run `doctor` and `capabilities`, inspect the board and lock, re-run the same `init`, and finish with `uninstall --dry-run`. Standard and bundle tours fetch pinned upstream repositories.
 
-### Community basis, development, and license
+## Community basis, development, and license
 
 VibeTether is an original control kernel informed by [Superpowers](https://github.com/obra/superpowers), [Matt Pocock's Skills](https://github.com/mattpocock/skills), [GitHub Spec Kit](https://github.com/github/spec-kit), [OpenSpec](https://github.com/Fission-AI/OpenSpec), [BMAD Method](https://github.com/bmad-code-org/BMAD-METHOD), [Anthropic Skills](https://github.com/anthropics/skills), Vercel's agent Skills, Addy Osmani's engineering Skills, and Karpathy-style guidance. Popularity helped discovery, not validation: every cataloged Skill is classified by role, invocation policy, exposure, conflicts, fallback, outputs, and exit evidence. No upstream provider becomes project authority.
 
