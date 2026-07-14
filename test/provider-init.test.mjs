@@ -592,7 +592,7 @@ test('bootstrapOnly allows missing optional providers but rejects required missi
     await t.test(`required provider ${state}`, async () => {
       const registryValue = completeRegistry(source);
       registryValue.routes[0].required = true;
-      registryValue.routes[0].when_any = ['goal-unclear'];
+      registryValue.routes[0].when_any = [];
       const target = await project(`bootstrap-authority-required-${state}`);
       await initialize(options(target, { agent: 'codex' }), {
         loadRegistry: async () => registryValue,
@@ -618,7 +618,7 @@ test('bootstrapOnly allows missing optional providers but rejects required missi
             throw new Error('bootstrapOnly must not stage');
           },
         }),
-        /bootstrap authority.*required.*(cannot be verified|fingerprint)|bootstrap authority.*exposure.*(cannot be verified|fingerprint)/i,
+        /bootstrap authority.*required active exposure.*(cannot be verified|fingerprint)/i,
       );
 
       assert.deepEqual(await snapshot(target), before);

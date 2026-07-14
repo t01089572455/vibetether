@@ -238,7 +238,7 @@ export function buildRoutingDocument(registry, profileName) {
 
 function routeMatches(route, signals) {
   if (route.when_all?.some((signal) => !signals.has(signal))) return false;
-  if (route.when_any && !route.when_any.some((signal) => signals.has(signal))) return false;
+  if (route.when_any?.length > 0 && !route.when_any.some((signal) => signals.has(signal))) return false;
   return true;
 }
 

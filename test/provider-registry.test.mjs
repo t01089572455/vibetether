@@ -3,12 +3,38 @@ import test from 'node:test';
 import {
   buildRoutingDocument,
   loadProviderRegistry,
+  matchingRoutes,
   resolveExposurePlan,
   resolveProfileProviders,
   resolveRoute,
 } from '../src/provider-registry.mjs';
 import { createCapabilityBoard } from '../src/provider-plan.mjs';
 import { resolveBoardRoute } from '../src/capabilities.mjs';
+
+test('route matching treats omitted and empty when_any as unconditional', () => {
+  const common = {
+    phase: 'DISCOVER',
+    capability: 'requirements-clarification',
+  };
+  const routing = {
+    routes: [
+      { ...common, id: 'signal-hit', priority: 5, when_any: ['goal-unclear'] },
+      { ...common, id: 'omitted-when-any', priority: 4 },
+      { ...common, id: 'empty-when-any', priority: 3, when_any: [] },
+      { ...common, id: 'empty-when-all', priority: 2, when_all: [] },
+      { ...common, id: 'signal-miss', priority: 1, when_any: ['security-sensitive'] },
+    ],
+  };
+
+  assert.deepEqual(
+    matchingRoutes(routing, {
+      phase: 'DISCOVER',
+      capability: 'requirements-clarification',
+      signals: ['goal-unclear'],
+    }).map((route) => route.id),
+    ['signal-hit', 'omitted-when-any', 'empty-when-any', 'empty-when-all'],
+  );
+});
 
 test('provider registry pins complete auditable upstream skill sources', async () => {
   const registry = await loadProviderRegistry();
