@@ -120,7 +120,8 @@ function proposedIntent({ discovery, prior, model }) {
 }
 
 function isConfirmedIntent(source) {
-  return /^Status: confirmed$/m.test(source ?? '');
+  const normalized = String(source ?? '').replaceAll('\r\n', '\n');
+  return normalized.startsWith('# VibeTether Intent Contract\n\nStatus: confirmed\n');
 }
 
 function confirmationSummary(priorSource, proposal, preview) {

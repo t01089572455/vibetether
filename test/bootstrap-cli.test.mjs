@@ -504,6 +504,27 @@ test('bootstrap yes rejects unresolved legacy direction even when goal and succe
   assert.equal(stageCounter.calls, 0);
 });
 
+test('bootstrap yes ignores incidental confirmed text under an unresolved legacy header', async () => {
+  const target = await project('bootstrap-unresolved-incidental-confirmed');
+  await main(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']);
+  const intentPath = path.join(target, '.vibetether', 'intent.md');
+  const unresolved = `${legacyUnresolvedIntent(
+    'Keep unresolved header authority',
+    'Incidental body text cannot confirm direction',
+  )}\nStatus: confirmed\n`;
+  await writeFile(intentPath, unresolved, 'utf8');
+  const before = await snapshot(target);
+  const stageCounter = { calls: 0 };
+
+  await assert.rejects(
+    main(['bootstrap', '--project', target, '--yes'], runtime(null, stageCounter)),
+    /cannot be fabricated|explicit.*--goal.*--success-evidence|unattended.*requires/i,
+  );
+
+  assert.deepEqual(await snapshot(target), before);
+  assert.equal(stageCounter.calls, 0);
+});
+
 test('bootstrap yes rejects partial or optional-only changes to confirmed direction', async () => {
   for (const [name, extra] of [
     ['partial-goal', ['--goal', 'Changed goal without success evidence']],
@@ -562,6 +583,26 @@ test('bootstrap yes reuses confirmed direction when the explicit required pair i
   const result = await main([
     'bootstrap', '--project', target, '--yes', '--goal', goal, '--success-evidence', evidence,
   ], runtime(null, stageCounter));
+
+  assert.match(result, /bootstrap/i);
+  assert.deepEqual(await snapshot(target), before);
+  assert.equal(stageCounter.calls, 0);
+});
+
+test('bootstrap yes recognizes and byte-preserves a confirmed CRLF preamble', async () => {
+  const target = await project('bootstrap-confirmed-crlf-preamble');
+  await main([
+    'init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes',
+    '--goal', 'Preserve the CRLF confirmed contract',
+    '--success-evidence', 'Unattended bootstrap reuses exact bytes',
+  ]);
+  const intentPath = path.join(target, '.vibetether', 'intent.md');
+  const crlf = (await readFile(intentPath, 'utf8')).replaceAll('\n', '\r\n');
+  await writeFile(intentPath, crlf, 'utf8');
+  const before = await snapshot(target);
+  const stageCounter = { calls: 0 };
+
+  const result = await main(['bootstrap', '--project', target, '--yes'], runtime(null, stageCounter));
 
   assert.match(result, /bootstrap/i);
   assert.deepEqual(await snapshot(target), before);
@@ -813,6 +854,38 @@ test('interactive bootstrap canonicalizes populated unresolved direction after p
   const applied = parseIntentContract(appliedSource);
   assert.equal(applied.goal, goal);
   assert.equal(applied.successEvidence, evidence);
+  assert.equal(stageCounter.calls, 0);
+});
+
+test('interactive bootstrap treats incidental confirmed body text as unresolved until confirmation', async () => {
+  const target = await project('bootstrap-unresolved-incidental-interactive');
+  await main(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']);
+  const intentPath = path.join(target, '.vibetether', 'intent.md');
+  const goal = 'Resolve only the canonical header status';
+  const evidence = 'Interactive prior and proposal review occurs first';
+  const unresolved = `${legacyUnresolvedIntent(goal, evidence)}\nStatus: confirmed\n`;
+  await writeFile(intentPath, unresolved, 'utf8');
+  const before = await snapshot(target);
+  const promptAdapter = prompts();
+  promptAdapter.confirm = async function confirm(summary) {
+    this.confirmations.push(summary);
+    assert.deepEqual(await snapshot(target), before);
+    return true;
+  };
+  const stageCounter = { calls: 0 };
+
+  await main(['bootstrap', '--project', target], runtime(promptAdapter, stageCounter));
+
+  const summary = promptAdapter.confirmations[0];
+  const priorIndex = summary.indexOf('Prior Intent Contract:');
+  const proposalIndex = summary.indexOf('Proposed Intent Contract:');
+  assert.ok(priorIndex >= 0 && proposalIndex > priorIndex);
+  assert.match(summary.slice(priorIndex, proposalIndex), /^Status: unresolved$/m);
+  assert.match(summary.slice(proposalIndex), /^Status: confirmed$/m);
+  const applied = await readFile(intentPath, 'utf8');
+  assert.match(applied, /^# VibeTether Intent Contract\n\nStatus: confirmed\n/);
+  assert.notEqual(applied, unresolved);
+  assert.equal(parseIntentContract(applied).goal, goal);
   assert.equal(stageCounter.calls, 0);
 });
 
