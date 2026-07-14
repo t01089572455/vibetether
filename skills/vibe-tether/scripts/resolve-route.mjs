@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 
-import { access, readFile, realpath } from 'node:fs/promises';
+import { access, lstat, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
+import {
+  experienceIndexRouteFromManifest,
+  matchExperience,
+  parseExperienceIndex,
+} from './experience-index.mjs';
 
 function fail(message, code = 2) {
   console.error(`ERROR ${message}`);
@@ -38,6 +43,25 @@ function matches(route, signals) {
 function available(route, harness) {
   const harnesses = route.recommendation?.available_in ?? [];
   return harness ? harnesses.includes(harness) : harnesses.length > 0;
+}
+
+async function readSafeProjectFile(root, relativePath, label) {
+  if (typeof relativePath !== 'string' || relativePath.length === 0) {
+    throw new Error(`${label} path must be a non-empty project-relative string`);
+  }
+  const target = path.resolve(root, relativePath);
+  const relative = path.relative(root, target);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`${label} path escapes the project: ${relativePath}`);
+  }
+  let current = root;
+  for (const part of relative.split(path.sep).filter(Boolean)) {
+    current = path.join(current, part);
+    const metadata = await lstat(current);
+    if (metadata.isSymbolicLink()) throw new Error(`${label} path contains a symbolic link: ${relativePath}`);
+    if (current === target && !metadata.isFile()) throw new Error(`${label} must be a regular file: ${relativePath}`);
+  }
+  return readFile(target, 'utf8');
 }
 
 async function refreshAvailability(board, root) {
@@ -134,7 +158,21 @@ try {
     throw new Error(`Cannot read the zero-dependency capability board at ${boardPath}: ${error.message}. Run VibeTether init to upgrade it.`);
   }
   await refreshAvailability(board, root);
-  console.log(JSON.stringify(resolve(board, options), null, 2));
+  let experience;
+  try {
+    const manifestSource = await readSafeProjectFile(root, '.vibetether/project.yaml', 'VibeTether manifest');
+    const experiencePath = experienceIndexRouteFromManifest(manifestSource);
+    const experienceSource = await readSafeProjectFile(root, experiencePath, 'Experience index');
+    experience = parseExperienceIndex(experienceSource);
+  } catch (error) {
+    throw new Error('Cannot read experience index because it is missing, unsafe, or structurally invalid. Run vibetether doctor for details.');
+  }
+  const resolution = resolve(board, options);
+  const applicableExperience = await matchExperience(experience, {
+    root,
+    signals: options.signals,
+  });
+  console.log(JSON.stringify({ ...resolution, applicable_experience: applicableExperience }, null, 2));
 } catch (error) {
   fail(error.message);
 }

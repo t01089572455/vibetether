@@ -2,6 +2,10 @@ import { access, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import YAML from 'yaml';
 import { CliError } from './errors.mjs';
+import { matchExperience, parseExperienceIndex } from './experience-index.mjs';
+import { rejectSymlinkPath } from './files.mjs';
+
+const DEFAULT_EXPERIENCE_INDEX = '.vibetether/experience-index.yaml';
 
 function inside(root, relativePath, label) {
   const target = path.resolve(root, relativePath);
@@ -184,6 +188,29 @@ export async function loadCapabilityBoard(project) {
   return { root, board };
 }
 
+async function loadExperienceIndex(root, manifest) {
+  const route = manifest.experience_index === undefined
+    ? DEFAULT_EXPERIENCE_INDEX
+    : manifest.experience_index;
+  if (typeof route !== 'string' || route.length === 0) {
+    throw new CliError('Manifest experience_index must be a project-relative path. Run vibetether doctor for details.', 3);
+  }
+  try {
+    const target = inside(root, route, 'Experience index');
+    await rejectSymlinkPath(root, route);
+    return parseExperienceIndex(await readFile(target, 'utf8'));
+  } catch (error) {
+    throw new CliError('Cannot read experience index because it is missing, unsafe, or structurally invalid. Run vibetether doctor for details.', 3);
+  }
+}
+
+export async function loadCapabilityContext(project) {
+  const loaded = await loadCapabilityBoard(project);
+  const manifest = await parseYaml(path.join(loaded.root, '.vibetether', 'project.yaml'), 'VibeTether manifest');
+  const experience = await loadExperienceIndex(loaded.root, manifest);
+  return { ...loaded, manifest, experience };
+}
+
 function humanDashboard(root, board) {
   const lines = [
     `VibeTether capability dashboard - ${board.profile} profile (advisory routing)`,
@@ -234,7 +261,7 @@ function humanResolution(result) {
   const alternatives = result.alternatives?.length
     ? result.alternatives.map((alternative) => `${alternative.skill} (${alternative.available ? 'available' : 'unavailable'})`).join(', ')
     : 'none';
-  return [
+  const lines = [
     `VibeTether advisory route: ${result.phase} / ${result.capability}`,
     `Detected signals: ${(result.detected_signals ?? result.signals ?? []).join(', ') || 'none'}`,
     `Recommended: ${recommended}`,
@@ -246,17 +273,32 @@ function humanResolution(result) {
     `Required outputs: ${(result.required_outputs ?? result.expected_outputs).join(', ')}`,
     `Exit evidence: ${result.exit_evidence.join(' ')}`,
     `User confirmation required: ${result.confirmation_required ? `yes (${result.confirmation_gates.join(', ')})` : 'no route-level gate detected'}`,
-  ].join('\n') + '\n';
+    'Applicable experience:',
+  ];
+  if (!(result.applicable_experience ?? []).length) {
+    lines.push('  none');
+  } else {
+    for (const entry of result.applicable_experience) {
+      const label = entry.requires_revalidation
+        ? `${entry.status} / requires_revalidation`
+        : entry.status;
+      lines.push(`  ${entry.id} | ${label}`);
+      for (const artifact of entry.artifacts) lines.push(`    ${artifact}`);
+    }
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 export async function showCapabilities(options) {
-  const loaded = await loadCapabilityBoard(options.project);
-  const root = loaded.root;
-  const board = await refreshBoardAvailability(loaded.board, root);
   const queried = options.phase || options.capability;
   if (Boolean(options.phase) !== Boolean(options.capability)) {
     throw new CliError('--phase and --capability must be provided together.');
   }
+  const loaded = queried
+    ? await loadCapabilityContext(options.project)
+    : await loadCapabilityBoard(options.project);
+  const root = loaded.root;
+  const board = await refreshBoardAvailability(loaded.board, root);
   const result = queried
     ? resolveBoardRoute(board, {
         phase: options.phase,
@@ -265,6 +307,12 @@ export async function showCapabilities(options) {
         harness: options.agent,
       })
     : board;
+  if (queried) {
+    result.applicable_experience = await matchExperience(loaded.experience, {
+      root,
+      signals: options.signals,
+    });
+  }
   if (options.json) return `${JSON.stringify(result, null, 2)}\n`;
   return queried ? humanResolution(result) : humanDashboard(root, board);
 }

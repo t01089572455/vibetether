@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { refreshBoardAvailability, resolveBoardRoute } from '../src/capabilities.mjs';
+import YAML from 'yaml';
+import { refreshBoardAvailability, resolveBoardRoute, showCapabilities } from '../src/capabilities.mjs';
+import { serializeExperienceIndex } from '../src/experience-index.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cli = path.join(packageRoot, 'bin', 'vibetether.mjs');
@@ -164,4 +166,171 @@ test('capabilities requires phase and capability together', async () => {
   const result = runCli(['capabilities', '--project', target, '--phase', 'PLAN']);
   assert.equal(result.status, 2);
   assert.match(result.stderr, /phase.*capability.*together/i);
+});
+
+function publicationIndex(overrides = {}) {
+  return {
+    schema_version: 1,
+    entries: [{
+      id: 'github-publication',
+      use_when: ['github', 'publish', 'release'],
+      systems: ['git', 'windows'],
+      artifacts: ['docs/operations/github-publishing.md'],
+      verified_at: '2026-07-13',
+      revalidate_when: ['authentication-method-changes', 'remote-changes'],
+      status: 'proven',
+      ...overrides,
+    }],
+  };
+}
+
+async function initializedExperienceProject(name) {
+  const target = await mkdtemp(path.join(os.tmpdir(), `vibetether-capability-experience-${name}-`));
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
+  await mkdir(path.join(target, 'docs', 'operations'), { recursive: true });
+  await writeFile(path.join(target, 'docs', 'operations', 'github-publishing.md'), '# GitHub publishing\n', 'utf8');
+  await writeFile(
+    path.join(target, '.vibetether', 'experience-index.yaml'),
+    serializeExperienceIndex(publicationIndex()),
+    'utf8',
+  );
+  return target;
+}
+
+test('package route queries attach metadata-only applicable experience without changing dashboards', async () => {
+  const target = await initializedExperienceProject('query');
+  const result = JSON.parse(await showCapabilities({
+    project: target,
+    phase: 'SHIP',
+    capability: 'release-verification',
+    signals: ['publish', 'windows'],
+    agent: 'codex',
+    json: true,
+  }));
+
+  assert.equal(result.applicable_experience.length, 1);
+  assert.equal(result.applicable_experience[0].id, 'github-publication');
+  assert.deepEqual(result.applicable_experience[0].artifacts, ['docs/operations/github-publishing.md']);
+  assert.equal(JSON.stringify(result).includes('# GitHub publishing'), false);
+
+  const human = await showCapabilities({
+    project: target,
+    phase: 'SHIP',
+    capability: 'release-verification',
+    signals: ['publish', 'windows'],
+    agent: 'codex',
+    json: false,
+  });
+  assert.match(human, /github-publication/);
+  assert.match(human, /proven/);
+  assert.match(human, /docs\/operations\/github-publishing\.md/);
+  assert.doesNotMatch(human, /# GitHub publishing/);
+
+  const unrelated = JSON.parse(await showCapabilities({
+    project: target,
+    phase: 'SHIP',
+    capability: 'release-verification',
+    signals: ['database'],
+    agent: 'codex',
+    json: true,
+  }));
+  assert.deepEqual(unrelated.applicable_experience, []);
+
+  const dashboard = JSON.parse(await showCapabilities({ project: target, signals: [], json: true }));
+  assert.equal(Object.hasOwn(dashboard, 'applicable_experience'), false);
+});
+
+test('package route queries honor the manifest experience route and fall back only when absent', async () => {
+  const target = await initializedExperienceProject('manifest-route');
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
+  manifest.experience_index = 'docs/custom-experience.yaml';
+  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+  await writeFile(
+    path.join(target, 'docs', 'custom-experience.yaml'),
+    serializeExperienceIndex(publicationIndex({ id: 'custom-publication' })),
+    'utf8',
+  );
+
+  const custom = JSON.parse(await showCapabilities({
+    project: target,
+    phase: 'SHIP',
+    capability: 'release-verification',
+    signals: ['publish'],
+    agent: 'codex',
+    json: true,
+  }));
+  assert.deepEqual(custom.applicable_experience.map(({ id }) => id), ['custom-publication']);
+
+  delete manifest.experience_index;
+  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+  const fallback = JSON.parse(await showCapabilities({
+    project: target,
+    phase: 'SHIP',
+    capability: 'release-verification',
+    signals: ['publish'],
+    agent: 'codex',
+    json: true,
+  }));
+  assert.deepEqual(fallback.applicable_experience.map(({ id }) => id), ['github-publication']);
+});
+
+test('package route queries fail actionably for missing or malformed experience indexes while dashboards remain available', async () => {
+  const target = await initializedExperienceProject('invalid-index');
+  const indexPath = path.join(target, '.vibetether', 'experience-index.yaml');
+  await rm(indexPath);
+  await assert.rejects(
+    showCapabilities({
+      project: target,
+      phase: 'SHIP',
+      capability: 'release-verification',
+      signals: ['publish'],
+      agent: 'codex',
+      json: true,
+    }),
+    /experience index[\s\S]*vibetether doctor/i,
+  );
+  assert.match(await showCapabilities({ project: target, signals: [], json: false }), /capability dashboard/i);
+
+  await writeFile(indexPath, 'schema_version: 1\nentries: []\nnotes: hidden\n', 'utf8');
+  await assert.rejects(
+    showCapabilities({
+      project: target,
+      phase: 'SHIP',
+      capability: 'release-verification',
+      signals: ['publish'],
+      agent: 'codex',
+      json: true,
+    }),
+    /experience index[\s\S]*vibetether doctor/i,
+  );
+});
+
+test('package route queries refuse a symlinked experience-index route', async (context) => {
+  const target = await initializedExperienceProject('symlink-index');
+  const external = path.join(await mkdtemp(path.join(os.tmpdir(), 'vibetether-external-index-')), 'index.yaml');
+  await writeFile(external, serializeExperienceIndex(publicationIndex()), 'utf8');
+  const indexPath = path.join(target, '.vibetether', 'experience-index.yaml');
+  await rm(indexPath);
+  try {
+    await symlink(external, indexPath, 'file');
+  } catch (error) {
+    if (process.platform === 'win32' && ['EACCES', 'EPERM'].includes(error.code)) {
+      context.skip(`Windows denied symlink creation: ${error.code}`);
+      return;
+    }
+    throw error;
+  }
+
+  await assert.rejects(
+    showCapabilities({
+      project: target,
+      phase: 'SHIP',
+      capability: 'release-verification',
+      signals: ['publish'],
+      agent: 'codex',
+      json: true,
+    }),
+    /symbolic-link|symlink|experience index[\s\S]*doctor/i,
+  );
 });

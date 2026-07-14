@@ -6,6 +6,7 @@ import {
   isSensitiveArtifactPath,
 } from './artifact-safety.mjs';
 import { rejectSymlinkPath, resolveInside } from './files.mjs';
+import { matchExperience as matchInstalledExperience } from '../skills/vibe-tether/scripts/experience-index.mjs';
 
 const EMPTY_ENTRIES = Object.freeze([]);
 export const EMPTY_EXPERIENCE_INDEX = Object.freeze({ schema_version: 1, entries: EMPTY_ENTRIES });
@@ -124,7 +125,7 @@ function assertSchema(value) {
       }
     }
     if (containsSecretValue(JSON.stringify({ ...entry, artifacts: [] }))) {
-      throw new Error(`Experience entry ${entry.id ?? 'unknown'} contains secret-bearing metadata`);
+      throw new Error('Experience entry contains secret-bearing metadata');
     }
     if (typeof entry.id !== 'string' || normalize(entry.id) !== entry.id || !SIGNAL.test(entry.id)) {
       throw new Error(`Experience entry has invalid normalized id: ${entry.id ?? 'missing'}`);
@@ -215,52 +216,5 @@ export async function validateExperienceIndex(value, root) {
 
 export async function matchExperience(value, { root, signals = [] }) {
   assertSchema(value);
-  if (!Array.isArray(signals) || signals.some((signal) => typeof signal !== 'string')) {
-    throw new Error('Experience matching signals must be an array of strings');
-  }
-  const active = new Set(signals.map(normalize).filter((signal) => SIGNAL.test(signal)));
-  const matches = [];
-  for (const entry of value.entries) {
-    if (!['proven', 'provisional'].includes(entry.status)) continue;
-    const matchCount = [...new Set([...entry.use_when, ...(entry.systems ?? [])])]
-      .filter((signal) => active.has(signal)).length;
-    if (matchCount === 0) continue;
-
-    let artifactsPresent = true;
-    for (const artifact of entry.artifacts) {
-      if (isSensitiveArtifactPath(artifact) || !isSafeProjectRelativeArtifactPath(artifact)) {
-        artifactsPresent = false;
-        break;
-      }
-      try {
-        if (!(await validateArtifact(root, artifact, { allowMissing: true }))) {
-          artifactsPresent = false;
-          break;
-        }
-      } catch {
-        artifactsPresent = false;
-        break;
-      }
-    }
-    if (!artifactsPresent) continue;
-
-    const revalidation = entry.revalidate_when.filter((signal) => active.has(signal));
-    matches.push({
-      id: entry.id,
-      status: entry.status,
-      match_count: matchCount,
-      artifacts: [...entry.artifacts],
-      verified_at: entry.verified_at,
-      requires_revalidation: entry.status === 'provisional' || revalidation.length > 0,
-      revalidation_reasons: [
-        ...(entry.status === 'provisional' ? ['provisional'] : []),
-        ...revalidation,
-      ],
-    });
-  }
-  return matches.sort(
-    (a, b) => b.match_count - a.match_count
-      || b.verified_at.localeCompare(a.verified_at)
-      || a.id.localeCompare(b.id),
-  );
+  return matchInstalledExperience(value, { root, signals });
 }

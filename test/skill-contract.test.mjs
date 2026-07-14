@@ -126,6 +126,19 @@ test('the installed validator can validate its own public Skill', () => {
   assert.match(result.stdout, /VibeTether Skill: valid/);
 });
 
+test('the public Skill ships the zero-dependency experience resolver substrate', async () => {
+  const resolver = await readFile(path.join(skillDir, 'scripts', 'resolve-route.mjs'), 'utf8');
+  const experience = await readFile(path.join(skillDir, 'scripts', 'experience-index.mjs'), 'utf8');
+  const safety = await readFile(path.join(skillDir, 'scripts', 'artifact-safety.mjs'), 'utf8');
+
+  assert.match(resolver, /experience-index\.mjs/);
+  assert.match(resolver, /applicable_experience/);
+  assert.match(experience, /parseExperienceIndex/);
+  assert.match(experience, /matchExperience/);
+  assert.match(safety, /isSensitiveArtifactPath/);
+  assert.doesNotMatch(`${resolver}\n${experience}\n${safety}`, /from ['"]yaml['"]/);
+});
+
 test('the installed validator performs its own recursive leakage scan', async () => {
   const script = await readFile(path.join(skillDir, 'scripts', 'validate-project.mjs'), 'utf8');
   assert.match(script, /readdir/);
