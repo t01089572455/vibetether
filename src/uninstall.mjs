@@ -5,6 +5,7 @@ import YAML from 'yaml';
 import { ADAPTERS } from './adapters.mjs';
 import { CliError } from './errors.mjs';
 import { EMPTY_EXPERIENCE_INDEX, serializeExperienceIndex } from './experience-index.mjs';
+import { isVibeTetherOwnedExperienceIndex } from './manifest.mjs';
 import {
   inspectManagedBlock,
   readTextIfPresent,
@@ -256,7 +257,8 @@ export async function uninstall(options) {
       if (manifest && typeof manifest === 'object' && !Array.isArray(manifest)) {
         let removedCanonicalEmptyExperienceIndex = false;
         const canonicalEmptyIndex = serializeExperienceIndex(EMPTY_EXPERIENCE_INDEX);
-        if (manifest.experience_index === '.vibetether/experience-index.yaml') {
+        if (manifest.experience_index === '.vibetether/experience-index.yaml'
+          && isVibeTetherOwnedExperienceIndex(manifest.experience_index_ownership)) {
           await rejectSymlinkPath(root, manifest.experience_index);
           const experiencePath = resolveInside(root, manifest.experience_index);
           const experienceOriginal = await readTextIfPresent(experiencePath);
@@ -269,6 +271,7 @@ export async function uninstall(options) {
               removeFile: true,
             });
             delete manifest.experience_index;
+            delete manifest.experience_index_ownership;
             removedCanonicalEmptyExperienceIndex = true;
           }
         }

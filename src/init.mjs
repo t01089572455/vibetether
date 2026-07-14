@@ -29,7 +29,9 @@ import {
   createInitialExperienceFeedback,
   DEFAULT_INTENT,
   enableHarnesses,
+  EXPERIENCE_INDEX_OWNERSHIP,
   EXPERIENCE_INDEX_PATH,
+  isVibeTetherOwnedExperienceIndex,
   parseManifest,
   refreshCanonicalOperationsSource,
   serializeManifest,
@@ -340,13 +342,6 @@ export async function initialize(options, dependencies = {}) {
     signals: routingSignals,
   });
   providerSources = resolveProfileSources(registry, options.profile, manifest.bundles);
-  textPlans.push({
-    relativePath: '.vibetether/project.yaml',
-    target: manifestTarget,
-    original: manifestOriginal,
-    content: serializeManifest(manifest),
-  });
-
   const experienceTarget = resolveInside(root, EXPERIENCE_INDEX_PATH);
   const experienceOriginal = await readTextIfPresent(experienceTarget);
   if (experienceOriginal !== null) {
@@ -356,6 +351,17 @@ export async function initialize(options, dependencies = {}) {
       throw new CliError(`Experience index conflict in ${EXPERIENCE_INDEX_PATH}: ${error.message}`, 3);
     }
   }
+  if (experienceOriginal === null) {
+    manifest.experience_index_ownership = { ...EXPERIENCE_INDEX_OWNERSHIP };
+  } else if (!isVibeTetherOwnedExperienceIndex(manifest.experience_index_ownership)) {
+    delete manifest.experience_index_ownership;
+  }
+  textPlans.push({
+    relativePath: '.vibetether/project.yaml',
+    target: manifestTarget,
+    original: manifestOriginal,
+    content: serializeManifest(manifest),
+  });
   textPlans.push({
     relativePath: EXPERIENCE_INDEX_PATH,
     target: experienceTarget,

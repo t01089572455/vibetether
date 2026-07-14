@@ -1,4 +1,4 @@
-import { readFile, realpath, stat } from 'node:fs/promises';
+import { lstat, readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import YAML from 'yaml';
@@ -6,6 +6,7 @@ import { ADAPTERS, MANAGED_END, MANAGED_START } from './adapters.mjs';
 import { CliError } from './errors.mjs';
 import { managedBlockBody, rejectSymlinkPath } from './files.mjs';
 import { parseExperienceIndex, validateExperienceIndex } from './experience-index.mjs';
+import { isSafeProjectRelativeArtifactPath, isSensitiveArtifactPath } from './artifact-safety.mjs';
 import { skillFingerprint, sourceSkill } from './skill-install.mjs';
 import { assertCapabilityBoard } from '../skills/vibe-tether/scripts/capability-routing.mjs';
 
@@ -56,6 +57,20 @@ function normalizedArtifactPath(value) {
 function isBuiltInExperienceArtifact(artifact) {
   const normalized = normalizedArtifactPath(artifact);
   return normalized.startsWith('skills/vibe-tether/') || normalized.startsWith('evals/');
+}
+
+async function feedbackArtifactStatus(root, artifact) {
+  if (!isSafeProjectRelativeArtifactPath(artifact) || isSensitiveArtifactPath(artifact)) return 'unsafe';
+  const target = projectPath(root, artifact);
+  if (!target) return 'escape';
+  try {
+    await rejectSymlinkPath(root, artifact);
+    const metadata = await lstat(target);
+    return metadata.isFile() && !metadata.isSymbolicLink() ? 'ok' : 'unsafe';
+  } catch (error) {
+    if (error.code === 'ENOENT') return 'missing';
+    return 'unsafe';
+  }
 }
 
 async function validateExperienceFeedback(root, state, manifest, experienceIndex, issues) {
@@ -110,13 +125,15 @@ async function validateExperienceFeedback(root, state, manifest, experienceIndex
       issues.push(issue('invalid-experience-feedback', 'Experience artifact paths must be non-empty strings'));
       continue;
     }
-    const target = projectPath(root, artifact);
-    if (!target) {
-      issues.push(issue('experience-artifact-escape', `Experience artifact path escapes the project: ${artifact}`));
-    } else if (!(await exists(target))) {
-      issues.push(issue('missing-experience-artifact', `Missing experience artifact: ${artifact}`));
+    const artifactStatus = await feedbackArtifactStatus(root, artifact);
+    if (artifactStatus === 'escape') {
+      issues.push(issue('experience-artifact-escape', 'Experience artifact path must stay inside the project'));
+    } else if (artifactStatus === 'missing') {
+      issues.push(issue('missing-experience-artifact', 'Missing experience artifact'));
+    } else if (artifactStatus !== 'ok') {
+      issues.push(issue('unsafe-experience-artifact', 'Experience artifact must be a safe project-contained regular non-linked file'));
     }
-    if (/\.md$/i.test(artifact)) {
+    if (artifactStatus === 'ok' && /\.md$/i.test(artifact)) {
       const normalizedArtifact = portablePath(artifact).replace(/^\.\//, '');
       const declaredSources = [manifest.goal_source, manifest.intent_contract, ...flattenSources(manifest.sources)]
         .filter(Boolean)
@@ -131,7 +148,10 @@ async function validateExperienceFeedback(root, state, manifest, experienceIndex
         ));
       }
     }
-    if (requiresIndex && !isBuiltInExperienceArtifact(artifact) && !indexedArtifacts.has(normalizedArtifactPath(artifact))) {
+    if (artifactStatus === 'ok'
+      && requiresIndex
+      && !isBuiltInExperienceArtifact(artifact)
+      && !indexedArtifacts.has(normalizedArtifactPath(artifact))) {
       issues.push(issue(
         'unindexed-experience-artifact',
         `Reusable experience artifact is not indexed: ${artifact}`,

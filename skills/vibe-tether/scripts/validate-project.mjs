@@ -6,6 +6,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { isSafeProjectRelativeArtifactPath, isSensitiveArtifactPath } from './artifact-safety.mjs';
 import { parseExperienceIndex } from './experience-index.mjs';
+import { parseCanonicalManifest } from './manifest.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const skillDir = path.resolve(scriptDir, '..');
@@ -94,84 +95,37 @@ async function validateSelf() {
   return errors;
 }
 
-function scalar(value) {
-  const trimmed = value.trim();
-  if (trimmed === 'true') return true;
-  if (trimmed === 'false') return false;
-  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
-  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
-    return trimmed.slice(1, -1);
-  }
-  return trimmed;
-}
-
-function topLevelScalar(source, key) {
-  const match = source.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'));
-  return match ? scalar(match[1]) : undefined;
-}
-
-function sectionLines(source, section) {
-  const lines = source.replace(/\r\n/g, '\n').split('\n');
-  const start = lines.findIndex((line) => line === `${section}:`);
-  if (start < 0) return [];
-  const result = [];
-  for (let index = start + 1; index < lines.length; index += 1) {
-    if (lines[index] && !/^\s/.test(lines[index])) break;
-    result.push(lines[index]);
-  }
-  return result;
-}
-
 function parseManifest(source) {
-  const sourceLines = sectionLines(source, 'sources');
-  const sources = sourceLines
-    .map((line) => line.match(/^\s+-\s+(.+)$/)?.[1])
-    .filter(Boolean)
-    .map(scalar);
+  return parseCanonicalManifest(source);
+}
 
-  const harnesses = {};
-  let currentHarness = null;
-  for (const line of sectionLines(source, 'harnesses')) {
-    const header = line.match(/^  ([a-zA-Z0-9_-]+):\s*$/);
-    if (header) {
-      currentHarness = header[1];
-      harnesses[currentHarness] = {};
-      continue;
-    }
-    const property = line.match(/^    ([a-zA-Z0-9_-]+):\s*(.+)$/);
-    if (currentHarness && property) harnesses[currentHarness][property[1]] = scalar(property[2]);
-  }
+function flattenSources(value) {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(flattenSources);
+  if (value && typeof value === 'object') return Object.values(value).flatMap(flattenSources);
+  return [];
+}
 
-  const checkpoint = {};
-  for (const line of sectionLines(source, 'checkpoint')) {
-    const property = line.match(/^  ([a-zA-Z0-9_-]+):\s*(.+)$/);
-    if (property) checkpoint[property[1]] = scalar(property[2]);
-  }
-
-  return {
-    schema_version: topLevelScalar(source, 'schema_version'),
-    project_id: topLevelScalar(source, 'project_id'),
-    goal_source: topLevelScalar(source, 'goal_source'),
-    intent_contract: topLevelScalar(source, 'intent_contract'),
-    capability_board: topLevelScalar(source, 'capability_board'),
-    provider_lock: topLevelScalar(source, 'provider_lock'),
-    experience_index: topLevelScalar(source, 'experience_index'),
-    sources,
-    harnesses,
-    checkpoint,
-  };
+function safeDiagnosticPath(value, fallback) {
+  return typeof value === 'string'
+    && isSafeProjectRelativeArtifactPath(value)
+    && !isSensitiveArtifactPath(value)
+    ? value
+    : fallback;
 }
 
 async function validateProject(projectRoot) {
   const errors = [];
   const manifestPath = path.join(projectRoot, '.vibetether', 'project.yaml');
-  if (!(await exists(manifestPath))) return [`Missing manifest: ${manifestPath}`];
+  const manifestStatus = await projectRegularFileStatus(projectRoot, '.vibetether/project.yaml');
+  if (manifestStatus === 'missing') return ['Missing manifest: .vibetether/project.yaml'];
+  if (manifestStatus !== 'ok') return ['Manifest must be a regular non-linked file'];
 
   let manifest;
   try {
     manifest = parseManifest(await readFile(manifestPath, 'utf8'));
   } catch (error) {
-    return [`Invalid manifest YAML: ${error.message}`];
+    return ['Invalid manifest YAML'];
   }
 
   if (manifest?.schema_version !== 1) errors.push('Manifest schema_version must be 1');
@@ -181,24 +135,31 @@ async function validateProject(projectRoot) {
   if (!manifest?.capability_board) errors.push('Manifest capability_board is required');
   if (!manifest?.provider_lock) errors.push('Manifest provider_lock is required');
   if (!manifest?.experience_index) errors.push('Manifest experience_index is required');
-  const declaredSources = [manifest?.goal_source, manifest?.intent_contract, ...manifest.sources].filter(Boolean);
+  const declaredSources = [
+    manifest?.goal_source,
+    manifest?.intent_contract,
+    ...flattenSources(manifest?.sources),
+  ].filter(Boolean);
   for (const source of [...new Set(declaredSources)]) {
-    const sourcePath = path.resolve(projectRoot, source);
-    const relative = path.relative(path.resolve(projectRoot), sourcePath);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      errors.push(`Source escapes project root: ${source}`);
-    } else if (!(await exists(sourcePath))) {
-      errors.push(`Missing declared source: ${source}`);
+    const sourceStatus = await projectRegularFileStatus(projectRoot, source);
+    if (sourceStatus === 'escape') {
+      errors.push('Declared source escapes project root');
+    } else if (sourceStatus === 'missing') {
+      errors.push(`Missing declared source: ${safeDiagnosticPath(source, 'redacted')}`);
+    } else if (sourceStatus !== 'ok') {
+      errors.push('Declared source must be a regular non-linked file');
     }
   }
 
   if (manifest.capability_board) {
     const boardPath = path.resolve(projectRoot, manifest.capability_board);
-    const relative = path.relative(path.resolve(projectRoot), boardPath);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      errors.push(`Capability board escapes project root: ${manifest.capability_board}`);
-    } else if (!(await exists(boardPath))) {
-      errors.push(`Missing capability board: ${manifest.capability_board}`);
+    const boardStatus = await projectRegularFileStatus(projectRoot, manifest.capability_board);
+    if (boardStatus === 'escape') {
+      errors.push('Capability board escapes project root');
+    } else if (boardStatus === 'missing') {
+      errors.push(`Missing capability board: ${safeDiagnosticPath(manifest.capability_board, 'redacted')}`);
+    } else if (boardStatus !== 'ok') {
+      errors.push('Capability board must be a regular non-linked file');
     } else {
       try {
         const board = JSON.parse(await readFile(boardPath, 'utf8'));
@@ -211,18 +172,19 @@ async function validateProject(projectRoot) {
         if (!Array.isArray(board.capabilities) || !Array.isArray(board.providers) || !Array.isArray(board.routes)) {
           errors.push('Capability board must declare capabilities, providers, and routes arrays');
         }
-      } catch (error) {
-        errors.push(`Invalid capability board: ${error.message}`);
+      } catch {
+        errors.push('Invalid capability board');
       }
     }
   }
   if (manifest.provider_lock) {
-    const lockPath = path.resolve(projectRoot, manifest.provider_lock);
-    const relative = path.relative(path.resolve(projectRoot), lockPath);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      errors.push(`Provider lock escapes project root: ${manifest.provider_lock}`);
-    } else if (!(await exists(lockPath))) {
-      errors.push(`Missing provider lock: ${manifest.provider_lock}`);
+    const lockStatus = await projectRegularFileStatus(projectRoot, manifest.provider_lock);
+    if (lockStatus === 'escape') {
+      errors.push('Provider lock escapes project root');
+    } else if (lockStatus === 'missing') {
+      errors.push(`Missing provider lock: ${safeDiagnosticPath(manifest.provider_lock, 'redacted')}`);
+    } else if (lockStatus !== 'ok') {
+      errors.push('Provider lock must be a regular non-linked file');
     }
   }
 
@@ -262,11 +224,16 @@ async function validateProject(projectRoot) {
 
   for (const harness of Object.values(manifest?.harnesses ?? {})) {
     if (!harness?.enabled || !harness?.instruction_file) continue;
-    const instructionPath = path.join(projectRoot, harness.instruction_file);
-    if (!(await exists(instructionPath))) {
-      errors.push(`Missing instruction file: ${harness.instruction_file}`);
+    const instructionStatus = await projectRegularFileStatus(projectRoot, harness.instruction_file);
+    if (instructionStatus === 'missing') {
+      errors.push(`Missing instruction file: ${safeDiagnosticPath(harness.instruction_file, 'redacted')}`);
       continue;
     }
+    if (instructionStatus !== 'ok') {
+      errors.push('Instruction file must be a regular non-linked file');
+      continue;
+    }
+    const instructionPath = path.resolve(projectRoot, harness.instruction_file);
     const instructions = await readFile(instructionPath, 'utf8');
     if (!instructions.includes(managedStart) || !instructions.includes(managedEnd)) {
       errors.push(`Missing VibeTether managed block: ${harness.instruction_file}`);
@@ -275,11 +242,13 @@ async function validateProject(projectRoot) {
 
   if (manifest.checkpoint?.path) {
     const checkpointPath = path.resolve(projectRoot, manifest.checkpoint.path);
-    const relative = path.relative(path.resolve(projectRoot), checkpointPath);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      errors.push(`Checkpoint escapes project root: ${manifest.checkpoint.path}`);
-    } else if (!(await exists(checkpointPath))) {
-      errors.push(`Missing checkpoint: ${manifest.checkpoint.path}`);
+    const checkpointStatus = await projectRegularFileStatus(projectRoot, manifest.checkpoint.path);
+    if (checkpointStatus === 'escape') {
+      errors.push('Checkpoint escapes project root');
+    } else if (checkpointStatus === 'missing') {
+      errors.push(`Missing checkpoint: ${safeDiagnosticPath(manifest.checkpoint.path, 'redacted')}`);
+    } else if (checkpointStatus !== 'ok') {
+      errors.push('Checkpoint must be a regular non-linked file');
     } else {
       const checkpointSource = await readFile(checkpointPath, 'utf8');
       for (const field of ['goal', 'phase', 'slice', 'last_reanchor', 'next_intended_action']) {

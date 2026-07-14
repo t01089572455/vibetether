@@ -90,24 +90,24 @@ test('a locked Skill reports actionable Windows guidance without removing manage
 test('rollback restores a removed canonical text artifact when a later write fails', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-uninstall-rollback-'));
   const index = path.join(root, '.vibetether', 'experience-index.yaml');
-  const instructions = path.join(root, 'AGENTS.md');
+  const manifest = path.join(root, '.vibetether', 'project.yaml');
   const originalIndex = 'schema_version: 1\nentries: []\n';
-  const originalInstructions = '# Before\nmanaged\n';
+  const originalManifest = 'schema_version: 1\nexperience_index: .vibetether/experience-index.yaml\nexperience_index_ownership:\n  owner: vibetether\n  fingerprint: canonical-empty-v1\n';
   await mkdir(path.dirname(index), { recursive: true });
   await writeFile(index, originalIndex, 'utf8');
-  await writeFile(instructions, originalInstructions, 'utf8');
+  await writeFile(manifest, originalManifest, 'utf8');
   const writeFailure = new Error('injected text write failure');
 
   await assert.rejects(
     applyUninstallPlans(
       [
         { target: index, original: originalIndex, content: '', removeFile: true },
-        { target: instructions, original: originalInstructions, content: '# Before\n', removeFile: false },
+        { target: manifest, original: originalManifest, content: 'schema_version: 1\n', removeFile: false },
       ],
       [],
       {
         writeAtomic: async (target, content) => {
-          if (target === instructions) throw writeFailure;
+          if (target === manifest) throw writeFailure;
           return writeAtomic(target, content);
         },
       },
@@ -116,5 +116,5 @@ test('rollback restores a removed canonical text artifact when a later write fai
   );
 
   assert.equal(await readFile(index, 'utf8'), originalIndex);
-  assert.equal(await readFile(instructions, 'utf8'), originalInstructions);
+  assert.equal(await readFile(manifest, 'utf8'), originalManifest);
 });

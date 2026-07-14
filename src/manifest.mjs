@@ -3,6 +3,10 @@ import { unresolvedIntent } from './bootstrap-model.mjs';
 
 export const EXPERIENCE_INDEX_PATH = '.vibetether/experience-index.yaml';
 export const OPERATIONS_SOURCE_PATH = 'docs/operations/';
+export const EXPERIENCE_INDEX_OWNERSHIP = Object.freeze({
+  owner: 'vibetether',
+  fingerprint: 'canonical-empty-v1',
+});
 
 function isMapping(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -94,6 +98,11 @@ export function createInitialExperienceFeedback() {
     reason: '',
     artifacts: [],
   };
+}
+
+export function isVibeTetherOwnedExperienceIndex(value) {
+  return value?.owner === EXPERIENCE_INDEX_OWNERSHIP.owner
+    && value?.fingerprint === EXPERIENCE_INDEX_OWNERSHIP.fingerprint;
 }
 
 export function createInitialCheckpoint(goalSource, recommendedProvider = 'vibe-tether') {

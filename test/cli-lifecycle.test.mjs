@@ -401,6 +401,36 @@ test('doctor and the installed validator reject a linked experience index author
   assert.match(validator.stderr, /experience index/i);
 });
 
+test('doctor rejects a linked built-in experience feedback artifact without exposing its target', async (context) => {
+  const target = await initializedProject('linked-built-in-feedback-artifact');
+  const artifact = 'skills/vibe-tether/proof.txt';
+  const artifactPath = path.join(target, artifact);
+  const secret = `github_pat_${'Q'.repeat(30)}`;
+  const external = path.join(await project('linked-built-in-feedback-external'), `${secret}.txt`);
+  await mkdir(path.dirname(artifactPath), { recursive: true });
+  await writeFile(external, 'outside project\n', 'utf8');
+  try {
+    await symlink(external, artifactPath, 'file');
+  } catch (error) {
+    if (process.platform === 'win32' && ['EACCES', 'EPERM'].includes(error.code)) {
+      context.skip('Symbolic links are not available to this Windows test process');
+      return;
+    }
+    throw error;
+  }
+  await setExperienceFeedback(target, {
+    trigger: 'first-proven-path',
+    disposition: 'captured',
+    reason: 'The verified path has a durable built-in proof artifact.',
+    artifacts: [artifact],
+  });
+
+  const report = doctorFailure(target);
+
+  assert.equal(report.issues.some((entry) => entry.code === 'unsafe-experience-artifact'), true);
+  assert.doesNotMatch(JSON.stringify(report.issues), new RegExp(secret));
+});
+
 test('doctor and the installed validator reject a project-directory experience artifact', async () => {
   const target = await initializedProject('directory-artifact');
   await writeFile(
@@ -500,6 +530,11 @@ test('uninstall removes only VibeTether-managed content and preserves the Intent
 
 test('uninstall removes an unchanged empty VibeTether experience index', async () => {
   const target = await initializedProject('uninstall-empty-index');
+  const before = YAML.parse(await readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'));
+  assert.deepEqual(before.experience_index_ownership, {
+    owner: 'vibetether',
+    fingerprint: 'canonical-empty-v1',
+  });
 
   const result = runCli(['uninstall', '--project', target, '--yes']);
 
@@ -507,6 +542,92 @@ test('uninstall removes an unchanged empty VibeTether experience index', async (
   assert.equal(await exists(path.join(target, '.vibetether', 'experience-index.yaml')), false);
   const manifest = YAML.parse(await readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'));
   assert.equal(Object.hasOwn(manifest, 'experience_index'), false);
+});
+
+test('uninstall preserves a canonical empty experience index that predated initialization', async () => {
+  const target = await project('uninstall-preexisting-empty-index');
+  const indexPath = path.join(target, '.vibetether', 'experience-index.yaml');
+  await mkdir(path.dirname(indexPath), { recursive: true });
+  const original = serializeExperienceIndex({ schema_version: 1, entries: [] });
+  await writeFile(indexPath, original, 'utf8');
+
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
+  const initializedManifest = YAML.parse(await readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'));
+  assert.equal(Object.hasOwn(initializedManifest, 'experience_index_ownership'), false);
+
+  const result = runCli(['uninstall', '--project', target, '--yes']);
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(await readFile(indexPath, 'utf8'), original);
+  const manifest = YAML.parse(await readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'));
+  assert.equal(manifest.experience_index, '.vibetether/experience-index.yaml');
+});
+
+test('uninstall preserves a VibeTether-owned index after it becomes malformed', async () => {
+  const target = await initializedProject('uninstall-malformed-owned-index');
+  const indexPath = path.join(target, '.vibetether', 'experience-index.yaml');
+  const malformed = 'schema_version: [unterminated\n';
+  await writeFile(indexPath, malformed, 'utf8');
+
+  const result = runCli(['uninstall', '--project', target, '--yes']);
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(await readFile(indexPath, 'utf8'), malformed);
+  const manifest = YAML.parse(await readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'));
+  assert.equal(manifest.experience_index, '.vibetether/experience-index.yaml');
+  assert.deepEqual(manifest.experience_index_ownership, {
+    owner: 'vibetether',
+    fingerprint: 'canonical-empty-v1',
+  });
+});
+
+test('installed validator rejects malformed manifests and linked authority files without following targets', async (context) => {
+  const malformedTarget = await initializedProject('installed-validator-malformed-manifest');
+  const malformedManifest = path.join(malformedTarget, '.vibetether', 'project.yaml');
+  const secret = `github_pat_${'R'.repeat(30)}`;
+  await writeFile(malformedManifest, `${await readFile(malformedManifest, 'utf8')}profile: [${secret}\n`, 'utf8');
+  const malformedValidator = path.join(malformedTarget, '.agents', 'skills', 'vibe-tether', 'scripts', 'validate-project.mjs');
+  const malformed = spawnSync(process.execPath, [malformedValidator, '--project', malformedTarget], {
+    cwd: malformedTarget,
+    encoding: 'utf8',
+  });
+  assert.equal(malformed.status, 1, malformed.stderr || malformed.stdout);
+  assert.match(malformed.stderr, /invalid manifest/i);
+  assert.doesNotMatch(malformed.stderr, new RegExp(secret));
+
+  const authorityCases = [
+    ['manifest', '.vibetether/project.yaml'],
+    ['capability board', '.vibetether/capabilities.yaml'],
+    ['provider lock', '.vibetether/providers.lock.yaml'],
+    ['checkpoint', '.vibetether/state/current.yaml'],
+    ['instruction', 'AGENTS.md'],
+  ];
+  for (const [label, relativePath] of authorityCases) {
+    const target = await initializedProject(`installed-validator-linked-${label.replaceAll(' ', '-')}`);
+    const authorityPath = path.join(target, ...relativePath.split('/'));
+    const original = await readFile(authorityPath, 'utf8');
+    const external = path.join(await project(`installed-validator-external-${label.replaceAll(' ', '-')}`), `${secret}-${label.replaceAll(' ', '-')}.txt`);
+    await writeFile(external, original, 'utf8');
+    await rm(authorityPath);
+    try {
+      await symlink(external, authorityPath, 'file');
+    } catch (error) {
+      if (process.platform === 'win32' && ['EACCES', 'EPERM'].includes(error.code)) {
+        context.skip('Symbolic links are not available to this Windows test process');
+        return;
+      }
+      throw error;
+    }
+
+    const installedValidator = path.join(target, '.agents', 'skills', 'vibe-tether', 'scripts', 'validate-project.mjs');
+    const validator = spawnSync(process.execPath, [installedValidator, '--project', target], {
+      cwd: target,
+      encoding: 'utf8',
+    });
+    assert.equal(validator.status, 1, `${label}: ${validator.stderr || validator.stdout}`);
+    assert.match(validator.stderr, new RegExp(`${label}.*regular non-linked file`, 'i'), label);
+    assert.doesNotMatch(validator.stderr, new RegExp(secret), label);
+  }
 });
 
 test('uninstall preserves a non-empty experience index and its manifest route', async () => {
