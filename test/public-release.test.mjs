@@ -117,6 +117,25 @@ test('README makes provider fetching and Agent discovery explicit for beginners'
   assert.match(readme, /catalog-only[\s\S]*outside host discovery/i);
 });
 
+test('README leads with one install-everything command before customization and documents Windows recovery', async () => {
+  const readme = await text('README.md');
+  const fastest = readme.search(/## Fastest setup: install everything/i);
+  const customize = readme.search(/## Customize the installation/i);
+  assert.notEqual(fastest, -1, 'README is missing the fastest install-everything entry');
+  assert.ok(customize > fastest, 'README must put the easiest path before customization');
+  assert.match(
+    readme,
+    /init --project \. --agent both --profile extended --bundle web --bundle production --yes/i,
+  );
+  assert.match(readme, /downloads and catalogs every curated source enabled by VibeTether/i);
+  assert.match(readme, /does not expose every upstream Skill/i);
+  assert.match(readme, /core[\s\S]*provider-free[\s\S]*extended/i);
+  assert.match(readme, /GIT_CONFIG_COUNT/);
+  assert.match(readme, /GIT_CONFIG_KEY_0=http\.sslBackend/);
+  assert.match(readme, /GIT_CONFIG_VALUE_0=openssl/);
+  assert.match(readme, /GIT_SSL_BACKEND[\s\S]*does not configure Git/i);
+});
+
 test('the public GitHub publishing runbook preserves the first proven path without credentials', async () => {
   const runbook = await text('docs/operations/github-publishing.md');
   assert.match(runbook, /first-proven-path/i);

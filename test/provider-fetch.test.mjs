@@ -211,3 +211,25 @@ test('retries only the Windows Schannel credential failure with the OpenSSL Git 
   assert.equal(calls[0].includes('http.sslBackend=openssl'), false);
   assert.equal(calls[1].includes('http.sslBackend=openssl'), true);
 });
+
+test('retries a Windows Schannel TLS handshake failure with the OpenSSL Git backend', () => {
+  const calls = [];
+  const execute = (_command, args) => {
+    calls.push(args);
+    if (calls.length === 1) {
+      return {
+        status: 128,
+        stdout: '',
+        stderr: "fatal: unable to access 'https://github.com/vercel-labs/agent-skills.git/': schannel: failed to receive handshake, SSL/TLS connection failed",
+      };
+    }
+    return { status: 0, stdout: 'ok\n', stderr: '' };
+  };
+
+  const result = runProviderGit('fixture', 'disabled-hooks', ['fetch', 'origin', 'abc'], execute);
+
+  assert.equal(result, 'ok');
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].includes('http.sslBackend=openssl'), false);
+  assert.equal(calls[1].includes('http.sslBackend=openssl'), true);
+});

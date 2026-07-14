@@ -12,7 +12,56 @@ Users do not need to memorize community Skill names. VibeTether checks whether t
 
 ## Quick start
 
-### 1. Install only the portable Skill
+If you want the simplest path, copy the first command below. The profile, bundle, portable-only, preview, and two-stage choices come afterward.
+
+## Fastest setup: install everything
+
+Run this from the project you want VibeTether to control:
+
+```sh
+npx --yes github:t01089572455/vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+```
+
+This is VibeTether's maximum reviewed installation. It installs the control Skill for Codex and Claude Code, then downloads and catalogs every curated source enabled by VibeTether: the base Matt Pocock, Superpowers, and Karpathy catalogs; the Anthropic extension; the Vercel Web catalog; and the Addy Osmani Production catalog.
+
+"Install everything" does not expose every upstream Skill to every agent. VibeTether catalogs the complete pinned inventories for provenance and routing, but exposes only the approved, compatible specialists. Competing routers, duplicate workflows, and unrelated Skills remain outside host discovery so the capability board can recommend a clear primary route.
+
+Verify the installation:
+
+```sh
+npx --yes github:t01089572455/vibetether doctor --project . --json
+npx --yes github:t01089572455/vibetether capabilities --project .
+```
+
+### Windows Schannel recovery
+
+Most users do not need this. If a provider download fails with `schannel`, `SEC_E_NO_CREDENTIALS`, or `failed to receive handshake`, run the same installation in Command Prompt with Git's documented environment-config channel:
+
+```bat
+set "GIT_CONFIG_COUNT=1"
+set "GIT_CONFIG_KEY_0=http.sslBackend"
+set "GIT_CONFIG_VALUE_0=openssl"
+npx --yes github:t01089572455/vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+```
+
+`GIT_SSL_BACKEND=openssl` does not configure Git's HTTP backend and is ignored. The three `GIT_CONFIG_*` variables above are inherited by the provider Git subprocesses and are equivalent to configuring `http.sslBackend=openssl` for that command session.
+
+## Customize the installation
+
+Use the following options only when the recommended install-everything path is not what you want.
+
+### Provider-free two-stage bootstrap
+
+If provider networking is unavailable, install the control loop first and upgrade later:
+
+```sh
+npx --yes github:t01089572455/vibetether init --project . --agent both --profile core --no-auto-bundles --yes
+npx --yes github:t01089572455/vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+```
+
+The `core` step is provider-free: it installs VibeTether, managed project instructions, the built-in capability board, checkpoint state, and safe fallbacks without cloning a community repository. Re-running `init` with `extended` upgrades the same installation transactionally.
+
+### Install only the portable Skill
 
 Use this if you want VibeTether's control method without changing project instructions or fetching community providers:
 
@@ -20,7 +69,7 @@ Use this if you want VibeTether's control method without changing project instru
 npx skills add t01089572455/vibetether --skill vibe-tether
 ```
 
-### 2. Preview a full project installation
+### Preview before writing
 
 Run this from the project you want to control:
 
@@ -30,7 +79,7 @@ npx --yes github:t01089572455/vibetether init --agent both --profile standard --
 
 The dry-run is network-free for provider content and writes nothing. Review the exact project files, provider catalogs, exposures, and license operations before applying them.
 
-### 3. Initialize Codex and Claude Code
+### Use the smaller standard profile
 
 ```sh
 npx --yes github:t01089572455/vibetether init --agent both --profile standard --yes
@@ -38,7 +87,7 @@ npx --yes github:t01089572455/vibetether init --agent both --profile standard --
 
 The `standard` profile audits and catalogs 53 complete upstream Skills at exact commits, while only 21 exposed Skills enter Codex or Claude discovery. Competing routers and unrelated specialists stay outside host discovery.
 
-### 4. Verify and inspect
+### Verify and inspect
 
 ```sh
 npx --yes github:t01089572455/vibetether doctor --project . --json
@@ -51,11 +100,11 @@ Ask the router for a deterministic decision:
 npx --yes github:t01089572455/vibetether capabilities --project . --phase DISCOVER --capability requirements-clarification --signal goal-unclear --agent codex --json
 ```
 
-### 5. Update or repair
+### Update or repair
 
 Run the same `init` command again. Re-running `init` is the update and repair workflow: unchanged installations are byte-for-byte idempotent, new catalog plans are verified before writes, and modified managed copies stop for review.
 
-### 6. Preview or apply uninstall
+### Preview or apply uninstall
 
 ```sh
 npx --yes github:t01089572455/vibetether uninstall --dry-run

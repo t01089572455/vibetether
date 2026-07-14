@@ -34,7 +34,12 @@ export function runProviderGit(cwd, hooksPath, args, execute = spawnSync) {
     throw new CliError(`Git is required to install curated providers: ${result.error.message}`, 3);
   }
   const detail = (result.stderr || result.stdout || '').trim();
-  if (result.status !== 0 && /schannel:.*(?:AcquireCredentialsHandle|SEC_E_NO_CREDENTIALS)/i.test(detail)) {
+  if (
+    result.status !== 0 &&
+    /schannel:[\s\S]*(?:AcquireCredentialsHandle|SEC_E_NO_CREDENTIALS|failed to receive handshake|SSL\/TLS connection failed)/i.test(
+      detail,
+    )
+  ) {
     result = execute(
       'git',
       ['-c', `core.hooksPath=${hooksPath}`, '-c', 'core.autocrlf=false', '-c', 'http.sslBackend=openssl', ...args],
