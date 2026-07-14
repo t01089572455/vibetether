@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -160,6 +160,42 @@ test('capabilities command exposes a human dashboard and machine-readable built-
   const localResolution = JSON.parse(local.stdout);
   assert.equal(localResolution.selection.skill, 'vibe-tether');
   assert.equal(localResolution.should_invoke_provider, false);
+});
+
+test('core profile recalls proven paths through the built-in resolver without provider installation or staging', async () => {
+  const target = await mkdtemp(path.join(os.tmpdir(), 'vibetether-core-recall-'));
+  const initialized = runCli(['init', '--project', target, '--agent', 'both', '--profile', 'core', '--yes']);
+  assert.equal(initialized.status, 0, initialized.stderr || initialized.stdout);
+
+  const board = JSON.parse(await readFile(path.join(target, '.vibetether', 'capabilities.yaml'), 'utf8'));
+  const phases = ['ALIGN', 'PLAN', 'EXECUTE_ONE', 'VERIFY', 'SHIP'];
+  const recallRoutes = board.routes.filter((route) => route.capability === 'proven-path-recall');
+  assert.equal(recallRoutes.length, phases.length);
+  assert.deepEqual(recallRoutes.map((route) => route.phase).sort(), [...phases].sort());
+  assert.deepEqual(board.providers, []);
+
+  for (const route of recallRoutes) {
+    assert.equal(route.recommendation.skill, 'vibetether-built-in-recall');
+    assert.deepEqual(new Set(route.recommendation.available_in), new Set(['codex', 'claude']));
+    assert.deepEqual(route.recommendation.installations, {});
+  }
+
+  for (const phase of phases) {
+    const query = runCli([
+      'capabilities', '--project', target, '--phase', phase,
+      '--capability', 'proven-path-recall', '--signal', 'publish', '--agent', 'codex', '--json',
+    ]);
+    assert.equal(query.status, 0, `${phase}: ${query.stderr || query.stdout}`);
+    const resolution = JSON.parse(query.stdout);
+    assert.equal(resolution.recommendation.skill, 'vibetether-built-in-recall', phase);
+    assert.equal(resolution.selection.skill, 'vibetether-built-in-recall', phase);
+    assert.equal(resolution.selection.source, 'recommended', phase);
+    assert.equal(resolution.should_invoke_provider, true, phase);
+  }
+
+  await assert.rejects(access(path.join(target, '.vibetether', 'providers')));
+  assert.deepEqual(await readdir(path.join(target, '.agents', 'skills')), ['vibe-tether']);
+  assert.deepEqual(await readdir(path.join(target, '.claude', 'skills')), ['vibe-tether']);
 });
 
 test('capabilities requires phase and capability together', async () => {
