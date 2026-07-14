@@ -191,6 +191,8 @@ test('project scan allows strong runbook documentation under credential-named pa
     ['credentials', 'rotation.adoc'],
     ['credentials', 'guides', 'rotation.adoc'],
     ['secret.rst'],
+    ['access-token-rotation.md'],
+    ['client_secret-rotation.mdx'],
   ]) {
     const root = await project(`strong-runbook-${allowed.join('-')}`);
     const target = path.join(root, 'docs', 'operations', ...allowed);
@@ -210,11 +212,22 @@ test('project scan denies credential config and cloud credential roots despite a
     ['.kube', 'config'],
     ['.azure', 'accessTokens.json'],
     ['.aws', 'credentials'],
+    ['.aws', 'access-token-rotation.md'],
     ['.gnupg', 'private-keys-v1.d', 'key'],
     ['.config', 'gcloud', 'application_default_credentials.json'],
     ['api-key.json'],
     ['client-secret.mdx'],
     ['.envrc'],
+    ['api_key.txt'],
+    ['service_account.json'],
+    ['access_token.json'],
+    ['client_secret.json'],
+    ['kubeconfig.yaml'],
+    ['.npmrc.bak'],
+    ['credentials-prod.json'],
+    ['credentials.prod.json.backup.old~'],
+    ['access-token-rotation.pem.md'],
+    ['token-rotation.token.md'],
   ]) {
     const root = await project(`credential-tree-${denied.join('-').replaceAll('.', 'dot')}`);
     await mkdir(path.join(root, 'docs', 'operations'), { recursive: true });

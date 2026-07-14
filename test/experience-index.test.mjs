@@ -4,6 +4,7 @@ import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { isSensitiveArtifactPath } from '../src/artifact-safety.mjs';
 import {
   EMPTY_EXPERIENCE_INDEX,
   matchExperience,
@@ -148,8 +149,12 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
     'docs/operations/secret.rst',
     'docs/operations/tokens.markdown',
     'docs/operations/credentials/rotation.adoc',
+    'docs/operations/access-token-rotation.md',
+    'docs/operations/client-secret-rotation.mdx',
+    'docs/operations/api_key-usage.rst',
   ];
   for (const [position, artifact] of allowedPaths.entries()) {
+    assert.equal(isSensitiveArtifactPath(artifact), false, artifact);
     await writeArtifact(root, artifact, `# Allowed runbook ${position}\n`);
     const allowed = index([entry({ id: `allowed-runbook-${position}`, artifacts: [artifact] })]);
     assert.deepEqual(await validateExperienceIndex(allowed, root), allowed, artifact);
@@ -169,6 +174,10 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
   ];
   const deniedPaths = [
     '.npmrc',
+    '.npmrc.bak',
+    '.netrc.backup',
+    '.pypirc.old',
+    '.git-credentials.orig',
     '.netrc',
     '.pypirc',
     '.git-credentials',
@@ -180,18 +189,32 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
     '.kube/config',
     '.azure/accessTokens.json',
     '.aws/credentials',
+    '.aws/access-token-rotation.md',
     '.gnupg/private-keys-v1.d/key',
     '.config/gcloud/application_default_credentials.json',
     'accessTokens.json',
     'application_default_credentials.json',
     'kubeconfig',
     'config/api-key.json',
+    'config/api_key.txt',
     'config/apikey.yaml',
     'config/client-secret.txt',
+    'config/client_secret.json',
+    'config/clientSecret.json',
     'config/auth-token.json',
+    'config/access_token.json',
+    'config/refresh.token.json',
+    'config/service_account.json',
+    'config/private key.yaml',
+    'config/password-prod.toml',
+    'config/passwd-local.txt',
+    'config/credentials.prod.json.bak.old~',
+    'config/kubeconfig.yaml',
     'docs/operations/access-token.md',
     'docs/operations/api-key.md',
     'docs/operations/client-secret.mdx',
+    'docs/operations/access-token-rotation.pem.md',
+    'docs/operations/token-rotation.token.md',
     'config/secrets/settings.json',
     'config/tokens/token.txt',
     'config/credentials/data.yaml',
@@ -211,6 +234,7 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
     `docs/operations/hf_${'g'.repeat(34)}.md`,
   ];
   for (const [position, artifact] of deniedPaths.entries()) {
+    assert.equal(isSensitiveArtifactPath(artifact), true, artifact);
     const denied = index([entry({ id: `denied-artifact-${position}`, artifacts: [artifact] })]);
     await assert.rejects(
       validateExperienceIndex(denied, root),
