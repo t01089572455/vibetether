@@ -22,6 +22,7 @@ import {
   parseManifest,
   serializeManifest,
 } from './manifest.mjs';
+import { validateProviderLock } from './managed-project-state.mjs';
 import { scanProject } from './project-scan.mjs';
 import { stageProviderSources } from './provider-fetch.mjs';
 import {
@@ -403,9 +404,11 @@ export async function initialize(options, dependencies = {}) {
   if (lockOriginal !== null) {
     try {
       existingLock = YAML.parse(lockOriginal);
-      if (![1, 2].includes(existingLock?.schema_version)) throw new Error('schema_version must be 1 or 2');
+      if (!validateProviderLock(existingLock)) {
+        throw new Error('the complete schema_version 1 or 2 provider contract is required');
+      }
     } catch (error) {
-      throw new CliError(`Provider lock conflict in .vibetether/providers.lock.yaml: ${error.message}`, 3);
+      throw new CliError(`Provider lock conflict in .vibetether/providers.lock.yaml: expected a valid provider lock. Run \`vibetether init\` to repair it: ${error.message}`, 3);
     }
   }
 

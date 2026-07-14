@@ -157,7 +157,7 @@ function uniqueIds(values) {
   return new Set(ids).size === ids.length;
 }
 
-function validateProviderLock(lock) {
+export function validateProviderLock(lock) {
   const validV1 = lock?.schema_version === 1
     && Array.isArray(lock.sources)
     && Array.isArray(lock.skills);

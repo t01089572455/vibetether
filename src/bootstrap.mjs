@@ -10,6 +10,7 @@ import {
 import { CliError } from './errors.mjs';
 import { readTextIfPresent, resolveInside } from './files.mjs';
 import { initialize } from './init.mjs';
+import { validateProviderLock } from './managed-project-state.mjs';
 import { parseManifest } from './manifest.mjs';
 import { scanProject } from './project-scan.mjs';
 import { createTerminalPromptAdapter } from './terminal-prompts.mjs';
@@ -122,7 +123,7 @@ function isConfirmedIntent(source) {
 
 function confirmationSummary(priorSource, proposal, preview) {
   const sections = [];
-  if (priorSource !== null && priorSource !== proposal && isConfirmedIntent(priorSource)) {
+  if (priorSource !== null && priorSource !== proposal) {
     sections.push(`Prior Intent Contract:\n\n${priorSource.trimEnd()}`);
   }
   sections.push(`Proposed Intent Contract:\n\n${proposal.trimEnd()}`);
@@ -236,7 +237,7 @@ async function initializedProject(root) {
   let lock;
   try {
     lock = YAML.parse(lockSource);
-    if (![1, 2].includes(lock?.schema_version)) throw new Error('schema_version must be 1 or 2');
+    if (!validateProviderLock(lock)) throw new Error('the complete schema_version 1 or 2 provider contract is required');
     if (lock.bundles !== undefined && !Array.isArray(lock.bundles)) throw new Error('bundles must be an array');
   } catch (error) {
     throw new CliError(`VibeTether bootstrap requires a valid provider lock. Run \`vibetether init\` to repair it: ${error.message}`, 3);
@@ -311,15 +312,23 @@ async function dryRunBootstrap(options, dependencies) {
 
 async function unattendedBootstrap(options, dependencies) {
   const context = await bootstrapContext(options);
-  if (!context.model.ready) {
-    throw new CliError('Required user-owned direction is unresolved and cannot be fabricated by unattended bootstrap.');
+  const explicitRequiredDirection = Boolean(
+    options.explicit?.goal && options.explicit?.successEvidence,
+  );
+  const proposal = explicitRequiredDirection
+    ? renderIntentContract(context.model.answers)
+    : proposedIntent(context);
+  const exactConfirmedReuse = isConfirmedIntent(context.prior.source)
+    && proposal === context.prior.source;
+  if (!context.model.ready || (!explicitRequiredDirection && !exactConfirmedReuse)) {
+    throw new CliError('Unattended bootstrap requires byte-identical reuse of a confirmed Intent Contract or explicit --goal and --success-evidence; user-owned direction cannot be fabricated.');
   }
   return initialize(
     {
       ...context.finalOptions,
       dryRun: false,
       yes: true,
-      intentContent: proposedIntent(context),
+      intentContent: proposal,
     },
     dependencies,
   );

@@ -72,6 +72,37 @@ function runtime(promptAdapter, stageCounter = { calls: 0 }) {
   };
 }
 
+function legacyUnresolvedIntent(goal, successEvidence) {
+  return `# VibeTether Intent Contract
+
+Status: unresolved
+
+## Goal
+
+${goal}
+
+## Success evidence
+
+${successEvidence}
+
+## Scope boundaries
+
+Preserve existing project truth.
+
+## Non-negotiable constraints
+
+- Do not fabricate user-owned direction.
+
+## Visual direction
+
+No visual direction has been recorded yet.
+
+## Open direction decisions
+
+- Confirm the goal and success evidence before consequential product work.
+`;
+}
+
 test('terminal prompt adapter prints recommendations, trims answers, defaults blanks, and accepts only yes', async () => {
   const output = new PassThrough();
   let printed = '';
@@ -357,6 +388,59 @@ test('bootstrap rejects provider lock bundles that conflict with the manifest', 
   assert.deepEqual(await snapshot(target), before);
 });
 
+test('bootstrap rejects incomplete v2 provider lock arrays before writes or provider fetches', async () => {
+  for (const field of ['sources', 'catalog', 'exposures', 'skills']) {
+    const target = await project(`bootstrap-lock-missing-${field}`);
+    await main([
+      'init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes',
+      '--goal', 'Validate the complete provider lock', '--success-evidence', 'Bootstrap fails closed',
+    ]);
+    const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
+    const lock = YAML.parse(await readFile(lockPath, 'utf8'));
+    delete lock[field];
+    await writeFile(lockPath, YAML.stringify(lock), 'utf8');
+    const before = await snapshot(target);
+    const stageCounter = { calls: 0 };
+
+    await assert.rejects(
+      main(['bootstrap', '--project', target, '--yes'], runtime(null, stageCounter)),
+      /valid provider lock.*vibetether init|vibetether init.*valid provider lock/i,
+    );
+
+    assert.deepEqual(await snapshot(target), before);
+    assert.equal(stageCounter.calls, 0);
+  }
+});
+
+test('bootstrap rejects forged incomplete provider records before writes or provider fetches', async () => {
+  const target = await project('bootstrap-lock-forged-record');
+  await main([
+    'init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes',
+    '--goal', 'Reject forged provider ownership', '--success-evidence', 'Bootstrap fails closed',
+  ]);
+  const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
+  const lock = YAML.parse(await readFile(lockPath, 'utf8'));
+  const forged = {
+    install_name: 'forged-provider',
+    installations: {
+      codex: { path: '.agents/skills/forged-provider', ownership: 'vibetether' },
+    },
+  };
+  lock.exposures = [forged];
+  lock.skills = [forged];
+  await writeFile(lockPath, YAML.stringify(lock), 'utf8');
+  const before = await snapshot(target);
+  const stageCounter = { calls: 0 };
+
+  await assert.rejects(
+    main(['bootstrap', '--project', target, '--yes'], runtime(null, stageCounter)),
+    /valid provider lock.*vibetether init|vibetether init.*valid provider lock/i,
+  );
+
+  assert.deepEqual(await snapshot(target), before);
+  assert.equal(stageCounter.calls, 0);
+});
+
 test('interactive bootstrap checks initialization before terminal availability', async () => {
   const target = await project('bootstrap-uninitialized-interactive');
 
@@ -399,6 +483,50 @@ test('bootstrap yes rejects unresolved direction because user-owned answers cann
   assert.equal(stageCounter.calls, 0);
 });
 
+test('bootstrap yes rejects unresolved legacy direction even when goal and success are populated', async () => {
+  const target = await project('bootstrap-unresolved-populated-yes');
+  await main([
+    'init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes',
+    '--goal', 'Legacy unresolved goal', '--success-evidence', 'Legacy unresolved evidence',
+  ]);
+  const intentPath = path.join(target, '.vibetether', 'intent.md');
+  const unresolved = legacyUnresolvedIntent('Legacy unresolved goal', 'Legacy unresolved evidence');
+  await writeFile(intentPath, unresolved, 'utf8');
+  const before = await snapshot(target);
+  const stageCounter = { calls: 0 };
+
+  await assert.rejects(
+    main(['bootstrap', '--project', target, '--yes'], runtime(null, stageCounter)),
+    /cannot be fabricated|explicit.*--goal.*--success-evidence|unattended.*requires/i,
+  );
+
+  assert.deepEqual(await snapshot(target), before);
+  assert.equal(stageCounter.calls, 0);
+});
+
+test('bootstrap yes rejects partial or optional-only changes to confirmed direction', async () => {
+  for (const [name, extra] of [
+    ['partial-goal', ['--goal', 'Changed goal without success evidence']],
+    ['optional-constraint', ['--constraint', 'Changed constraint without required direction']],
+  ]) {
+    const target = await project(`bootstrap-confirmed-${name}`);
+    await main([
+      'init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes',
+      '--goal', 'Confirmed goal', '--success-evidence', 'Confirmed evidence',
+    ]);
+    const before = await snapshot(target);
+    const stageCounter = { calls: 0 };
+
+    await assert.rejects(
+      main(['bootstrap', '--project', target, '--yes', ...extra], runtime(null, stageCounter)),
+      /explicit.*--goal.*--success-evidence|cannot be fabricated|unattended.*requires/i,
+    );
+
+    assert.deepEqual(await snapshot(target), before);
+    assert.equal(stageCounter.calls, 0);
+  }
+});
+
 test('bootstrap yes accepts explicit required direction for an unresolved initialized project', async () => {
   const target = await project('bootstrap-explicit-yes');
   await main(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']);
@@ -412,6 +540,29 @@ test('bootstrap yes accepts explicit required direction for an unresolved initia
   const intent = await readFile(path.join(target, '.vibetether', 'intent.md'), 'utf8');
   assert.match(intent, /Status: confirmed/);
   assert.match(intent, /Complete project truth unattended/);
+});
+
+test('bootstrap yes explicit goal and success canonically confirm matching unresolved answers', async () => {
+  const target = await project('bootstrap-explicit-matching-unresolved');
+  const goal = 'Resolve matching unresolved direction';
+  const evidence = 'The canonical Intent is confirmed';
+  await main([
+    'init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes',
+    '--goal', goal, '--success-evidence', evidence,
+  ]);
+  const intentPath = path.join(target, '.vibetether', 'intent.md');
+  const unresolved = legacyUnresolvedIntent(goal, evidence);
+  await writeFile(intentPath, unresolved, 'utf8');
+  const stageCounter = { calls: 0 };
+
+  await main([
+    'bootstrap', '--project', target, '--yes', '--goal', goal, '--success-evidence', evidence,
+  ], runtime(null, stageCounter));
+
+  const intent = await readFile(intentPath, 'utf8');
+  assert.match(intent, /^Status: confirmed$/m);
+  assert.notEqual(intent, unresolved);
+  assert.equal(stageCounter.calls, 0);
 });
 
 test('bootstrap yes reuses a confirmed intent and never stages or rewrites providers', async () => {
@@ -508,6 +659,42 @@ test('initialize bootstrapOnly independently rejects a profile that would desync
   assert.equal(stageCalls, 0);
 });
 
+test('initialize bootstrapOnly independently rejects an incomplete provider lock before writes or staging', async () => {
+  const target = await project('bootstrap-only-lock-structure-guard');
+  await main([
+    'init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes',
+    '--goal', 'Guard the internal lock contract', '--success-evidence', 'Bootstrap fails closed',
+  ]);
+  const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
+  const lock = YAML.parse(await readFile(lockPath, 'utf8'));
+  delete lock.catalog;
+  await writeFile(lockPath, YAML.stringify(lock), 'utf8');
+  const before = await snapshot(target);
+  let stageCalls = 0;
+
+  await assert.rejects(
+    initialize({
+      project: target,
+      agent: 'codex',
+      profile: 'core',
+      bundles: [],
+      autoBundles: false,
+      bootstrapOnly: true,
+      dryRun: false,
+      yes: true,
+    }, {
+      stageProviders: async () => {
+        stageCalls += 1;
+        throw new Error('must not stage');
+      },
+    }),
+    /valid provider lock.*vibetether init|vibetether init.*valid provider lock/i,
+  );
+
+  assert.deepEqual(await snapshot(target), before);
+  assert.equal(stageCalls, 0);
+});
+
 test('interactive bootstrap previews prior truth and applies intent only after confirmation', async () => {
   const target = await project('bootstrap-interactive');
   await main(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']);
@@ -553,6 +740,32 @@ test('interactive bootstrap shows the prior confirmed contract when explicit dir
   assert.match(promptAdapter.confirmations[0], /Original confirmed goal/);
   assert.match(promptAdapter.confirmations[0], /Proposed Intent Contract/i);
   assert.match(promptAdapter.confirmations[0], /Changed confirmed goal/);
+});
+
+test('interactive bootstrap reviews a differing unresolved prior before confirmation and writes nothing first', async () => {
+  const target = await project('bootstrap-unresolved-prior-preview');
+  await main(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']);
+  const before = await snapshot(target);
+  const promptAdapter = prompts({
+    goal: 'Replace unresolved direction interactively',
+    success_evidence: 'The prior and proposal are reviewed',
+  });
+  promptAdapter.confirm = async function confirm(summary) {
+    this.confirmations.push(summary);
+    assert.deepEqual(await snapshot(target), before);
+    return false;
+  };
+  const stageCounter = { calls: 0 };
+
+  const result = await main(['bootstrap', '--project', target], runtime(promptAdapter, stageCounter));
+
+  assert.match(result, /cancelled/i);
+  assert.match(promptAdapter.confirmations[0], /Prior Intent Contract/i);
+  assert.match(promptAdapter.confirmations[0], /^Status: unresolved$/m);
+  assert.match(promptAdapter.confirmations[0], /Proposed Intent Contract/i);
+  assert.match(promptAdapter.confirmations[0], /Replace unresolved direction interactively/);
+  assert.deepEqual(await snapshot(target), before);
+  assert.equal(stageCounter.calls, 0);
 });
 
 test('bootstrap cancellation preserves every project byte and closes the adapter', async () => {
