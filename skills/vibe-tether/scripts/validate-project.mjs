@@ -22,7 +22,7 @@ async function exists(target) {
   }
 }
 
-async function projectRegularFileStatus(projectRoot, relativePath) {
+async function projectEntryStatus(projectRoot, relativePath, expectedType = 'file') {
   if (!isSafeProjectRelativeArtifactPath(relativePath)) return 'escape';
   const root = path.resolve(projectRoot);
   const target = path.resolve(root, relativePath);
@@ -40,7 +40,14 @@ async function projectRegularFileStatus(projectRoot, relativePath) {
       throw error;
     }
     if (metadata.isSymbolicLink()) return 'linked';
-    if (current === target && !metadata.isFile()) return 'not-file';
+    if (current === target) {
+      const matchesExpectedType = expectedType === 'file'
+        ? metadata.isFile()
+        : expectedType === 'directory'
+          ? metadata.isDirectory()
+          : metadata.isFile() || metadata.isDirectory();
+      if (!matchesExpectedType) return 'not-file';
+    }
   }
   return 'ok';
 }
@@ -117,7 +124,7 @@ function safeDiagnosticPath(value, fallback) {
 async function validateProject(projectRoot) {
   const errors = [];
   const manifestPath = path.join(projectRoot, '.vibetether', 'project.yaml');
-  const manifestStatus = await projectRegularFileStatus(projectRoot, '.vibetether/project.yaml');
+  const manifestStatus = await projectEntryStatus(projectRoot, '.vibetether/project.yaml');
   if (manifestStatus === 'missing') return ['Missing manifest: .vibetether/project.yaml'];
   if (manifestStatus !== 'ok') return ['Manifest must be a regular non-linked file'];
 
@@ -141,19 +148,19 @@ async function validateProject(projectRoot) {
     ...flattenSources(manifest?.sources),
   ].filter(Boolean);
   for (const source of [...new Set(declaredSources)]) {
-    const sourceStatus = await projectRegularFileStatus(projectRoot, source);
+    const sourceStatus = await projectEntryStatus(projectRoot, source, 'any');
     if (sourceStatus === 'escape') {
       errors.push('Declared source escapes project root');
     } else if (sourceStatus === 'missing') {
       errors.push(`Missing declared source: ${safeDiagnosticPath(source, 'redacted')}`);
     } else if (sourceStatus !== 'ok') {
-      errors.push('Declared source must be a regular non-linked file');
+      errors.push('Declared source must be a regular non-linked file or directory');
     }
   }
 
   if (manifest.capability_board) {
     const boardPath = path.resolve(projectRoot, manifest.capability_board);
-    const boardStatus = await projectRegularFileStatus(projectRoot, manifest.capability_board);
+    const boardStatus = await projectEntryStatus(projectRoot, manifest.capability_board);
     if (boardStatus === 'escape') {
       errors.push('Capability board escapes project root');
     } else if (boardStatus === 'missing') {
@@ -178,7 +185,7 @@ async function validateProject(projectRoot) {
     }
   }
   if (manifest.provider_lock) {
-    const lockStatus = await projectRegularFileStatus(projectRoot, manifest.provider_lock);
+    const lockStatus = await projectEntryStatus(projectRoot, manifest.provider_lock);
     if (lockStatus === 'escape') {
       errors.push('Provider lock escapes project root');
     } else if (lockStatus === 'missing') {
@@ -190,7 +197,7 @@ async function validateProject(projectRoot) {
 
   if (manifest.experience_index) {
     const indexPath = path.resolve(projectRoot, manifest.experience_index);
-    const indexStatus = await projectRegularFileStatus(projectRoot, manifest.experience_index);
+    const indexStatus = await projectEntryStatus(projectRoot, manifest.experience_index);
     if (indexStatus === 'escape') {
       errors.push('Experience index escapes project root');
     } else if (indexStatus === 'missing') {
@@ -206,7 +213,7 @@ async function validateProject(projectRoot) {
               errors.push('Experience index contains an unsafe artifact path');
               continue;
             }
-            const artifactStatus = await projectRegularFileStatus(projectRoot, artifact);
+            const artifactStatus = await projectEntryStatus(projectRoot, artifact);
             if (artifactStatus === 'escape') {
               errors.push('Experience index artifact escapes project root');
             } else if (artifactStatus === 'missing') {
@@ -224,7 +231,7 @@ async function validateProject(projectRoot) {
 
   for (const harness of Object.values(manifest?.harnesses ?? {})) {
     if (!harness?.enabled || !harness?.instruction_file) continue;
-    const instructionStatus = await projectRegularFileStatus(projectRoot, harness.instruction_file);
+    const instructionStatus = await projectEntryStatus(projectRoot, harness.instruction_file);
     if (instructionStatus === 'missing') {
       errors.push(`Missing instruction file: ${safeDiagnosticPath(harness.instruction_file, 'redacted')}`);
       continue;
@@ -242,7 +249,7 @@ async function validateProject(projectRoot) {
 
   if (manifest.checkpoint?.path) {
     const checkpointPath = path.resolve(projectRoot, manifest.checkpoint.path);
-    const checkpointStatus = await projectRegularFileStatus(projectRoot, manifest.checkpoint.path);
+    const checkpointStatus = await projectEntryStatus(projectRoot, manifest.checkpoint.path);
     if (checkpointStatus === 'escape') {
       errors.push('Checkpoint escapes project root');
     } else if (checkpointStatus === 'missing') {

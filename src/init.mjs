@@ -305,14 +305,24 @@ export async function initialize(options, dependencies = {}) {
   } else {
     try {
       persistedManifest = parseManifest(manifestOriginal);
+    } catch {
+      throw new CliError(
+        'Manifest conflict in .vibetether/project.yaml: invalid manifest YAML. Restore a canonical manifest and retry.',
+        3,
+      );
+    }
+    try {
       const refreshedManifest = refreshCanonicalOperationsSource(persistedManifest, scanned);
       manifest = {
         ...enableHarnesses(refreshedManifest, adapters),
         profile: options.profile,
         project_state: scanned.project_state,
       };
-    } catch (error) {
-      throw new CliError(`Manifest conflict in .vibetether/project.yaml: ${error.message}`, 3);
+    } catch {
+      throw new CliError(
+        'Manifest conflict in .vibetether/project.yaml: manifest routing fields are invalid. Restore the canonical manifest structure and retry.',
+        3,
+      );
     }
   }
   if (manifest.experience_index !== undefined && manifest.experience_index !== EXPERIENCE_INDEX_PATH) {

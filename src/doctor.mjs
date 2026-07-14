@@ -45,6 +45,9 @@ async function projectEntryStatus(root, relativePath, expectedType = 'file') {
     const metadata = await lstat(target);
     if (expectedType === 'file' && !metadata.isFile()) return { status: 'wrong-type', target };
     if (expectedType === 'directory' && !metadata.isDirectory()) return { status: 'wrong-type', target };
+    if (expectedType === 'any' && !metadata.isFile() && !metadata.isDirectory()) {
+      return { status: 'wrong-type', target };
+    }
     return { status: 'ok', target };
   } catch (error) {
     if (error.code === 'ENOENT') return { status: 'missing', target };
@@ -56,7 +59,7 @@ function unsafeAuthorityMessage(label, expectedType = 'file') {
   const kind = expectedType === 'directory'
     ? 'directory'
     : expectedType === 'any'
-      ? 'non-linked path'
+      ? 'regular non-linked file or directory'
       : 'regular non-linked file';
   return `${label} must be a safe project-contained ${kind}`;
 }
@@ -288,7 +291,7 @@ export async function inspectProject(options) {
       if (!harness?.enabled) continue;
       const adapter = ADAPTERS[name];
       if (!adapter) {
-        issues.push(issue('unknown-harness', `Unknown enabled harness: ${name}`));
+        issues.push(issue('unknown-harness', 'Unknown enabled harness in the project manifest'));
         continue;
       }
       const instructionRelativePath = harness.instruction_file ?? adapter.instructionFile;
@@ -352,7 +355,7 @@ export async function inspectProject(options) {
       }
     }
     if (board && lock && board.profile !== lock.profile) {
-      issues.push(issue('provider-profile-mismatch', `Capability board profile ${board.profile} does not match provider lock profile ${lock.profile}`));
+      issues.push(issue('provider-profile-mismatch', 'Capability board profile does not match provider lock profile'));
     }
 
     const lockedExposures = lock?.skills ?? lock?.exposures ?? [];
@@ -365,13 +368,13 @@ export async function inspectProject(options) {
       const installation = source.license_installation;
       if (!installation?.path || !source.license_sha256) {
         if (activeSourceIds.has(source.id) && source.license_evidence?.mode !== 'readme-declaration') {
-          issues.push(issue('missing-provider-license-record', `Active provider source ${source.id} lacks an installed license record`));
+          issues.push(issue('missing-provider-license-record', 'An active provider source lacks an installed license record'));
         }
         continue;
       }
       const expectedLicensePath = `.vibetether/licenses/${source.id}.LICENSE.txt`;
       if (portablePath(installation.path) !== expectedLicensePath) {
-        issues.push(issue('provider-license-path-mismatch', `Provider license path does not match source ${source.id}: ${installation.path}`));
+        issues.push(issue('provider-license-path-mismatch', 'Provider license path does not match the expected project path'));
         continue;
       }
       const licenseEntry = await projectEntryStatus(root, installation.path);
@@ -381,7 +384,7 @@ export async function inspectProject(options) {
       }
       if (licenseEntry.status === 'missing') {
         if (activeSourceIds.has(source.id)) {
-          issues.push(issue('missing-provider-license', `Missing installed ${source.license} license for ${source.id}: ${installation.path}`));
+          issues.push(issue('missing-provider-license', 'Missing installed license for an active provider source'));
         }
         continue;
       }
@@ -394,19 +397,19 @@ export async function inspectProject(options) {
         const managed = installation.ownership === 'vibetether';
         (managed ? issues : warnings).push((managed ? issue : warning)(
           managed ? 'changed-managed-provider-license' : 'changed-preexisting-provider-license',
-          `${managed ? 'VibeTether-managed' : 'Pre-existing'} provider license changed at ${installation.path}`,
+          `${managed ? 'VibeTether-managed' : 'Pre-existing'} provider license changed`,
         ));
       }
     }
     const availableProviders = new Set();
     for (const skill of lockedExposures) {
       if (!skill?.id || !skill?.install_name || !/^[a-f0-9]{64}$/.test(skill?.fingerprint ?? '')) {
-        issues.push(issue('invalid-provider-lock', `Provider lock contains an invalid Skill record: ${skill?.id ?? 'unknown'}`));
+        issues.push(issue('invalid-provider-lock', 'Provider lock contains an invalid Skill record'));
         continue;
       }
       for (const [harness, installation] of Object.entries(skill.installations ?? {})) {
         if (!installation?.path || !['vibetether', 'preexisting'].includes(installation?.ownership)) {
-          issues.push(issue('invalid-provider-installation', `Invalid ${skill.install_name} installation record for ${harness}`));
+          issues.push(issue('invalid-provider-installation', 'Invalid provider installation record'));
           continue;
         }
         const adapter = ADAPTERS[harness];
@@ -416,7 +419,7 @@ export async function inspectProject(options) {
         if (!expectedPath || portablePath(installation.path) !== expectedPath) {
           issues.push(issue(
             'provider-installation-path-mismatch',
-            `Provider install path does not match ${harness}/${skill.install_name}: ${installation.path}`,
+            'Provider install path does not match the expected project path',
           ));
           continue;
         }
@@ -427,14 +430,9 @@ export async function inspectProject(options) {
         }
         if (providerEntry.status === 'missing') {
           if (skill.active) {
-            const fallbacks = (board?.routes ?? [])
-              .filter((route) => route.recommendation?.skill === skill.install_name)
-              .map((route) => route.fallback)
-              .filter(Boolean);
-            const fallback = [...new Set(fallbacks)].join(', ') || 'the capability board fallback';
             warnings.push(warning(
               'missing-optional-provider',
-              `Optional provider ${skill.install_name} is missing for ${harness}; use fallback ${fallback} and record the selection reason.`,
+              'An optional provider is missing; use the capability board fallback and record the selection reason.',
             ));
           }
           continue;
@@ -449,13 +447,13 @@ export async function inspectProject(options) {
             const managed = installation.ownership === 'vibetether';
             (managed ? issues : warnings).push((managed ? issue : warning)(
               managed ? 'changed-managed-provider' : 'changed-preexisting-provider',
-              `${managed ? 'VibeTether-managed' : 'Pre-existing'} provider ${skill.install_name} changed at ${installation.path}`,
+              `${managed ? 'VibeTether-managed' : 'Pre-existing'} provider changed`,
             ));
           } else if (skill.active) {
             availableProviders.add(skill.id);
           }
         } catch {
-          issues.push(issue('invalid-provider', `Cannot verify provider ${skill.install_name}`));
+          issues.push(issue('invalid-provider', 'Cannot verify provider installation'));
         }
       }
     }
@@ -463,16 +461,16 @@ export async function inspectProject(options) {
     for (const skill of lock?.catalog ?? []) {
       const installation = skill.installation;
       if (!skill?.id || !skill?.install_name || !/^[a-f0-9]{64}$/.test(skill?.fingerprint ?? '')) {
-        issues.push(issue('invalid-provider-lock', `Provider lock contains an invalid catalog record: ${skill?.id ?? 'unknown'}`));
+        issues.push(issue('invalid-provider-lock', 'Provider lock contains an invalid catalog record'));
         continue;
       }
       if (!['vibetether', 'preexisting'].includes(installation?.ownership)) {
-        issues.push(issue('invalid-catalog-installation', `Catalog provider ${skill.id} has invalid ownership metadata: ${installation?.ownership ?? 'missing'}`));
+        issues.push(issue('invalid-catalog-installation', 'Catalog provider has invalid ownership metadata'));
         continue;
       }
       const expectedPath = `.vibetether/providers/catalog/${skill.source_id}/${skill.install_name}`;
       if (!installation?.path || portablePath(installation.path) !== expectedPath) {
-        issues.push(issue('catalog-installation-path-mismatch', `Catalog path does not match ${skill.id}: ${installation?.path ?? 'missing'}`));
+        issues.push(issue('catalog-installation-path-mismatch', 'Catalog path does not match the expected project path'));
         continue;
       }
       const catalogEntry = await projectEntryStatus(root, installation.path, 'directory');
@@ -481,7 +479,7 @@ export async function inspectProject(options) {
         continue;
       }
       if (catalogEntry.status === 'missing') {
-        if (skill.active) issues.push(issue('missing-catalog-provider', `Missing cataloged provider ${skill.id}: ${installation.path}`));
+        if (skill.active) issues.push(issue('missing-catalog-provider', 'Missing catalog provider installation'));
         continue;
       }
       if (catalogEntry.status !== 'ok') {
@@ -494,11 +492,11 @@ export async function inspectProject(options) {
           const managed = installation.ownership === 'vibetether';
           (managed ? issues : warnings).push((managed ? issue : warning)(
             managed ? 'changed-managed-catalog-provider' : 'changed-preexisting-catalog-provider',
-            `${managed ? 'VibeTether-managed' : 'Pre-existing'} catalog provider ${skill.install_name} changed at ${installation.path}`,
+            `${managed ? 'VibeTether-managed' : 'Pre-existing'} catalog provider changed`,
           ));
         }
       } catch {
-        issues.push(issue('invalid-catalog-provider', `Cannot verify catalog provider ${skill.install_name}`));
+        issues.push(issue('invalid-catalog-provider', 'Cannot verify catalog provider installation'));
       }
     }
 
@@ -547,7 +545,7 @@ export async function inspectProject(options) {
   }
 
   const harnesses = Object.entries(manifest?.harnesses ?? {})
-    .filter(([, value]) => value?.enabled)
+    .filter(([name, value]) => value?.enabled && Object.hasOwn(ADAPTERS, name))
     .map(([name]) => name);
   const report = {
     ok: issues.length === 0,

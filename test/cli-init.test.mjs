@@ -188,6 +188,20 @@ test('init rejects a conflicting preexisting experience-index route instead of s
   assert.equal(await exists(path.join(target, 'CLAUDE.md')), false);
 });
 
+test('init redacts malformed existing manifest parser diagnostics', async () => {
+  const target = await project('redacted-malformed-manifest');
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const secret = `github_pat_${'M'.repeat(30)}`;
+  await writeFile(manifestPath, `${await readFile(manifestPath, 'utf8')}profile: [${secret}\n`, 'utf8');
+
+  const result = runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']);
+
+  assert.equal(result.status, 3, result.stderr || result.stdout);
+  assert.match(result.stderr, /manifest conflict.*invalid manifest yaml/i);
+  assert.doesNotMatch(result.stderr, new RegExp(secret));
+});
+
 test('init rejects a symbolic-link experience index before writing project files', async (context) => {
   const target = await project('experience-symlink');
   const external = path.join(await project('experience-symlink-external'), 'index.yaml');

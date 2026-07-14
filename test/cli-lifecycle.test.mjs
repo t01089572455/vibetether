@@ -612,6 +612,131 @@ test('uninstall preserves a VibeTether-owned index after it becomes malformed', 
   });
 });
 
+test('uninstall redacts malformed manifest and provider-lock parser diagnostics', async () => {
+  const secret = `github_pat_${'U'.repeat(30)}`;
+  const cases = [
+    ['manifest', '.vibetether/project.yaml', `profile: [${secret}\n`, /project\.yaml.*invalid manifest yaml/i],
+    ['provider lock', '.vibetether/providers.lock.yaml', `sources: [${secret}\n`, /provider lock is invalid/i],
+  ];
+
+  for (const [label, relativePath, malformed, expected] of cases) {
+    const target = await initializedProject(`uninstall-redacted-${label.replaceAll(' ', '-')}`);
+    const targetPath = path.join(target, ...relativePath.split('/'));
+    await writeFile(targetPath, malformed, 'utf8');
+
+    const result = runCli(['uninstall', '--project', target, '--yes']);
+
+    assert.equal(result.status, 3, `${label}: ${result.stderr || result.stdout}`);
+    assert.match(result.stderr, expected, label);
+    assert.doesNotMatch(result.stderr, new RegExp(secret), label);
+  }
+});
+
+test('doctor redacts untrusted provider-lock Skill identifiers', async () => {
+  const target = await initializedProject('doctor-redacted-provider-lock-record');
+  const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
+  const lock = YAML.parse(await readFile(lockPath, 'utf8'));
+  const secret = `github_pat_${'D'.repeat(30)}`;
+  lock.skills = [{
+    id: secret,
+    install_name: 'safe-name',
+    fingerprint: 'not-a-fingerprint',
+    installations: {},
+  }];
+  await writeFile(lockPath, YAML.stringify(lock), 'utf8');
+
+  const result = runCli(['doctor', '--project', target, '--json']);
+
+  assert.equal(result.status, 4, result.stderr || result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.issues.some((entry) => entry.code === 'invalid-provider-lock'), true);
+  assert.doesNotMatch(result.stdout, new RegExp(secret));
+  assert.doesNotMatch(result.stderr, new RegExp(secret));
+});
+
+test('doctor redacts untrusted harness and capability-board profile values', async () => {
+  const secret = `github_pat_${'H'.repeat(30)}`;
+  const harnessTarget = await initializedProject('doctor-redacted-unknown-harness');
+  const manifestPath = path.join(harnessTarget, '.vibetether', 'project.yaml');
+  const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
+  manifest.harnesses[secret] = { enabled: true, instruction_file: 'AGENTS.md' };
+  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+
+  const harnessResult = runCli(['doctor', '--project', harnessTarget, '--json']);
+
+  assert.equal(harnessResult.status, 4, harnessResult.stderr || harnessResult.stdout);
+  assert.equal(JSON.parse(harnessResult.stdout).issues.some((entry) => entry.code === 'unknown-harness'), true);
+  assert.doesNotMatch(harnessResult.stdout, new RegExp(secret));
+  assert.doesNotMatch(harnessResult.stderr, new RegExp(secret));
+
+  const profileTarget = await initializedProject('doctor-redacted-provider-profile');
+  const boardPath = path.join(profileTarget, '.vibetether', 'capabilities.yaml');
+  const board = YAML.parse(await readFile(boardPath, 'utf8'));
+  board.profile = secret;
+  await writeFile(boardPath, YAML.stringify(board), 'utf8');
+
+  const profileResult = runCli(['doctor', '--project', profileTarget, '--json']);
+
+  assert.equal(profileResult.status, 4, profileResult.stderr || profileResult.stdout);
+  assert.equal(JSON.parse(profileResult.stdout).issues.some((entry) => entry.code === 'provider-profile-mismatch'), true);
+  assert.doesNotMatch(profileResult.stdout, new RegExp(secret));
+  assert.doesNotMatch(profileResult.stderr, new RegExp(secret));
+});
+
+test('installed validator accepts safe declared source directories and rejects linked or escaping directories', async (context) => {
+  const target = await initializedProject('installed-validator-source-directories');
+  await mkdir(path.join(target, 'docs', 'operations'), { recursive: true });
+  await mkdir(path.join(target, 'docs', 'adr'), { recursive: true });
+  await writeFile(path.join(target, 'docs', 'operations', 'release.md'), '# Release\n', 'utf8');
+  await writeFile(path.join(target, 'docs', 'adr', '001.md'), '# ADR\n', 'utf8');
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
+  manifest.sources.conditional.operations = ['docs/operations/'];
+  manifest.sources.conditional.architecture = ['docs/adr/'];
+  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+  const installedValidator = path.join(target, '.agents', 'skills', 'vibe-tether', 'scripts', 'validate-project.mjs');
+
+  const doctor = runCli(['doctor', '--project', target, '--json']);
+  assert.equal(doctor.status, 0, doctor.stderr || doctor.stdout);
+  const valid = spawnSync(process.execPath, [installedValidator, '--project', target], {
+    cwd: target,
+    encoding: 'utf8',
+  });
+  assert.equal(valid.status, 0, valid.stderr || valid.stdout);
+
+  const secret = `github_pat_${'S'.repeat(30)}`;
+  manifest.sources.conditional.operations = [`../${secret}/`];
+  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+  const escaping = spawnSync(process.execPath, [installedValidator, '--project', target], {
+    cwd: target,
+    encoding: 'utf8',
+  });
+  assert.equal(escaping.status, 1, escaping.stderr || escaping.stdout);
+  assert.match(escaping.stderr, /declared source escapes project root/i);
+  assert.doesNotMatch(escaping.stderr, new RegExp(secret));
+
+  manifest.sources.conditional.operations = ['docs/linked-operations/'];
+  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+  const external = path.join(await project('installed-validator-source-directory-external'), secret);
+  await mkdir(external, { recursive: true });
+  try {
+    await symlink(external, path.join(target, 'docs', 'linked-operations'), 'junction');
+  } catch (error) {
+    if (process.platform === 'win32' && ['EACCES', 'EPERM'].includes(error.code)) {
+      context.skip('Symbolic links are not available to this Windows test process');
+      return;
+    }
+    throw error;
+  }
+  const linked = spawnSync(process.execPath, [installedValidator, '--project', target], {
+    cwd: target,
+    encoding: 'utf8',
+  });
+  assert.equal(linked.status, 1, linked.stderr || linked.stdout);
+  assert.match(linked.stderr, /declared source must be a regular non-linked file or directory/i);
+  assert.doesNotMatch(linked.stderr, new RegExp(secret));
+});
+
 test('installed validator rejects malformed manifests and linked authority files without following targets', async (context) => {
   const malformedTarget = await initializedProject('installed-validator-malformed-manifest');
   const malformedManifest = path.join(malformedTarget, '.vibetether', 'project.yaml');

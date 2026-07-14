@@ -141,8 +141,11 @@ export async function uninstall(options) {
       if (!validV1 && !validV2) {
         throw new Error('expected schema_version 1 or 2 and the matching provider arrays');
       }
-    } catch (error) {
-      throw new CliError(`Cannot safely uninstall providers because the provider lock is invalid: ${error.message}`, 3);
+    } catch {
+      throw new CliError(
+        'Cannot safely uninstall providers because the provider lock is invalid. Restore a valid provider lock and retry.',
+        3,
+      );
     }
     for (const skill of lock.skills) {
       for (const [harness, installation] of Object.entries(skill.installations ?? {})) {
@@ -252,46 +255,50 @@ export async function uninstall(options) {
   const manifestPath = resolveInside(root, '.vibetether/project.yaml');
   const manifestOriginal = await readTextIfPresent(manifestPath);
   if (manifestOriginal !== null) {
+    let manifest;
     try {
-      const manifest = YAML.parse(manifestOriginal);
-      if (manifest && typeof manifest === 'object' && !Array.isArray(manifest)) {
-        let removedCanonicalEmptyExperienceIndex = false;
-        const canonicalEmptyIndex = serializeExperienceIndex(EMPTY_EXPERIENCE_INDEX);
-        if (manifest.experience_index === '.vibetether/experience-index.yaml'
-          && isVibeTetherOwnedExperienceIndex(manifest.experience_index_ownership)) {
-          await rejectSymlinkPath(root, manifest.experience_index);
-          const experiencePath = resolveInside(root, manifest.experience_index);
-          const experienceOriginal = await readTextIfPresent(experiencePath);
-          if (experienceOriginal === canonicalEmptyIndex) {
-            textPlans.push({
-              relativePath: manifest.experience_index,
-              target: experiencePath,
-              original: experienceOriginal,
-              content: '',
-              removeFile: true,
-            });
-            delete manifest.experience_index;
-            delete manifest.experience_index_ownership;
-            removedCanonicalEmptyExperienceIndex = true;
-          }
-        }
-        const hadRouting = 'capability_board' in manifest
-          || 'provider_lock' in manifest
-          || removedCanonicalEmptyExperienceIndex;
-        delete manifest.capability_board;
-        delete manifest.provider_lock;
-        if (hadRouting) {
+      manifest = YAML.parse(manifestOriginal);
+    } catch {
+      throw new CliError(
+        'Cannot safely update .vibetether/project.yaml during uninstall: invalid manifest YAML. Restore a valid manifest and retry.',
+        3,
+      );
+    }
+    if (manifest && typeof manifest === 'object' && !Array.isArray(manifest)) {
+      let removedCanonicalEmptyExperienceIndex = false;
+      const canonicalEmptyIndex = serializeExperienceIndex(EMPTY_EXPERIENCE_INDEX);
+      if (manifest.experience_index === '.vibetether/experience-index.yaml'
+        && isVibeTetherOwnedExperienceIndex(manifest.experience_index_ownership)) {
+        await rejectSymlinkPath(root, manifest.experience_index);
+        const experiencePath = resolveInside(root, manifest.experience_index);
+        const experienceOriginal = await readTextIfPresent(experiencePath);
+        if (experienceOriginal === canonicalEmptyIndex) {
           textPlans.push({
-            relativePath: '.vibetether/project.yaml',
-            target: manifestPath,
-            original: manifestOriginal,
-            content: YAML.stringify(manifest, { lineWidth: 0 }),
-            removeFile: false,
+            relativePath: manifest.experience_index,
+            target: experiencePath,
+            original: experienceOriginal,
+            content: '',
+            removeFile: true,
           });
+          delete manifest.experience_index;
+          delete manifest.experience_index_ownership;
+          removedCanonicalEmptyExperienceIndex = true;
         }
       }
-    } catch (error) {
-      throw new CliError(`Cannot safely update .vibetether/project.yaml during uninstall: ${error.message}`, 3);
+      const hadRouting = 'capability_board' in manifest
+        || 'provider_lock' in manifest
+        || removedCanonicalEmptyExperienceIndex;
+      delete manifest.capability_board;
+      delete manifest.provider_lock;
+      if (hadRouting) {
+        textPlans.push({
+          relativePath: '.vibetether/project.yaml',
+          target: manifestPath,
+          original: manifestOriginal,
+          content: YAML.stringify(manifest, { lineWidth: 0 }),
+          removeFile: false,
+        });
+      }
     }
   }
 
