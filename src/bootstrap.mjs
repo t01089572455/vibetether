@@ -7,6 +7,7 @@ import {
   parseIntentContract,
   renderIntentContract,
 } from './bootstrap-model.mjs';
+import { validateBootstrapAuthority } from './bootstrap-authority.mjs';
 import { CliError } from './errors.mjs';
 import { readTextIfPresent, resolveInside } from './files.mjs';
 import { initialize } from './init.mjs';
@@ -49,6 +50,32 @@ function promptForInteractive(runtime) {
     throw new CliError('Interactive input is unavailable. Use --dry-run to inspect the plan or --yes for deterministic automation.');
   }
   return createTerminalPromptAdapter({ input: process.stdin, output: process.stdout });
+}
+
+function cleanupWarning(result, error) {
+  const output = typeof result === 'string' ? result.trimEnd() : String(result ?? '').trimEnd();
+  const detail = error instanceof Error ? error.message : String(error);
+  return `${output}${output ? '\n' : ''}Warning: Prompt cleanup failed: ${detail}\n`;
+}
+
+async function withPromptCleanup(promptAdapter, operation) {
+  let result;
+  try {
+    result = await operation();
+  } catch (primaryError) {
+    try {
+      await promptAdapter.close?.();
+    } catch {
+      // Cleanup is best-effort and must never replace the primary failure.
+    }
+    throw primaryError;
+  }
+  try {
+    await promptAdapter.close?.();
+  } catch (cleanupError) {
+    return cleanupWarning(result, cleanupError);
+  }
+  return result;
 }
 
 async function existingIntent(root) {
@@ -218,11 +245,10 @@ export async function runInit(options, runtime = {}) {
   const dependencies = runtime.initializeDependencies ?? {};
   if (options.yes || options.dryRun) return noninteractiveInit(options, dependencies);
   const promptAdapter = promptForInteractive(runtime);
-  try {
-    return await interactiveInit(options, promptAdapter, dependencies);
-  } finally {
-    promptAdapter.close();
-  }
+  return withPromptCleanup(
+    promptAdapter,
+    () => interactiveInit(options, promptAdapter, dependencies),
+  );
 }
 
 async function initializedProject(root) {
@@ -245,15 +271,7 @@ async function initializedProject(root) {
   } catch (error) {
     throw new CliError(`VibeTether bootstrap requires a valid provider lock. Run \`vibetether init\` to repair it: ${error.message}`, 3);
   }
-  if (lock.profile !== manifest.profile) {
-    throw new CliError(`Provider lock profile ${lock.profile ?? '<missing>'} does not match manifest profile ${manifest.profile ?? '<missing>'}. Run \`vibetether init\` to repair it.`, 3);
-  }
-  const lockBundles = [...(lock.bundles ?? [])].sort();
-  const manifestBundles = [...(manifest.bundles ?? [])].sort();
-  if (JSON.stringify(lockBundles) !== JSON.stringify(manifestBundles)) {
-    throw new CliError('Provider lock bundles do not match manifest bundles. Run `vibetether init` to repair them.', 3);
-  }
-  return manifest;
+  return { manifest, lock };
 }
 
 function manifestAgent(manifest) {
@@ -291,12 +309,20 @@ function unresolvedQuestions(model) {
 
 async function bootstrapContext(options) {
   const root = await projectRoot(options.project);
-  const manifest = await initializedProject(root);
+  const { manifest, lock } = await initializedProject(root);
   const finalOptions = bootstrapOptions(options, manifest);
   validateSharedConfiguration(finalOptions);
   if (!PROFILES.has(finalOptions.profile)) {
     throw new CliError(`Invalid initialized profile: ${finalOptions.profile}. Run \`vibetether init\` to repair it.`, 3);
   }
+  await validateBootstrapAuthority({
+    root,
+    manifest,
+    lock,
+    adapters: selectedAdapters(finalOptions.agent),
+    profile: finalOptions.profile,
+    bundles: finalOptions.bundles,
+  });
   const discovery = await scanProject(root, selectedAdapters(finalOptions.agent), finalOptions.profile);
   const prior = await existingIntent(root);
   const model = buildBootstrapModel({ discovery, input: mergeDirection(prior.input, options) });
@@ -338,8 +364,8 @@ async function unattendedBootstrap(options, dependencies) {
   );
 }
 
-async function interactiveBootstrap(options, promptAdapter, dependencies) {
-  const context = await bootstrapContext(options);
+async function interactiveBootstrap(options, promptAdapter, dependencies, preparedContext = null) {
+  const context = preparedContext ?? await bootstrapContext(options);
   const model = await askDirection(
     context.model,
     context.discovery,
@@ -364,11 +390,10 @@ export async function runBootstrap(options, runtime = {}) {
   const dependencies = runtime.initializeDependencies ?? {};
   if (options.dryRun) return dryRunBootstrap(options, dependencies);
   if (options.yes) return unattendedBootstrap(options, dependencies);
-  await initializedProject(await projectRoot(options.project));
+  const context = await bootstrapContext(options);
   const promptAdapter = promptForInteractive(runtime);
-  try {
-    return await interactiveBootstrap(options, promptAdapter, dependencies);
-  } finally {
-    promptAdapter.close();
-  }
+  return withPromptCleanup(
+    promptAdapter,
+    () => interactiveBootstrap(options, promptAdapter, dependencies, context),
+  );
 }

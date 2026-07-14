@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { access, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
 import { PassThrough } from 'node:stream';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import YAML from 'yaml';
 import { main } from '../src/cli.mjs';
 import { parseIntentContract } from '../src/bootstrap-model.mjs';
@@ -132,6 +134,102 @@ test('terminal prompt adapter prints recommendations, trims answers, defaults bl
     assert.equal(await confirmation, expected);
     confirmAdapter.close();
   }
+});
+
+test('interactive prompt adapters may omit close and asynchronous cleanup is awaited', async (t) => {
+  await t.test('optional close', async () => {
+    const target = await project('prompt-no-close');
+    const adapter = prompts({
+      agent: 'codex',
+      profile: 'core',
+      goal: 'Exercise an adapter without cleanup',
+      success_evidence: 'Cancellation remains successful',
+    }, false);
+    delete adapter.close;
+
+    const result = await main(['init', '--project', target], runtime(adapter));
+
+    assert.match(result, /cancelled/i);
+  });
+
+  await t.test('awaited asynchronous close', async () => {
+    const target = await project('prompt-async-close');
+    const adapter = prompts({
+      agent: 'codex',
+      profile: 'core',
+      goal: 'Await prompt cleanup',
+      success_evidence: 'The result waits for close',
+    }, false);
+    let cleanupFinished = false;
+    adapter.close = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      cleanupFinished = true;
+    };
+
+    const result = await main(['init', '--project', target], runtime(adapter));
+
+    assert.match(result, /cancelled/i);
+    assert.equal(cleanupFinished, true);
+  });
+});
+
+test('prompt cleanup never masks ask or confirm failures', async (t) => {
+  for (const phase of ['ask', 'confirm']) {
+    await t.test(phase, async () => {
+      const target = await project(`prompt-primary-${phase}`);
+      const primary = new Error(`${phase} primary failure`);
+      const adapter = prompts({
+        agent: 'codex',
+        profile: 'core',
+        goal: 'Reach confirmation',
+        success_evidence: 'The primary error survives cleanup',
+      });
+      adapter[phase] = async () => { throw primary; };
+      adapter.close = () => { throw new Error('cleanup failure must not mask primary'); };
+
+      await assert.rejects(
+        main(['init', '--project', target], runtime(adapter)),
+        (error) => error === primary,
+      );
+    });
+  }
+});
+
+test('prompt cleanup failures preserve cancellation and success results with warnings', async (t) => {
+  for (const confirmed of [false, true]) {
+    await t.test(confirmed ? 'success' : 'cancellation', async () => {
+      const target = await project(`prompt-cleanup-${confirmed ? 'success' : 'cancel'}`);
+      const adapter = prompts({
+        agent: 'codex',
+        profile: 'core',
+        goal: 'Preserve the primary result',
+        success_evidence: 'Cleanup failure becomes a warning',
+      }, confirmed);
+      adapter.close = () => { throw new Error('synthetic close failure'); };
+
+      const result = await main(['init', '--project', target], runtime(adapter));
+
+      assert.match(result, confirmed ? /initialized/i : /cancelled/i);
+      assert.match(result, /warning.*prompt cleanup.*synthetic close failure/is);
+    });
+  }
+});
+
+test('real non-TTY init exits promptly with dry-run and yes guidance', async () => {
+  const target = await project('non-tty-bin');
+  const started = Date.now();
+  const result = spawnSync(
+    process.execPath,
+    [fileURLToPath(new URL('../bin/vibetether.mjs', import.meta.url)), 'init', '--project', target],
+    { encoding: 'utf8', input: '', timeout: 5000 },
+  );
+
+  assert.equal(result.error, undefined);
+  assert.notEqual(result.status, 0);
+  assert.ok(Date.now() - started < 5000, 'the non-TTY command should not wait for prompt input');
+  assert.match(result.stderr, /interactive input is unavailable/i);
+  assert.match(result.stderr, /--dry-run/);
+  assert.match(result.stderr, /--yes/);
 });
 
 test('interactive init asks one question at a time, rescans changed config, and writes confirmed intent after confirmation', async () => {
@@ -735,6 +833,38 @@ test('initialize bootstrapOnly independently rejects a profile that would desync
       },
     }),
     /provider lock.*profile|profile.*provider lock/i,
+  );
+
+  assert.deepEqual(await snapshot(target), before);
+  assert.equal(stageCalls, 0);
+});
+
+test('initialize bootstrapOnly independently rejects harness expansion before writes or staging', async () => {
+  const target = await project('bootstrap-only-harness-guard');
+  await main([
+    'init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes',
+    '--goal', 'Guard persisted harness authority', '--success-evidence', 'Bootstrap remains text-only',
+  ]);
+  const before = await snapshot(target);
+  let stageCalls = 0;
+
+  await assert.rejects(
+    initialize({
+      project: target,
+      agent: 'both',
+      profile: 'core',
+      bundles: [],
+      autoBundles: false,
+      bootstrapOnly: true,
+      dryRun: false,
+      yes: true,
+    }, {
+      stageProviders: async () => {
+        stageCalls += 1;
+        throw new Error('must not stage');
+      },
+    }),
+    /bootstrap authority|enabled harnesses|provider configuration.*vibetether init/i,
   );
 
   assert.deepEqual(await snapshot(target), before);

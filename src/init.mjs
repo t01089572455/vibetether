@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import YAML from 'yaml';
 import { ADAPTERS, GITIGNORE_BODY, LEGACY_MANAGED_BODIES, MANAGED_END, MANAGED_START, selectedAdapters } from './adapters.mjs';
+import { validateBootstrapAuthority } from './bootstrap-authority.mjs';
 import { CliError } from './errors.mjs';
 import {
   applyManagedBlock,
@@ -281,12 +282,14 @@ export async function initialize(options, dependencies = {}) {
   }
   const scanned = await scanProject(root, adapters, options.profile);
   let manifest;
+  let persistedManifest = null;
   if (manifestOriginal === null) {
     manifest = scanned;
   } else {
     try {
+      persistedManifest = parseManifest(manifestOriginal);
       manifest = {
-        ...enableHarnesses(parseManifest(manifestOriginal), adapters),
+        ...enableHarnesses(persistedManifest, adapters),
         profile: options.profile,
         project_state: scanned.project_state,
       };
@@ -383,6 +386,43 @@ export async function initialize(options, dependencies = {}) {
     }
   }
 
+  for (const relativePath of ['.vibetether/capabilities.yaml', '.vibetether/providers.lock.yaml']) {
+    await rejectSymlinkPath(root, relativePath);
+  }
+  const lockTarget = resolveInside(root, '.vibetether/providers.lock.yaml');
+  const lockOriginal = await readTextIfPresent(lockTarget);
+  let existingLock = null;
+  let lockNeedsRepair = false;
+  if (lockOriginal !== null) {
+    try {
+      const parsedLock = YAML.parse(lockOriginal);
+      if (!validateProviderLock(parsedLock)) {
+        throw new Error('the complete schema_version 1 or 2 provider contract is required');
+      }
+      existingLock = parsedLock;
+    } catch (error) {
+      if (options.bootstrapOnly) {
+        throw new CliError(`Provider lock conflict in .vibetether/providers.lock.yaml: expected a valid provider lock. Run \`vibetether init\` to repair it: ${error.message}`, 3);
+      }
+      existingLock = null;
+      lockNeedsRepair = true;
+    }
+  }
+
+  if (options.bootstrapOnly) {
+    if (existingLock === null) {
+      throw new CliError('VibeTether bootstrap requires an initialized project with a valid provider lock. Run `vibetether init` first.');
+    }
+    await validateBootstrapAuthority({
+      root,
+      manifest: persistedManifest,
+      lock: existingLock,
+      adapters,
+      profile: options.profile,
+      bundles: options.bundles ?? [],
+    });
+  }
+
   const skillPlans = adapters.map((adapter) => ({
     relativePath: ADAPTERS[adapter].skillDirectory,
     target: resolveInside(root, ADAPTERS[adapter].skillDirectory),
@@ -395,34 +435,7 @@ export async function initialize(options, dependencies = {}) {
     plan.replacesExisting = inspection.replacesExisting ?? false;
   }
 
-  for (const relativePath of ['.vibetether/capabilities.yaml', '.vibetether/providers.lock.yaml']) {
-    await rejectSymlinkPath(root, relativePath);
-  }
-  const lockTarget = resolveInside(root, '.vibetether/providers.lock.yaml');
-  const lockOriginal = await readTextIfPresent(lockTarget);
-  let existingLock = null;
-  if (lockOriginal !== null) {
-    try {
-      existingLock = YAML.parse(lockOriginal);
-      if (!validateProviderLock(existingLock)) {
-        throw new Error('the complete schema_version 1 or 2 provider contract is required');
-      }
-    } catch (error) {
-      throw new CliError(`Provider lock conflict in .vibetether/providers.lock.yaml: expected a valid provider lock. Run \`vibetether init\` to repair it: ${error.message}`, 3);
-    }
-  }
-
   if (options.bootstrapOnly) {
-    if (existingLock === null) {
-      throw new CliError('VibeTether bootstrap requires an initialized project with a valid provider lock. Run `vibetether init` first.');
-    }
-    if (existingLock.profile !== options.profile) {
-      throw new CliError(`Provider lock profile ${existingLock.profile ?? '<missing>'} does not match requested bootstrap profile ${options.profile}. Run \`vibetether init\` to change provider configuration.`, 3);
-    }
-    const lockedBundles = [...(existingLock.bundles ?? [])].sort();
-    if (JSON.stringify(lockedBundles) !== JSON.stringify(manifest.bundles)) {
-      throw new CliError('Provider lock bundles do not match the bootstrap manifest plan. Run `vibetether init` to change provider configuration.', 3);
-    }
     const board = createCapabilityBoard(registry, options.profile, existingLock, adapters);
     const boardTarget = resolveInside(root, '.vibetether/capabilities.yaml');
     textPlans.push({
@@ -575,7 +588,10 @@ export async function initialize(options, dependencies = {}) {
       original: lockOriginal,
       content: YAML.stringify(lock, { lineWidth: 0 }),
     });
-    return formatDryRun(root, textPlans, skillPlans);
+    const preview = formatDryRun(root, textPlans, skillPlans);
+    return lockNeedsRepair
+      ? `${preview.trimEnd()}\nWarning: The existing provider lock is invalid and will be rebuilt from verified installed copies.\n`
+      : preview;
   }
 
   if (!options.yes) {
@@ -712,6 +728,10 @@ export async function initialize(options, dependencies = {}) {
     await staged?.cleanup();
   }
 
-  const warnings = (staged?.warnings ?? []).map((warning) => `- ${warning}`).join('\n');
+  const warningMessages = [...(staged?.warnings ?? [])];
+  if (lockNeedsRepair) {
+    warningMessages.unshift('The previous provider lock was invalid and was rebuilt from verified installed copies.');
+  }
+  const warnings = warningMessages.map((warning) => `- ${warning}`).join('\n');
   return `VibeTether initialized ${root} for ${adapters.join(' + ')} using the ${options.profile} profile with ${providers.length} curated provider Skill(s).\n${warnings ? `Warnings:\n${warnings}\n` : ''}`;
 }

@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import YAML from 'yaml';
+import { main } from '../src/cli.mjs';
 import { initialize } from '../src/init.mjs';
+import { validateProviderLock } from '../src/managed-project-state.mjs';
 import { inspectProject } from '../src/doctor.mjs';
 import { skillFingerprint } from '../src/skill-install.mjs';
 
@@ -160,6 +162,20 @@ async function exists(target) {
     if (error.code === 'ENOENT') return false;
     throw error;
   }
+}
+
+async function snapshot(root) {
+  const result = {};
+  async function visit(current, relative = '') {
+    for (const entry of await readdir(current, { withFileTypes: true })) {
+      const childRelative = relative ? `${relative}/${entry.name}` : entry.name;
+      const child = path.join(current, entry.name);
+      if (entry.isDirectory()) await visit(child, childRelative);
+      else result[childRelative] = await readFile(child);
+    }
+  }
+  await visit(root);
+  return result;
 }
 
 function options(root, overrides = {}) {
@@ -325,6 +341,186 @@ test('provider-aware init is byte-for-byte idempotent and retains managed owners
   assert.deepEqual(after, before);
   const lock = YAML.parse(after[3]);
   assert.equal(lock.skills[0].installations.codex.ownership, 'vibetether');
+});
+
+test('normal init dry-run and apply safely reconstruct invalid provider locks from exact installed copies', async (t) => {
+  const source = await completeUpstream();
+  const value = completeRegistry(source);
+  const providerPaths = [
+    '.agents/skills/demo',
+    '.vibetether/providers/catalog/fixture-source/demo',
+    '.vibetether/providers/catalog/fixture-source/router',
+  ];
+
+  for (const variant of ['missing-catalog-with-untrusted-path', 'malformed-yaml']) {
+    await t.test(variant, async () => {
+      const target = await project(`repair-${variant}`);
+      const dependencies = { loadRegistry: async () => value };
+      await initialize(options(target, { agent: 'codex' }), dependencies);
+      const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
+      const beforeFingerprints = await Promise.all(
+        providerPaths.map((relativePath) => skillFingerprint(path.join(target, relativePath))),
+      );
+      const beforeBytes = await Promise.all(
+        providerPaths.map((relativePath) => readFile(path.join(target, relativePath, 'guide.md'))),
+      );
+
+      if (variant === 'malformed-yaml') {
+        await writeFile(lockPath, 'schema_version: [\n', 'utf8');
+      } else {
+        const lock = YAML.parse(await readFile(lockPath, 'utf8'));
+        delete lock.catalog;
+        lock.exposures[0].installations.codex.path = '../untrusted-provider-path';
+        lock.skills = lock.exposures;
+        await writeFile(lockPath, YAML.stringify(lock), 'utf8');
+      }
+      const corrupted = await snapshot(target);
+
+      const preview = await initialize(
+        options(target, { agent: 'codex', dryRun: true, yes: false }),
+        {
+          ...dependencies,
+          stageProviders: async () => {
+            throw new Error('repair dry-run must remain network-free');
+          },
+        },
+      );
+
+      assert.match(preview, /providers\.lock\.yaml/);
+      assert.deepEqual(await snapshot(target), corrupted);
+
+      await initialize(options(target, { agent: 'codex' }), dependencies);
+
+      const repaired = YAML.parse(await readFile(lockPath, 'utf8'));
+      assert.ok(validateProviderLock(repaired));
+      assert.equal(repaired.exposures[0].installations.codex.path, '.agents/skills/demo');
+      assert.equal(repaired.exposures[0].installations.codex.ownership, 'preexisting');
+      assert.equal(repaired.catalog.every((entry) => entry.installation.ownership === 'preexisting'), true);
+      assert.deepEqual(
+        await Promise.all(providerPaths.map((relativePath) => skillFingerprint(path.join(target, relativePath)))),
+        beforeFingerprints,
+      );
+      assert.deepEqual(
+        await Promise.all(providerPaths.map((relativePath) => readFile(path.join(target, relativePath, 'guide.md')))),
+        beforeBytes,
+      );
+    });
+  }
+});
+
+test('bootstrapOnly rejects incomplete active harness installations without writes or staging', async () => {
+  const source = await completeUpstream();
+  const target = await project('bootstrap-authority-incomplete-harness');
+  const dependencies = { loadRegistry: async () => completeRegistry(source) };
+  await initialize(options(target), dependencies);
+  const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
+  const lock = YAML.parse(await readFile(lockPath, 'utf8'));
+  delete lock.exposures.find((entry) => entry.id === 'fixture-demo').installations.claude;
+  lock.skills = structuredClone(lock.exposures);
+  await writeFile(lockPath, YAML.stringify(lock), 'utf8');
+  const before = await snapshot(target);
+  let stageCalls = 0;
+
+  await assert.rejects(
+    initialize(options(target, {
+      bootstrapOnly: true,
+      autoBundles: false,
+    }), {
+      loadRegistry: async () => completeRegistry(source),
+      stageProviders: async () => {
+        stageCalls += 1;
+        throw new Error('must not stage');
+      },
+    }),
+    /bootstrap authority|active exposure.*claude|complete installation/i,
+  );
+
+  assert.deepEqual(await snapshot(target), before);
+  assert.equal(stageCalls, 0);
+});
+
+test('bootstrapOnly verifies managed provider, catalog, and VibeTether Skill copies before writes', async (t) => {
+  const source = await completeUpstream();
+  for (const variant of [
+    { name: 'provider', relativePath: '.agents/skills/demo/guide.md' },
+    { name: 'preexisting-provider', relativePath: '.agents/skills/demo/guide.md', preexisting: true },
+    { name: 'catalog', relativePath: '.vibetether/providers/catalog/fixture-source/demo/guide.md' },
+    { name: 'vibetether-skill', relativePath: '.agents/skills/vibe-tether/SKILL.md' },
+    { name: 'license', relativePath: '.vibetether/licenses/fixture-source.LICENSE.txt' },
+  ]) {
+    await t.test(variant.name, async () => {
+      const target = await project(`bootstrap-authority-modified-${variant.name}`);
+      await initialize(options(target, { agent: 'codex' }), {
+        loadRegistry: async () => completeRegistry(source),
+      });
+      if (variant.preexisting) {
+        const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
+        const lock = YAML.parse(await readFile(lockPath, 'utf8'));
+        lock.exposures.find((entry) => entry.id === 'fixture-demo').installations.codex.ownership = 'preexisting';
+        lock.skills = structuredClone(lock.exposures);
+        await writeFile(lockPath, YAML.stringify(lock), 'utf8');
+      }
+      const changedPath = path.join(target, ...variant.relativePath.split('/'));
+      await writeFile(changedPath, `${await readFile(changedPath, 'utf8')}\nmodified after init\n`, 'utf8');
+      const before = await snapshot(target);
+      let stageCalls = 0;
+
+      await assert.rejects(
+        initialize(options(target, {
+          agent: 'codex',
+          bootstrapOnly: true,
+          autoBundles: false,
+        }), {
+          loadRegistry: async () => completeRegistry(source),
+          stageProviders: async () => {
+            stageCalls += 1;
+            throw new Error('must not stage');
+          },
+        }),
+        /bootstrap authority|modified installed Skill|fingerprint/i,
+      );
+
+      assert.deepEqual(await snapshot(target), before);
+      assert.equal(stageCalls, 0);
+    });
+  }
+});
+
+test('bootstrap CLI orchestration applies the shared authority validator before preview or staging', async () => {
+  const source = await completeUpstream();
+  const target = await project('bootstrap-authority-cli');
+  const registryValue = completeRegistry(source);
+  await initialize(options(target, { agent: 'codex' }), {
+    loadRegistry: async () => registryValue,
+  });
+  const catalogPath = path.join(
+    target,
+    '.vibetether',
+    'providers',
+    'catalog',
+    'fixture-source',
+    'demo',
+    'guide.md',
+  );
+  await writeFile(catalogPath, '# modified before bootstrap preview\n', 'utf8');
+  const before = await snapshot(target);
+  let stageCalls = 0;
+
+  await assert.rejects(
+    main(['bootstrap', '--project', target, '--dry-run'], {
+      initializeDependencies: {
+        loadRegistry: async () => registryValue,
+        stageProviders: async () => {
+          stageCalls += 1;
+          throw new Error('must not stage');
+        },
+      },
+    }),
+    /bootstrap authority.*catalog.*fingerprint/i,
+  );
+
+  assert.deepEqual(await snapshot(target), before);
+  assert.equal(stageCalls, 0);
 });
 
 test('provider-aware dry-run is network-free and reports no changes after an identical init', async () => {
