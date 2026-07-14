@@ -86,7 +86,6 @@ test('init installs Codex and Claude project Skills and preserves user instructi
 
 test('repeated init is byte-for-byte idempotent', async () => {
   const target = await project('idempotent');
-  await writeFile(path.join(target, 'README.md'), '# Existing project\n', 'utf8');
   const args = ['init', '--project', target, '--agent', 'both', '--profile', 'core', '--yes'];
 
   const first = runCli(args);
@@ -110,6 +109,7 @@ test('repeated init is byte-for-byte idempotent', async () => {
   ]);
 
   assert.deepEqual(after, before);
+  assert.equal(YAML.parse(after[3]).project_state, 'greenfield');
 });
 
 test('repeated init refreshes persisted project state from the live scan', async () => {

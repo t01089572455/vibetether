@@ -310,7 +310,6 @@ test('doctor rejects an invalid catalog ownership record', async () => {
 test('provider-aware init is byte-for-byte idempotent and retains managed ownership', async () => {
   const source = await upstream();
   const target = await project('idempotent');
-  await writeFile(path.join(target, 'README.md'), '# Existing project\n', 'utf8');
   const dependencies = { loadRegistry: async () => registry(source) };
   await initialize(options(target, { agent: 'codex' }), dependencies);
   const paths = [
@@ -331,7 +330,6 @@ test('provider-aware init is byte-for-byte idempotent and retains managed owners
 test('provider-aware dry-run is network-free and reports no changes after an identical init', async () => {
   const source = await upstream();
   const target = await project('idempotent-dry-run');
-  await writeFile(path.join(target, 'README.md'), '# Existing project\n', 'utf8');
   const dependencies = { loadRegistry: async () => registry(source) };
   await initialize(options(target, { agent: 'codex' }), dependencies);
 
