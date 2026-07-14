@@ -250,6 +250,76 @@ test('intent metadata round-trips canonical answers despite hostile Markdown and
   assert.match(parsed.goal, /^Keep the true goal/);
 });
 
+test('canonical intent metadata rejects a visible goal that disagrees with its payload', () => {
+  const rendered = renderIntentContract({
+    goal: 'Original visible goal',
+    success_evidence: 'Fresh tests pass',
+  });
+  const changed = rendered.replace('\nOriginal visible goal\n', '\nChanged visible goal\n');
+
+  assert.throws(
+    () => parseIntentContract(changed),
+    /Intent Contract integrity check failed: visible content does not match canonical metadata/,
+  );
+});
+
+test('canonical intent metadata rejects an appended second contract', () => {
+  const rendered = renderIntentContract({
+    goal: 'One canonical contract',
+    success_evidence: 'Fresh tests pass',
+  });
+
+  assert.throws(
+    () => parseIntentContract(`${rendered}${rendered}`),
+    /Intent Contract integrity check failed: visible content does not match canonical metadata/,
+  );
+});
+
+test('canonical intent metadata rejects arbitrary trailing content', () => {
+  const rendered = renderIntentContract({
+    goal: 'No trailing content',
+    success_evidence: 'Fresh tests pass',
+  });
+
+  assert.throws(
+    () => parseIntentContract(`${rendered}Unexpected trailing content.\n`),
+    /Intent Contract integrity check failed: visible content does not match canonical metadata/,
+  );
+});
+
+test('canonical intent metadata rejects base64url payloads containing invalid UTF-8', () => {
+  const rendered = renderIntentContract({
+    goal: 'Original goal',
+    success_evidence: 'Fresh tests pass',
+  });
+  const payload = rendered.match(/<!-- vibetether:intent:v1 ([A-Za-z0-9_-]+) -->/)[1];
+  const bytes = Buffer.from(payload, 'base64url');
+  const goalOffset = bytes.indexOf(Buffer.from('Original goal', 'utf8'));
+  assert.notEqual(goalOffset, -1);
+  bytes[goalOffset] = 0xff;
+  const invalidUtf8 = rendered.replace(payload, bytes.toString('base64url'));
+
+  assert.throws(
+    () => parseIntentContract(invalidUtf8),
+    /Invalid VibeTether intent metadata: the v1 payload is not valid UTF-8/,
+  );
+});
+
+test('canonical intent metadata accepts whole-document CRLF conversion', () => {
+  const rendered = renderIntentContract({
+    goal: 'CRLF-compatible goal',
+    success_evidence: 'Fresh tests pass',
+  });
+
+  assert.deepEqual(parseIntentContract(rendered.replaceAll('\n', '\r\n')), {
+    goal: 'CRLF-compatible goal',
+    successEvidence: 'Fresh tests pass',
+    scopeBoundaries: null,
+    constraints: SAFE_CONSTRAINTS,
+    visualDirection: null,
+  });
+});
+
 test('marker-like intent text in answers remains ordinary content with or without metadata', () => {
   const input = {
     goal: 'Show the literal prefix <!-- vibetether:intent: in project guidance.',

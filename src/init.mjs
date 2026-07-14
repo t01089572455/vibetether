@@ -284,6 +284,7 @@ export async function initialize(options, dependencies = {}) {
       manifest = {
         ...enableHarnesses(parseManifest(manifestOriginal), adapters),
         profile: options.profile,
+        project_state: scanned.project_state,
       };
     } catch (error) {
       throw new CliError(`Manifest conflict in .vibetether/project.yaml: ${error.message}`, 3);

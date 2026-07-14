@@ -281,6 +281,10 @@ function invalidMetadata(reason) {
   throw new Error(`Invalid VibeTether intent metadata: ${reason}`);
 }
 
+function invalidIntegrity(reason) {
+  throw new Error(`Intent Contract integrity check failed: ${reason}`);
+}
+
 function validateMetadataAnswers(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     invalidMetadata('the v1 payload must be an object');
@@ -324,12 +328,18 @@ function parseMetadata(source) {
   try {
     const bytes = Buffer.from(payload, 'base64url');
     if (bytes.toString('base64url') !== payload) invalidMetadata('the v1 payload is not canonical base64url');
-    decoded = JSON.parse(bytes.toString('utf8'));
+    const text = bytes.toString('utf8');
+    if (!Buffer.from(text, 'utf8').equals(bytes)) invalidMetadata('the v1 payload is not valid UTF-8');
+    decoded = JSON.parse(text);
   } catch (error) {
     if (error.message.startsWith('Invalid VibeTether intent metadata:')) throw error;
     invalidMetadata('the v1 payload is not valid base64url JSON');
   }
-  return validateMetadataAnswers(decoded);
+  const answers = validateMetadataAnswers(decoded);
+  if (normalized !== renderIntentContract(answers)) {
+    invalidIntegrity('visible content does not match canonical metadata');
+  }
+  return answers;
 }
 
 function inputShape(answers) {

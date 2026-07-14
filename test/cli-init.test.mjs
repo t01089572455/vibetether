@@ -86,6 +86,7 @@ test('init installs Codex and Claude project Skills and preserves user instructi
 
 test('repeated init is byte-for-byte idempotent', async () => {
   const target = await project('idempotent');
+  await writeFile(path.join(target, 'README.md'), '# Existing project\n', 'utf8');
   const args = ['init', '--project', target, '--agent', 'both', '--profile', 'core', '--yes'];
 
   const first = runCli(args);
@@ -109,6 +110,23 @@ test('repeated init is byte-for-byte idempotent', async () => {
   ]);
 
   assert.deepEqual(after, before);
+});
+
+test('repeated init refreshes persisted project state from the live scan', async () => {
+  const target = await project('project-state-refresh');
+  const args = ['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes'];
+
+  const first = runCli(args);
+  assert.equal(first.status, 0, first.stderr || first.stdout);
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const initial = YAML.parse(await readFile(manifestPath, 'utf8'));
+  assert.equal(initial.project_state, 'greenfield');
+
+  await writeFile(path.join(target, 'README.md'), '# Existing project\n', 'utf8');
+  const second = runCli(args);
+  assert.equal(second.status, 0, second.stderr || second.stdout);
+  const refreshed = YAML.parse(await readFile(manifestPath, 'utf8'));
+  assert.equal(refreshed.project_state, 'existing');
 });
 
 test('init discovers existing truth sources with explicit confidence', async () => {
