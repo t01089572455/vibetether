@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -627,6 +627,48 @@ test('installed validator rejects malformed manifests and linked authority files
     assert.equal(validator.status, 1, `${label}: ${validator.stderr || validator.stdout}`);
     assert.match(validator.stderr, new RegExp(`${label}.*regular non-linked file`, 'i'), label);
     assert.doesNotMatch(validator.stderr, new RegExp(secret), label);
+  }
+});
+
+test('doctor rejects linked project authorities without following secret-bearing targets', async (context) => {
+  const secret = `github_pat_${'Q'.repeat(30)}`;
+  const authorityCases = [
+    ['manifest', '.vibetether/project.yaml', 'unsafe-manifest'],
+    ['capability board', '.vibetether/capabilities.yaml', 'unsafe-capability-board'],
+    ['provider lock', '.vibetether/providers.lock.yaml', 'unsafe-provider-lock'],
+    ['checkpoint', '.vibetether/state/current.yaml', 'unsafe-checkpoint'],
+    ['instruction', 'AGENTS.md', 'unsafe-instructions'],
+    ['installed Skill', '.agents/skills/vibe-tether', 'unsafe-skill', 'directory'],
+  ];
+
+  for (const [label, relativePath, expectedCode, kind] of authorityCases) {
+    const target = await initializedProject(`doctor-linked-${label.replaceAll(' ', '-')}`);
+    const authorityPath = path.join(target, ...relativePath.split('/'));
+    const externalRoot = await project(`doctor-external-${label.replaceAll(' ', '-')}`);
+    const external = path.join(externalRoot, `${secret}-${label.replaceAll(' ', '-')}`);
+    if (kind === 'directory') {
+      await cp(authorityPath, external, { recursive: true });
+      await rm(authorityPath, { recursive: true });
+    } else {
+      await writeFile(external, await readFile(authorityPath, 'utf8'), 'utf8');
+      await rm(authorityPath);
+    }
+    try {
+      await symlink(external, authorityPath, kind === 'directory' ? 'junction' : 'file');
+    } catch (error) {
+      if (process.platform === 'win32' && ['EACCES', 'EPERM'].includes(error.code)) {
+        context.skip('Symbolic links are not available to this Windows test process');
+        return;
+      }
+      throw error;
+    }
+
+    const result = runCli(['doctor', '--project', target, '--json']);
+    assert.equal(result.status, 4, `${label}: ${result.stderr || result.stdout}`);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.ok, false, label);
+    assert.equal(report.issues.some((entry) => entry.code === expectedCode), true, label);
+    assert.doesNotMatch(JSON.stringify(report), new RegExp(secret), label);
   }
 });
 

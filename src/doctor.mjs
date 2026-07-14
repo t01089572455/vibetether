@@ -1,4 +1,4 @@
-import { lstat, readFile, realpath, stat } from 'node:fs/promises';
+import { lstat, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import YAML from 'yaml';
@@ -22,16 +22,6 @@ function flattenSources(value) {
   return [];
 }
 
-async function exists(target) {
-  try {
-    await stat(target);
-    return true;
-  } catch (error) {
-    if (error.code === 'ENOENT') return false;
-    throw error;
-  }
-}
-
 function issue(code, message) {
   return { level: 'error', code, message };
 }
@@ -44,6 +34,30 @@ function projectPath(root, relativePath) {
   const target = path.resolve(root, relativePath);
   const relative = path.relative(root, target);
   return relative.startsWith('..') || path.isAbsolute(relative) ? null : target;
+}
+
+async function projectEntryStatus(root, relativePath, expectedType = 'file') {
+  const target = projectPath(root, relativePath);
+  if (!target) return { status: 'escape', target: null };
+  try {
+    await rejectSymlinkPath(root, relativePath);
+    const metadata = await lstat(target);
+    if (expectedType === 'file' && !metadata.isFile()) return { status: 'wrong-type', target };
+    if (expectedType === 'directory' && !metadata.isDirectory()) return { status: 'wrong-type', target };
+    return { status: 'ok', target };
+  } catch (error) {
+    if (error.code === 'ENOENT') return { status: 'missing', target };
+    return { status: 'unsafe', target };
+  }
+}
+
+function unsafeAuthorityMessage(label, expectedType = 'file') {
+  const kind = expectedType === 'directory'
+    ? 'directory'
+    : expectedType === 'any'
+      ? 'non-linked path'
+      : 'regular non-linked file';
+  return `${label} must be a safe project-contained ${kind}`;
 }
 
 function portablePath(value) {
@@ -166,18 +180,24 @@ async function readExperienceIndex(root, manifest, issues) {
     issues.push(issue('missing-experience-index-field', 'Manifest experience_index is required'));
     return null;
   }
-  const target = projectPath(root, relativePath);
-  if (!target) {
+  const entry = await projectEntryStatus(root, relativePath);
+  if (entry.status === 'escape') {
     issues.push(issue('experience-index-escape', 'Experience index path must stay inside the project'));
     return null;
   }
-  if (!(await exists(target))) {
+  if (entry.status === 'missing') {
     issues.push(issue('missing-experience-index', 'Missing experience index declared by the project manifest'));
     return null;
   }
+  if (entry.status !== 'ok') {
+    issues.push(issue(
+      'invalid-experience-index',
+      'Experience index must be a safe project-contained regular non-linked file. Fix the index and rerun vibetether doctor.',
+    ));
+    return null;
+  }
   try {
-    await rejectSymlinkPath(root, relativePath);
-    const index = parseExperienceIndex(await readFile(target, 'utf8'));
+    const index = parseExperienceIndex(await readFile(entry.target, 'utf8'));
     await validateExperienceIndex(index, root);
     return index;
   } catch {
@@ -194,17 +214,21 @@ async function readYamlArtifact(root, relativePath, label, issues) {
     issues.push(issue(`missing-${label}-field`, `Manifest ${label.replaceAll('-', '_')} is required`));
     return null;
   }
-  const target = projectPath(root, relativePath);
-  if (!target) {
-    issues.push(issue(`${label}-escape`, `${label} path escapes the project: ${relativePath}`));
+  const entry = await projectEntryStatus(root, relativePath);
+  if (entry.status === 'escape') {
+    issues.push(issue(`${label}-escape`, `${label} path escapes the project`));
     return null;
   }
-  if (!(await exists(target))) {
-    issues.push(issue(`missing-${label}`, `Missing ${label}: ${relativePath}`));
+  if (entry.status === 'missing') {
+    issues.push(issue(`missing-${label}`, `Missing ${label}`));
+    return null;
+  }
+  if (entry.status !== 'ok') {
+    issues.push(issue(`unsafe-${label}`, unsafeAuthorityMessage(label.replaceAll('-', ' '))));
     return null;
   }
   try {
-    const value = YAML.parse(await readFile(target, 'utf8'));
+    const value = YAML.parse(await readFile(entry.target, 'utf8'));
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('document must be a mapping');
     return value;
   } catch (error) {
@@ -225,15 +249,17 @@ export async function inspectProject(options) {
   }
   const issues = [];
   const warnings = [];
-  const manifestPath = path.join(root, '.vibetether', 'project.yaml');
   let manifest = null;
-  if (!(await exists(manifestPath))) {
+  const manifestEntry = await projectEntryStatus(root, '.vibetether/project.yaml');
+  if (manifestEntry.status === 'missing') {
     issues.push(issue('missing-manifest', 'Missing .vibetether/project.yaml'));
+  } else if (manifestEntry.status !== 'ok') {
+    issues.push(issue('unsafe-manifest', unsafeAuthorityMessage('Manifest')));
   } else {
     try {
-      manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
-    } catch (error) {
-      issues.push(issue('invalid-manifest', `Invalid manifest YAML: ${error.message}`));
+      manifest = YAML.parse(await readFile(manifestEntry.target, 'utf8'));
+    } catch {
+      issues.push(issue('invalid-manifest', 'Invalid manifest YAML'));
     }
   }
 
@@ -247,12 +273,13 @@ export async function inspectProject(options) {
     }
     const declared = [manifest.goal_source, manifest.intent_contract, ...flattenSources(manifest.sources)].filter(Boolean);
     for (const source of [...new Set(declared)]) {
-      const sourcePath = path.resolve(root, source);
-      const relative = path.relative(root, sourcePath);
-      if (relative.startsWith('..') || path.isAbsolute(relative)) {
-        issues.push(issue('source-escape', `Declared source escapes the project: ${source}`));
-      } else if (!(await exists(sourcePath))) {
-        issues.push(issue('missing-source', `Missing declared source: ${source}`));
+      const sourceEntry = await projectEntryStatus(root, source, 'any');
+      if (sourceEntry.status === 'escape') {
+        issues.push(issue('source-escape', 'Declared source escapes the project'));
+      } else if (sourceEntry.status === 'missing') {
+        issues.push(issue('missing-source', 'Missing declared source'));
+      } else if (sourceEntry.status !== 'ok') {
+        issues.push(issue('unsafe-source', unsafeAuthorityMessage('Declared source', 'any')));
       }
     }
 
@@ -263,31 +290,37 @@ export async function inspectProject(options) {
         issues.push(issue('unknown-harness', `Unknown enabled harness: ${name}`));
         continue;
       }
-      const instructionPath = path.join(root, harness.instruction_file ?? adapter.instructionFile);
-      const skillPath = path.join(root, adapter.skillDirectory, 'SKILL.md');
-      if (!(await exists(instructionPath))) {
+      const instructionRelativePath = harness.instruction_file ?? adapter.instructionFile;
+      const instructionEntry = await projectEntryStatus(root, instructionRelativePath);
+      if (instructionEntry.status === 'missing') {
         issues.push(issue('missing-instructions', `Missing instruction file for ${name}`));
+      } else if (instructionEntry.status !== 'ok') {
+        issues.push(issue('unsafe-instructions', unsafeAuthorityMessage('Instruction file')));
       } else {
-        const instructions = await readFile(instructionPath, 'utf8');
+        const instructions = await readFile(instructionEntry.target, 'utf8');
         const starts = instructions.split(MANAGED_START).length - 1;
         const ends = instructions.split(MANAGED_END).length - 1;
         if (starts !== 1 || ends !== 1) {
-          issues.push(issue('invalid-managed-block', `Expected one VibeTether managed block in ${path.basename(instructionPath)}`));
+          issues.push(issue('invalid-managed-block', `Expected one VibeTether managed block in ${path.basename(instructionRelativePath)}`));
         } else if (managedBlockBody(instructions) !== adapter.managedBody.trim()) {
-          issues.push(issue('changed-managed-block', `VibeTether managed block changed in ${path.basename(instructionPath)}`));
+          issues.push(issue('changed-managed-block', `VibeTether managed block changed in ${path.basename(instructionRelativePath)}`));
         }
       }
-      if (!(await exists(skillPath))) {
+      const skillDirectory = await projectEntryStatus(root, adapter.skillDirectory, 'directory');
+      const skillEntry = await projectEntryStatus(root, path.join(adapter.skillDirectory, 'SKILL.md'));
+      if (skillDirectory.status === 'missing' || skillEntry.status === 'missing') {
         issues.push(issue('missing-skill', `Missing installed Skill for ${name}`));
+      } else if (skillDirectory.status !== 'ok' || skillEntry.status !== 'ok') {
+        issues.push(issue('unsafe-skill', unsafeAuthorityMessage('Installed Skill', 'directory')));
       } else {
         try {
           const [canonical, installed] = await Promise.all([
             skillFingerprint(sourceSkill),
-            skillFingerprint(path.dirname(skillPath)),
+            skillFingerprint(skillDirectory.target),
           ]);
           if (canonical !== installed) issues.push(issue('changed-skill', `Installed Skill changed for ${name}`));
-        } catch (error) {
-          issues.push(issue('invalid-skill', `Cannot verify installed Skill for ${name}: ${error.message}`));
+        } catch {
+          issues.push(issue('invalid-skill', `Cannot verify installed Skill for ${name}`));
         }
       }
     }
@@ -340,18 +373,22 @@ export async function inspectProject(options) {
         issues.push(issue('provider-license-path-mismatch', `Provider license path does not match source ${source.id}: ${installation.path}`));
         continue;
       }
-      const target = projectPath(root, installation.path);
-      if (!target) {
-        issues.push(issue('provider-license-path-escape', `Provider license path escapes the project: ${installation.path}`));
+      const licenseEntry = await projectEntryStatus(root, installation.path);
+      if (licenseEntry.status === 'escape') {
+        issues.push(issue('provider-license-path-escape', 'Provider license path escapes the project'));
         continue;
       }
-      if (!(await exists(target))) {
+      if (licenseEntry.status === 'missing') {
         if (activeSourceIds.has(source.id)) {
           issues.push(issue('missing-provider-license', `Missing installed ${source.license} license for ${source.id}: ${installation.path}`));
         }
         continue;
       }
-      const actual = createHash('sha256').update(await readFile(target)).digest('hex');
+      if (licenseEntry.status !== 'ok') {
+        issues.push(issue('unsafe-provider-license', unsafeAuthorityMessage('Provider license')));
+        continue;
+      }
+      const actual = createHash('sha256').update(await readFile(licenseEntry.target)).digest('hex');
       if (actual !== source.license_sha256) {
         const managed = installation.ownership === 'vibetether';
         (managed ? issues : warnings).push((managed ? issue : warning)(
@@ -382,12 +419,12 @@ export async function inspectProject(options) {
           ));
           continue;
         }
-        const target = projectPath(root, installation.path);
-        if (!target) {
-          issues.push(issue('provider-path-escape', `Provider path escapes the project: ${installation.path}`));
+        const providerEntry = await projectEntryStatus(root, installation.path, 'directory');
+        if (providerEntry.status === 'escape') {
+          issues.push(issue('provider-path-escape', 'Provider path escapes the project'));
           continue;
         }
-        if (!(await exists(target))) {
+        if (providerEntry.status === 'missing') {
           if (skill.active) {
             const fallbacks = (board?.routes ?? [])
               .filter((route) => route.recommendation?.skill === skill.install_name)
@@ -401,8 +438,12 @@ export async function inspectProject(options) {
           }
           continue;
         }
+        if (providerEntry.status !== 'ok') {
+          issues.push(issue('unsafe-provider', unsafeAuthorityMessage('Provider installation', 'directory')));
+          continue;
+        }
         try {
-          const installedFingerprint = await skillFingerprint(target);
+          const installedFingerprint = await skillFingerprint(providerEntry.target);
           if (installedFingerprint !== skill.fingerprint) {
             const managed = installation.ownership === 'vibetether';
             (managed ? issues : warnings).push((managed ? issue : warning)(
@@ -412,8 +453,8 @@ export async function inspectProject(options) {
           } else if (skill.active) {
             availableProviders.add(skill.id);
           }
-        } catch (error) {
-          issues.push(issue('invalid-provider', `Cannot verify provider ${skill.install_name}: ${error.message}`));
+        } catch {
+          issues.push(issue('invalid-provider', `Cannot verify provider ${skill.install_name}`));
         }
       }
     }
@@ -433,17 +474,21 @@ export async function inspectProject(options) {
         issues.push(issue('catalog-installation-path-mismatch', `Catalog path does not match ${skill.id}: ${installation?.path ?? 'missing'}`));
         continue;
       }
-      const target = projectPath(root, installation.path);
-      if (!target) {
-        issues.push(issue('catalog-path-escape', `Catalog path escapes the project: ${installation.path}`));
+      const catalogEntry = await projectEntryStatus(root, installation.path, 'directory');
+      if (catalogEntry.status === 'escape') {
+        issues.push(issue('catalog-path-escape', 'Catalog path escapes the project'));
         continue;
       }
-      if (!(await exists(target))) {
+      if (catalogEntry.status === 'missing') {
         if (skill.active) issues.push(issue('missing-catalog-provider', `Missing cataloged provider ${skill.id}: ${installation.path}`));
         continue;
       }
+      if (catalogEntry.status !== 'ok') {
+        issues.push(issue('unsafe-catalog-provider', unsafeAuthorityMessage('Catalog provider', 'directory')));
+        continue;
+      }
       try {
-        const installedFingerprint = await skillFingerprint(target);
+        const installedFingerprint = await skillFingerprint(catalogEntry.target);
         if (installedFingerprint !== skill.fingerprint) {
           const managed = installation.ownership === 'vibetether';
           (managed ? issues : warnings).push((managed ? issue : warning)(
@@ -451,8 +496,8 @@ export async function inspectProject(options) {
             `${managed ? 'VibeTether-managed' : 'Pre-existing'} catalog provider ${skill.install_name} changed at ${installation.path}`,
           ));
         }
-      } catch (error) {
-        issues.push(issue('invalid-catalog-provider', `Cannot verify catalog provider ${skill.install_name}: ${error.message}`));
+      } catch {
+        issues.push(issue('invalid-catalog-provider', `Cannot verify catalog provider ${skill.install_name}`));
       }
     }
 
@@ -464,15 +509,16 @@ export async function inspectProject(options) {
 
     const checkpoint = manifest.checkpoint;
     if (checkpoint?.path) {
-      const checkpointPath = path.resolve(root, checkpoint.path);
-      const relative = path.relative(root, checkpointPath);
-      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      const checkpointEntry = await projectEntryStatus(root, checkpoint.path);
+      if (checkpointEntry.status === 'escape') {
         issues.push(issue('checkpoint-escape', 'Checkpoint path escapes the project'));
-      } else if (!(await exists(checkpointPath))) {
-        issues.push(issue('missing-checkpoint', `Missing runtime checkpoint: ${checkpoint.path}`));
+      } else if (checkpointEntry.status === 'missing') {
+        issues.push(issue('missing-checkpoint', 'Missing runtime checkpoint'));
+      } else if (checkpointEntry.status !== 'ok') {
+        issues.push(issue('unsafe-checkpoint', unsafeAuthorityMessage('Checkpoint')));
       } else {
         try {
-          const state = YAML.parse(await readFile(checkpointPath, 'utf8'));
+          const state = YAML.parse(await readFile(checkpointEntry.target, 'utf8'));
           if (
             state?.schema_version !== 1 ||
             !state?.goal ||
@@ -492,8 +538,8 @@ export async function inspectProject(options) {
             }
             await validateExperienceFeedback(root, state, manifest, experienceIndex, issues);
           }
-        } catch (error) {
-          issues.push(issue('invalid-checkpoint', `Cannot parse runtime checkpoint: ${error.message}`));
+        } catch {
+          issues.push(issue('invalid-checkpoint', 'Cannot parse runtime checkpoint'));
         }
       }
     }
