@@ -114,6 +114,35 @@ test('project scan routes existing operational proven paths without inventing tr
   });
 });
 
+test('project scan omits an empty or placeholder-only operations directory', async () => {
+  const root = await project('empty-operations');
+  await mkdir(path.join(root, 'docs', 'operations'), { recursive: true });
+  await writeFile(path.join(root, 'docs', 'operations', 'empty.md'), '', 'utf8');
+  await writeFile(path.join(root, 'docs', 'operations', 'script.mjs'), 'export {};\n', 'utf8');
+
+  const manifest = await scanProject(root, ['codex'], 'core');
+
+  assert.deepEqual(manifest.sources.conditional.operations, []);
+  assert.equal(manifest.discovery['docs/operations/'], undefined);
+});
+
+test('project scan omits a linked operations directory even when the target contains documentation', async (context) => {
+  const root = await project('linked-operations');
+  const outside = await project('linked-operations-outside');
+  await writeFile(path.join(outside, 'publishing.md'), '# Outside publishing\n', 'utf8');
+  await mkdir(path.join(root, 'docs'), { recursive: true });
+  const skipReason = await linkDirectory(outside, path.join(root, 'docs', 'operations'));
+  if (skipReason) {
+    context.skip(skipReason);
+    return;
+  }
+
+  const manifest = await scanProject(root, ['codex'], 'core');
+
+  assert.deepEqual(manifest.sources.conditional.operations, []);
+  assert.equal(manifest.discovery['docs/operations/'], undefined);
+});
+
 test('project scan never invents context, ADR, or operations sources for an empty project', async () => {
   const root = await project('no-invented-truth');
 

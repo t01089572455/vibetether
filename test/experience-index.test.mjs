@@ -18,6 +18,13 @@ async function fixture() {
   return root;
 }
 
+async function writeArtifact(root, relativePath, content = 'credential-like test fixture\n') {
+  const target = path.join(root, ...relativePath.replaceAll('\\', '/').split('/'));
+  await mkdir(path.dirname(target), { recursive: true });
+  await writeFile(target, content, 'utf8');
+  return target;
+}
+
 function entry(overrides = {}) {
   return {
     id: 'github-publication',
@@ -127,6 +134,61 @@ test('schema rejects escaping, missing, and secret-bearing artifact metadata', a
   );
 });
 
+test('validation rejects credential path segments and modern token values without blocking benign authentication docs', async () => {
+  const root = await fixture();
+  await writeArtifact(root, 'docs/operations/authentication.md', '# Authentication workflow\n');
+  const safe = index([entry({
+    id: 'authentication-workflow',
+    use_when: ['authentication'],
+    systems: [],
+    artifacts: ['docs/operations/authentication.md'],
+  })]);
+  assert.deepEqual(await validateExperienceIndex(safe, root), safe);
+
+  const sensitivePaths = [
+    '.npmrc',
+    '.netrc',
+    '.env',
+    '.env.local',
+    '.envrc',
+    'config/secrets.yaml',
+    'config/secrets-production/runbook.md',
+    'config/secretsStore.yaml',
+    'config/tokens.json',
+    'config/tokensBackup.json',
+    'config/credentials-prod.json',
+    'config/credentialsVault.json',
+    'keys/id_ed25519',
+    'certs/client.key',
+    'certs/client.pem',
+    'certs/client.p12',
+    'certs/client.pfx',
+    'certs/client.crt',
+  ];
+  for (const artifact of sensitivePaths) {
+    await writeArtifact(root, artifact);
+    await assert.rejects(
+      validateExperienceIndex(index([entry({ artifacts: [artifact] })]), root),
+      /secret-bearing|credential/i,
+      artifact,
+    );
+  }
+
+  const tokenValues = [
+    ['github', 'pat', 'A'.repeat(30)].join('_'),
+    ['xoxb', '123456789012', 'a'.repeat(24)].join('-'),
+    `glpat-${'b'.repeat(24)}`,
+  ];
+  for (const token of tokenValues) {
+    const artifact = `docs/operations/${token}.md`;
+    await writeArtifact(root, artifact);
+    await assert.rejects(
+      validateExperienceIndex(index([entry({ artifacts: [artifact] })]), root),
+      /secret-bearing/i,
+    );
+  }
+});
+
 test('schema rejects artifact symlinks even when they resolve inside the project', async (context) => {
   const root = await fixture();
   const link = path.join(root, 'docs', 'operations', 'linked.md');
@@ -172,6 +234,49 @@ test('unrelated, obsolete, and missing-artifact experience is omitted', async ()
     await matchExperience(index([entry({ artifacts: ['docs/operations/missing.md'] })]), { root, signals: ['publish'] }),
     [],
   );
+});
+
+test('matching isolates lexical, missing, and credential-bearing artifacts while preserving safe matches', async () => {
+  const root = await fixture();
+  const outside = path.resolve(root, '..', `outside-${path.basename(root)}.md`);
+  await writeFile(outside, '# Outside must never be followed\n', 'utf8');
+  await writeArtifact(root, '.npmrc');
+  const githubToken = ['github', 'pat', 'C'.repeat(30)].join('_');
+  await writeArtifact(root, `docs/operations/${githubToken}.md`);
+
+  const result = await matchExperience(index([
+    entry({ id: 'safe-publication', verified_at: '2026-07-14' }),
+    entry({ id: 'escaping-artifact', artifacts: [`../${path.basename(outside)}`] }),
+    entry({ id: 'absolute-artifact', artifacts: [outside] }),
+    entry({ id: 'unc-artifact', artifacts: ['\\\\server\\share\\operations.md'] }),
+    entry({ id: 'missing-artifact', artifacts: ['docs/operations/missing.md'] }),
+    entry({ id: 'credential-artifact', artifacts: ['.npmrc'] }),
+    entry({ id: 'token-artifact', artifacts: [`docs/operations/${githubToken}.md`] }),
+  ]), { root, signals: ['publish'] });
+
+  assert.deepEqual(result.map(({ id }) => id), ['safe-publication']);
+});
+
+test('matching omits a symlinked artifact entry without hiding a safe match', async (context) => {
+  const root = await fixture();
+  const outside = path.resolve(root, '..', `linked-outside-${path.basename(root)}.md`);
+  await writeFile(outside, '# Linked outside\n', 'utf8');
+  try {
+    await symlink(outside, path.join(root, 'docs', 'operations', 'linked-outside.md'), 'file');
+  } catch (error) {
+    if (process.platform === 'win32' && ['EACCES', 'EPERM'].includes(error.code)) {
+      context.skip(`Windows denied symlink creation: ${error.code}`);
+      return;
+    }
+    throw error;
+  }
+
+  const result = await matchExperience(index([
+    entry({ id: 'safe-publication' }),
+    entry({ id: 'linked-artifact', artifacts: ['docs/operations/linked-outside.md'] }),
+  ]), { root, signals: ['publish'] });
+
+  assert.deepEqual(result.map(({ id }) => id), ['safe-publication']);
 });
 
 test('provisional and changed-environment paths require deterministic revalidation reasons', async () => {

@@ -1,4 +1,5 @@
 import { access } from 'node:fs/promises';
+import path from 'node:path';
 import YAML from 'yaml';
 import { rejectSymlinkPath, resolveInside } from './files.mjs';
 
@@ -25,8 +26,18 @@ const REQUIRED_ENTRY_FIELDS = [
 ];
 const ALLOWED_STATUS = new Set(['proven', 'provisional', 'obsolete']);
 const SIGNAL = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const SECRET_VALUE = /-----BEGIN [A-Z ]+PRIVATE KEY-----|\b(?:gh[opusr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[A-Z0-9]{16})\b/;
-const CREDENTIAL_PATH = /(?:^|[/\\])(?:\.env(?:\.[^/\\]+)?|id_(?:rsa|dsa|ecdsa|ed25519)|credentials(?:\.[^/\\]+)?|[^/\\]+\.(?:p12|pfx|pem|key))(?:$|[/\\])/i;
+const SECRET_VALUE = /-----BEGIN [A-Z ]+PRIVATE KEY-----|\b(?:gh[opusr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9_-]{20,}|AKIA[A-Z0-9]{16})\b/;
+const CREDENTIAL_FILE_EXTENSIONS = new Set([
+  '.cer',
+  '.crt',
+  '.der',
+  '.jks',
+  '.key',
+  '.keystore',
+  '.p12',
+  '.pem',
+  '.pfx',
+]);
 
 function isMapping(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -93,9 +104,34 @@ function assertArtifactMetadata(entry) {
       throw new Error(`Experience entry ${entry.id} has duplicated artifact path: ${artifact}`);
     }
     seen.add(artifact);
-    if (CREDENTIAL_PATH.test(artifact)) {
-      throw new Error(`Experience entry ${entry.id} contains a secret-bearing credential path`);
-    }
+  }
+}
+
+function isCredentialSegment(segment) {
+  const value = segment.toLowerCase();
+  if (['.npmrc', '.netrc', 'id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519'].includes(value)) return true;
+  if (value.startsWith('.env')) return true;
+  if (['secrets', 'tokens', 'credentials'].some((prefix) => value.startsWith(prefix))) return true;
+  return CREDENTIAL_FILE_EXTENSIONS.has(path.posix.extname(value));
+}
+
+function isSensitiveArtifact(artifact) {
+  if (SECRET_VALUE.test(artifact)) return true;
+  return artifact.replaceAll('\\', '/').split('/').filter(Boolean).some(isCredentialSegment);
+}
+
+function isLexicallyProjectRelative(artifact) {
+  const portable = artifact.replaceAll('\\', '/');
+  if (path.posix.isAbsolute(portable) || path.win32.parse(artifact).root) return false;
+  return !portable.split('/').some((segment) => segment === '..');
+}
+
+function assertSafeArtifact(entry, artifact) {
+  if (isSensitiveArtifact(artifact)) {
+    throw new Error(`Experience entry ${entry.id} contains a secret-bearing credential path or value`);
+  }
+  if (!isLexicallyProjectRelative(artifact)) {
+    throw new Error(`Experience artifact escapes the project: ${artifact}`);
   }
 }
 
@@ -114,7 +150,7 @@ function assertSchema(value) {
         throw new Error(`Experience entry ${entry.id ?? 'unknown'} requires field ${field}`);
       }
     }
-    if (SECRET_VALUE.test(JSON.stringify(entry))) {
+    if (SECRET_VALUE.test(JSON.stringify({ ...entry, artifacts: [] }))) {
       throw new Error(`Experience entry ${entry.id ?? 'unknown'} contains secret-bearing metadata`);
     }
     if (typeof entry.id !== 'string' || normalize(entry.id) !== entry.id || !SIGNAL.test(entry.id)) {
@@ -157,6 +193,9 @@ function canonicalEntry(entry) {
 }
 
 async function validateArtifact(root, artifact, { allowMissing = false } = {}) {
+  if (!isLexicallyProjectRelative(artifact)) {
+    throw new Error(`Experience artifact escapes the project: ${artifact}`);
+  }
   const target = resolveInside(root, artifact);
   await rejectSymlinkPath(root, artifact);
   try {
@@ -174,6 +213,9 @@ export function parseExperienceIndex(source) {
 
 export function serializeExperienceIndex(value) {
   assertSchema(value);
+  for (const entry of value.entries) {
+    for (const artifact of entry.artifacts) assertSafeArtifact(entry, artifact);
+  }
   return YAML.stringify(
     {
       schema_version: 1,
@@ -186,7 +228,10 @@ export function serializeExperienceIndex(value) {
 export async function validateExperienceIndex(value, root) {
   assertSchema(value);
   for (const entry of value.entries) {
-    for (const artifact of entry.artifacts) await validateArtifact(root, artifact);
+    for (const artifact of entry.artifacts) {
+      assertSafeArtifact(entry, artifact);
+      await validateArtifact(root, artifact);
+    }
   }
   return value;
 }
@@ -206,7 +251,16 @@ export async function matchExperience(value, { root, signals = [] }) {
 
     let artifactsPresent = true;
     for (const artifact of entry.artifacts) {
-      if (!(await validateArtifact(root, artifact, { allowMissing: true }))) {
+      if (isSensitiveArtifact(artifact) || !isLexicallyProjectRelative(artifact)) {
+        artifactsPresent = false;
+        break;
+      }
+      try {
+        if (!(await validateArtifact(root, artifact, { allowMissing: true }))) {
+          artifactsPresent = false;
+          break;
+        }
+      } catch {
         artifactsPresent = false;
         break;
       }

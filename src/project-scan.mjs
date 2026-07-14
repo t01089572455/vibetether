@@ -1,7 +1,44 @@
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { lstat, readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { CliError } from './errors.mjs';
+import { rejectSymlinkPath, resolveInside } from './files.mjs';
 import { detectProjectState } from './managed-project-state.mjs';
+
+const DOCUMENTATION_EXTENSIONS = new Set(['.adoc', '.markdown', '.md', '.mdx', '.rst', '.txt']);
+
+async function hasOperationsDocumentation(root) {
+  const operations = 'docs/operations';
+  try {
+    await rejectSymlinkPath(root, operations);
+    const base = resolveInside(root, operations);
+    const baseEntry = await lstat(base);
+    if (!baseEntry.isDirectory() || baseEntry.isSymbolicLink()) return false;
+    const pending = [operations];
+    while (pending.length > 0) {
+      const relativeDirectory = pending.pop();
+      const entries = await readdir(resolveInside(root, relativeDirectory), { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isSymbolicLink()) continue;
+        const relativePath = `${relativeDirectory}/${entry.name}`;
+        await rejectSymlinkPath(root, relativePath);
+        const metadata = await lstat(resolveInside(root, relativePath));
+        if (metadata.isSymbolicLink()) continue;
+        if (metadata.isDirectory()) {
+          pending.push(relativePath);
+          continue;
+        }
+        if (
+          metadata.isFile()
+          && metadata.size > 0
+          && DOCUMENTATION_EXTENSIONS.has(path.posix.extname(entry.name.toLowerCase()))
+        ) return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 async function kind(root, relativePath) {
   try {
@@ -64,7 +101,14 @@ export async function scanProject(root, enabledAdapters, profile) {
     ['docs/release-checklist.md', 'docs/release.md', 'RELEASE.md'],
     'release checklist',
   );
-  const operations = await record('docs/operations', 'operational proven paths');
+  const operations = await hasOperationsDocumentation(root) ? 'docs/operations/' : false;
+  if (operations) {
+    discovery[operations] = {
+      role: 'operational proven paths',
+      confidence: 'high',
+      kind: 'directory',
+    };
+  }
 
   try {
     const packageJson = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
