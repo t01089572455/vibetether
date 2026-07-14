@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { ADAPTERS, GITIGNORE_BODY } from '../src/adapters.mjs';
 import { applyManagedBlock } from '../src/files.mjs';
 import { scanProject } from '../src/project-scan.mjs';
+import { sourceSkill } from '../src/skill-install.mjs';
 
 async function project(name) {
   return mkdtemp(path.join(os.tmpdir(), `vibetether-scan-${name}-`));
@@ -14,7 +15,7 @@ async function project(name) {
 async function managedProject(name) {
   const root = await project(name);
   await mkdir(path.join(root, '.vibetether', 'state'), { recursive: true });
-  await mkdir(path.join(root, '.agents', 'skills', 'vibe-tether'), { recursive: true });
+  await mkdir(path.join(root, '.agents', 'skills'), { recursive: true });
   await writeFile(
     path.join(root, '.vibetether', 'project.yaml'),
     JSON.stringify({
@@ -39,11 +40,7 @@ async function managedProject(name) {
   await writeFile(path.join(root, '.vibetether', 'state', 'current.yaml'), 'schema_version: 1\n', 'utf8');
   await writeFile(path.join(root, 'AGENTS.md'), applyManagedBlock('', ADAPTERS.codex.managedBody), 'utf8');
   await writeFile(path.join(root, '.gitignore'), applyManagedBlock('', GITIGNORE_BODY), 'utf8');
-  await writeFile(
-    path.join(root, '.agents', 'skills', 'vibe-tether', 'SKILL.md'),
-    '---\nname: vibe-tether\ndescription: Managed fixture.\n---\n',
-    'utf8',
-  );
+  await cp(sourceSkill, path.join(root, '.agents', 'skills', 'vibe-tether'), { recursive: true });
   return root;
 }
 
@@ -128,6 +125,55 @@ test('project scan detects an unlisted Skill inside the managed agent directory'
   const root = await managedProject('unlisted-skill');
   await mkdir(path.join(root, '.agents', 'skills', 'user-skill'), { recursive: true });
   await writeFile(path.join(root, '.agents', 'skills', 'user-skill', 'SKILL.md'), '# User Skill\n', 'utf8');
+
+  assert.equal((await scanProject(root, ['codex'], 'core')).project_state, 'existing');
+});
+
+test('project scan detects arbitrary files inside the VibeTether control directory', async () => {
+  const root = await managedProject('control-user-notes');
+  await writeFile(path.join(root, '.vibetether', 'USER-NOTES.md'), '# User notes\n', 'utf8');
+
+  assert.equal((await scanProject(root, ['codex'], 'core')).project_state, 'existing');
+});
+
+test('project scan detects a modified canonical VibeTether Skill', async () => {
+  const root = await managedProject('modified-vibetether-skill');
+  const skillPath = path.join(root, '.agents', 'skills', 'vibe-tether', 'SKILL.md');
+  await writeFile(skillPath, `${await readFile(skillPath, 'utf8')}\nUser customization.\n`, 'utf8');
+
+  assert.equal((await scanProject(root, ['codex'], 'core')).project_state, 'existing');
+});
+
+test('project scan detects content under a harness not enabled in the persisted manifest', async () => {
+  const root = await managedProject('disabled-harness-content');
+  await mkdir(path.join(root, '.claude', 'skills'), { recursive: true });
+  await cp(sourceSkill, path.join(root, '.claude', 'skills', 'vibe-tether'), { recursive: true });
+
+  assert.equal((await scanProject(root, ['codex'], 'core')).project_state, 'existing');
+});
+
+test('project scan rejects forged provider ownership without complete lock metadata', async () => {
+  const root = await managedProject('forged-provider-lock');
+  const forged = {
+    install_name: 'forged-provider',
+    installations: {
+      codex: {
+        path: '.agents/skills/forged-provider',
+        ownership: 'vibetether',
+      },
+    },
+  };
+  await mkdir(path.join(root, '.agents', 'skills', 'forged-provider'), { recursive: true });
+  await writeFile(
+    path.join(root, '.agents', 'skills', 'forged-provider', 'SKILL.md'),
+    '# Forged provider\n',
+    'utf8',
+  );
+  await writeFile(
+    path.join(root, '.vibetether', 'providers.lock.yaml'),
+    JSON.stringify({ schema_version: 2, sources: [], catalog: [], exposures: [forged], skills: [forged] }),
+    'utf8',
+  );
 
   assert.equal((await scanProject(root, ['codex'], 'core')).project_state, 'existing');
 });
