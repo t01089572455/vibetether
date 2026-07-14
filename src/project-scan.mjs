@@ -1,6 +1,9 @@
 import { lstat, readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { isSensitiveArtifactPath } from './artifact-safety.mjs';
+import {
+  isSensitiveArtifactDirectoryPath,
+  isSensitiveArtifactPath,
+} from './artifact-safety.mjs';
 import { CliError } from './errors.mjs';
 import { rejectSymlinkPath, resolveInside } from './files.mjs';
 import { detectProjectState } from './managed-project-state.mjs';
@@ -28,7 +31,7 @@ async function hasOperationsDocumentation(root, overrides = {}) {
         const metadata = await io.lstat(resolveInside(root, relativePath));
         if (metadata.isSymbolicLink()) return false;
         if (metadata.isDirectory()) {
-          if (isSensitiveArtifactPath(relativePath, { documentationContainer: true })) return false;
+          if (isSensitiveArtifactDirectoryPath(relativePath)) return false;
           pending.push(relativePath);
           continue;
         }

@@ -152,6 +152,13 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
     'docs/operations/access-token-rotation.md',
     'docs/operations/client-secret-rotation.mdx',
     'docs/operations/api_key-usage.rst',
+    'docs/operations/access-token.md',
+    'docs/operations/api-key.md',
+    'docs/operations/client-secret.mdx',
+    'docs/operations/private-key.md',
+    'docs/operations/access-token-rotation/README.md',
+    'docs/operations/secrets-management/README.md',
+    'docs/operations/client_secret-rotation/README.md',
   ];
   for (const [position, artifact] of allowedPaths.entries()) {
     assert.equal(isSensitiveArtifactPath(artifact), false, artifact);
@@ -184,6 +191,9 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
     '.env',
     '.env.local',
     '.envrc',
+    '.env~',
+    '.envrc~',
+    '.envrc~.bak',
     '.ssh/id_ed25519',
     '.docker/config.json',
     '.kube/config',
@@ -192,6 +202,14 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
     '.aws/access-token-rotation.md',
     '.gnupg/private-keys-v1.d/key',
     '.config/gcloud/application_default_credentials.json',
+    '.kube.bak/config',
+    '.kube~/config',
+    '.aws.old/config',
+    '.azure.backup/azureProfile.json',
+    '.docker.orig/config.json',
+    '.config/gcloud.old/config.json',
+    '.ssh.save/config',
+    '.gnupg.bak/gpg.conf',
     'accessTokens.json',
     'application_default_credentials.json',
     'kubeconfig',
@@ -210,16 +228,25 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
     'config/passwd-local.txt',
     'config/credentials.prod.json.bak.old~',
     'config/kubeconfig.yaml',
-    'docs/operations/access-token.md',
-    'docs/operations/api-key.md',
-    'docs/operations/client-secret.mdx',
+    'config/KubeConfig.yaml',
+    'config/kube_config.yaml',
+    'config/apiKeys.json',
+    'config/clientSecrets.json',
+    'config/serviceAccounts.json',
+    'config/oauth_client_secret.json',
+    'config/prod-api-key.json',
+    'config/github_token.json',
+    'config/database_password.txt',
     'docs/operations/access-token-rotation.pem.md',
     'docs/operations/token-rotation.token.md',
     'config/secrets/settings.json',
     'config/tokens/token.txt',
     'config/credentials/data.yaml',
-    'docs/operations/private-key.md',
     'docs/operations/service-account.json',
+    'archives/client.pem.gz',
+    'archives/bundle.p12.zip',
+    'archives/archive.credentials.zip',
+    'archives/random.token.gz',
     'keys/id_ed25519',
     'certs/client.key',
     'certs/client.pem',
@@ -248,8 +275,8 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
 
 test('experience artifacts must be regular non-linked files while safe matches remain visible', async (context) => {
   const root = await fixture();
-  await mkdir(path.join(root, 'docs', 'operations', 'credential-directory'), { recursive: true });
-  await writeFile(path.join(root, 'docs', 'operations', 'credential-directory', '.npmrc'), 'fixture\n', 'utf8');
+  await mkdir(path.join(root, 'docs', 'operations', 'artifact-directory'), { recursive: true });
+  await writeFile(path.join(root, 'docs', 'operations', 'artifact-directory', '.npmrc'), 'fixture\n', 'utf8');
   await mkdir(path.join(root, 'docs', 'operations', 'linked-directory'), { recursive: true });
   const outside = await mkdtemp(path.join(os.tmpdir(), 'vibetether-experience-linked-directory-'));
   await writeFile(path.join(outside, 'outside.md'), '# Outside\n', 'utf8');
@@ -265,7 +292,7 @@ test('experience artifacts must be regular non-linked files while safe matches r
   await writeFile(path.join(root, 'docs', 'operations', 'empty.md'), '', 'utf8');
 
   for (const artifact of [
-    'docs/operations/credential-directory',
+    'docs/operations/artifact-directory',
     'docs/operations/linked-directory',
   ]) {
     const candidate = index([entry({ id: `directory-${path.basename(artifact)}`, artifacts: [artifact] })]);
@@ -274,7 +301,7 @@ test('experience artifacts must be regular non-linked files while safe matches r
 
   const mixed = index([
     entry({ id: 'safe-publication' }),
-    entry({ id: 'directory-credential', artifacts: ['docs/operations/credential-directory'] }),
+    entry({ id: 'directory-artifact', artifacts: ['docs/operations/artifact-directory'] }),
     entry({ id: 'directory-linked', artifacts: ['docs/operations/linked-directory'] }),
     entry({ id: 'empty-regular-file', artifacts: ['docs/operations/empty.md'] }),
   ]);
