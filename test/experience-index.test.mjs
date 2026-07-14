@@ -194,6 +194,7 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
     '.env~',
     '.envrc~',
     '.envrc~.bak',
+    '.env~.zip',
     '.ssh/id_ed25519',
     '.docker/config.json',
     '.kube/config',
@@ -210,6 +211,16 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
     '.config/gcloud.old/config.json',
     '.ssh.save/config',
     '.gnupg.bak/gpg.conf',
+    '.kube.zip/config',
+    '.aws.tar.gz/config',
+    '.azure.tgz/azureProfile.json',
+    '.docker.bz2/config.json',
+    '.ssh.xz/config',
+    '.gnupg.7z/gpg.conf',
+    '.config/gcloud.rar/config.json',
+    '.kube.zst/config',
+    '.aws.lz4/config',
+    '.npmrc.zip',
     'accessTokens.json',
     'application_default_credentials.json',
     'kubeconfig',
@@ -237,6 +248,12 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
     'config/prod-api-key.json',
     'config/github_token.json',
     'config/database_password.txt',
+    'config/github_pat.json',
+    'config/gitlab_pat.json',
+    'config/access_key.json',
+    'config/secret_access_key.json',
+    'config/keystore.json',
+    'config/key_store.json',
     'docs/operations/access-token-rotation.pem.md',
     'docs/operations/token-rotation.token.md',
     'config/secrets/settings.json',
@@ -270,6 +287,42 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
     );
     assert.throws(() => serializeExperienceIndex(denied), /secret-bearing|credential|unsafe|colon|relative/i, artifact);
     assert.deepEqual(await matchExperience(denied, { root, signals: ['publish'] }), [], artifact);
+  }
+});
+
+test('policy: ambiguous non-runbook credential structures fail closed and strong runbooks are the escape hatch', async () => {
+  const root = await fixture();
+  const ambiguous = [
+    'docs/operations/tokens.json',
+    'docs/operations/password-policy.json',
+    'docs/operations/credentials-schema.json',
+    'docs/operations/client.pem',
+    'docs/operations/bundle.p12',
+    'docs/operations/signing.key',
+  ];
+  for (const [position, artifact] of ambiguous.entries()) {
+    const candidate = index([entry({ id: `ambiguous-structured-${position}`, artifacts: [artifact] })]);
+    assert.equal(isSensitiveArtifactPath(artifact), true, artifact);
+    await assert.rejects(validateExperienceIndex(candidate, root), /secret-bearing|credential|unsafe/i, artifact);
+    assert.throws(() => serializeExperienceIndex(candidate), /secret-bearing|credential|unsafe/i, artifact);
+    assert.deepEqual(await matchExperience(candidate, { root, signals: ['publish'] }), [], artifact);
+  }
+
+  for (const [position, artifact] of [
+    'docs/operations/tokens.md',
+    'docs/operations/password-policy.md',
+    'docs/operations/credentials-schema.adoc',
+  ].entries()) {
+    await writeArtifact(root, artifact, '# Explicit operational documentation\n');
+    const candidate = index([entry({ id: `structured-runbook-${position}`, artifacts: [artifact] })]);
+    assert.equal(isSensitiveArtifactPath(artifact), false, artifact);
+    assert.deepEqual(await validateExperienceIndex(candidate, root), candidate, artifact);
+    assert.doesNotThrow(() => serializeExperienceIndex(candidate), artifact);
+    assert.deepEqual(
+      (await matchExperience(candidate, { root, signals: ['publish'] })).map(({ id }) => id),
+      [`structured-runbook-${position}`],
+      artifact,
+    );
   }
 });
 

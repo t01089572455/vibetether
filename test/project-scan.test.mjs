@@ -206,6 +206,9 @@ test('project scan allows strong runbook documentation under credential-named pa
     ['private-key.md'],
     ['client-secret.mdx'],
     ['api_key-usage.rst'],
+    ['tokens.md'],
+    ['password-policy.md'],
+    ['credentials-schema.adoc'],
   ]) {
     const root = await project(`strong-runbook-${allowed.join('-')}`);
     const target = path.join(root, 'docs', 'operations', ...allowed);
@@ -264,6 +267,29 @@ test('project scan denies credential config and cloud credential roots despite a
     ['bundle.p12.zip'],
     ['archive.credentials.zip'],
     ['random.token.gz'],
+    ['.env~.zip'],
+    ['.kube.zip', 'config'],
+    ['.aws.tar.gz', 'config'],
+    ['.azure.tgz', 'azureProfile.json'],
+    ['.docker.bz2', 'config.json'],
+    ['.ssh.xz', 'config'],
+    ['.gnupg.7z', 'gpg.conf'],
+    ['.config', 'gcloud.rar', 'config.json'],
+    ['.kube.zst', 'config'],
+    ['.aws.lz4', 'config'],
+    ['.npmrc.zip'],
+    ['github_pat.json'],
+    ['gitlab_pat.json'],
+    ['access_key.json'],
+    ['secret_access_key.json'],
+    ['keystore.json'],
+    ['key_store.json'],
+    ['tokens.json'],
+    ['password-policy.json'],
+    ['credentials-schema.json'],
+    ['client.pem'],
+    ['bundle.p12'],
+    ['signing.key'],
   ]) {
     const root = await project(`credential-tree-${denied.join('-').replaceAll('.', 'dot')}`);
     await mkdir(path.join(root, 'docs', 'operations'), { recursive: true });
