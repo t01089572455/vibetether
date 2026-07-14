@@ -10,6 +10,13 @@ const SAFE_CONSTRAINTS = [
 ];
 
 const SCOPE_RECOMMENDATION = 'Preserve existing instructions; confirm destructive actions and releases.';
+const CANONICAL_ANSWER_KEYS = [
+  'goal',
+  'success_evidence',
+  'scope_boundaries',
+  'constraints',
+  'visual_direction',
+];
 
 const QUESTION_DEFINITIONS = {
   goal: {
@@ -49,18 +56,22 @@ const MISSING = {
   visual_direction: 'No visual direction has been recorded yet.',
 };
 
-function normalizeValue(value) {
-  if (Array.isArray(value)) {
-    return [...new Set(value
-      .filter((item) => typeof item === 'string')
-      .map((item) => item.trim())
-      .filter(Boolean))];
-  }
-  if (typeof value === 'string') {
-    const normalized = value.trim();
-    return normalized || null;
-  }
-  return value ?? null;
+function normalizeScalar(value) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  return normalized || null;
+}
+
+function normalizeStringList(value) {
+  return [...new Set(value
+    .filter((item) => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean))];
+}
+
+function normalizeListInput(value) {
+  if (Array.isArray(value)) return normalizeStringList(value);
+  return normalizeScalar(value);
 }
 
 function hasAnswer(value) {
@@ -74,17 +85,17 @@ function asList(value) {
 }
 
 function normalizeConstraints(value) {
-  const custom = asList(normalizeValue(value)).filter((constraint) => !SAFE_CONSTRAINTS.includes(constraint));
+  const custom = asList(normalizeListInput(value)).filter((constraint) => !SAFE_CONSTRAINTS.includes(constraint));
   return [...new Set([...custom, ...SAFE_CONSTRAINTS])];
 }
 
 function normalizeAnswers(input = {}) {
   return {
-    goal: normalizeValue(input.goal),
-    success_evidence: normalizeValue(input.success_evidence ?? input.successEvidence),
-    scope_boundaries: normalizeValue(input.scope_boundaries ?? input.scopeBoundaries),
+    goal: normalizeScalar(input.goal),
+    success_evidence: normalizeScalar(input.success_evidence ?? input.successEvidence),
+    scope_boundaries: normalizeListInput(input.scope_boundaries ?? input.scopeBoundaries),
     constraints: normalizeConstraints(input.constraints),
-    visual_direction: normalizeValue(input.visual_direction ?? input.visualDirection),
+    visual_direction: normalizeScalar(input.visual_direction ?? input.visualDirection),
   };
 }
 
@@ -126,6 +137,7 @@ function normalizedPath(value) {
 }
 
 function isGreenfield(discovery) {
+  if (discovery?.project_state !== 'greenfield') return false;
   if (bundleSignals(discovery).length > 0) return false;
   const paths = [
     ...sourceEntries(discovery).map(([sourcePath]) => sourcePath),
@@ -184,6 +196,11 @@ function renderValue(value, missingMessage) {
   return String(value);
 }
 
+function renderMetadata(answers) {
+  const payload = Buffer.from(JSON.stringify(answers), 'utf8').toString('base64url');
+  return `<!-- vibetether:intent:v1 ${payload} -->`;
+}
+
 function openDirectionDecisions(answers) {
   const missingRequired = [
     !hasAnswer(answers.goal) ? 'goal' : null,
@@ -210,6 +227,7 @@ export function renderIntentContract(input = {}) {
   return `# VibeTether Intent Contract
 
 Status: ${status}
+${renderMetadata(answers)}
 
 This contract is the durable statement of direction for long-running agent work. Resolve product ambiguity with the user before changing consequential behavior.
 
@@ -254,20 +272,86 @@ function parseValue(value, missingMessage) {
   if (!value || value === missingMessage) return null;
   const lines = value.split('\n').map((line) => line.trim()).filter(Boolean);
   if (lines.length > 0 && lines.every((line) => line.startsWith('- '))) {
-    return normalizeValue(lines.map((line) => line.slice(2)));
+    return normalizeStringList(lines.map((line) => line.slice(2)));
   }
-  return normalizeValue(value);
+  return normalizeScalar(value);
+}
+
+function invalidMetadata(reason) {
+  throw new Error(`Invalid VibeTether intent metadata: ${reason}`);
+}
+
+function validateMetadataAnswers(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    invalidMetadata('the v1 payload must be an object');
+  }
+  const keys = Object.keys(value);
+  if (keys.length !== CANONICAL_ANSWER_KEYS.length
+    || !CANONICAL_ANSWER_KEYS.every((key, index) => keys[index] === key)) {
+    invalidMetadata('the v1 payload must contain only canonical answer fields in canonical order');
+  }
+  for (const key of ['goal', 'success_evidence', 'visual_direction']) {
+    if (value[key] !== null && typeof value[key] !== 'string') {
+      invalidMetadata(`${key} must be a string or null`);
+    }
+  }
+  if (value.scope_boundaries !== null
+    && typeof value.scope_boundaries !== 'string'
+    && !(Array.isArray(value.scope_boundaries)
+      && value.scope_boundaries.every((item) => typeof item === 'string'))) {
+    invalidMetadata('scope_boundaries must be a string, an array of strings, or null');
+  }
+  if (!Array.isArray(value.constraints)
+    || !value.constraints.every((item) => typeof item === 'string')) {
+    invalidMetadata('constraints must be an array of strings');
+  }
+  return normalizeAnswers(value);
+}
+
+function parseMetadata(source) {
+  const normalized = String(source ?? '').replaceAll('\r\n', '\n');
+  const prefixMatches = normalized.match(/<!-- vibetether:intent:/g) ?? [];
+  if (prefixMatches.length === 0) return null;
+  const markerMatches = [...normalized.matchAll(/<!-- vibetether:intent:v1 ([A-Za-z0-9_-]+) -->/g)];
+  if (prefixMatches.length !== 1 || markerMatches.length !== 1) {
+    invalidMetadata('expected exactly one well-formed v1 marker');
+  }
+
+  const payload = markerMatches[0][1];
+  let decoded;
+  try {
+    const bytes = Buffer.from(payload, 'base64url');
+    if (bytes.toString('base64url') !== payload) invalidMetadata('the v1 payload is not canonical base64url');
+    decoded = JSON.parse(bytes.toString('utf8'));
+  } catch (error) {
+    if (error.message.startsWith('Invalid VibeTether intent metadata:')) throw error;
+    invalidMetadata('the v1 payload is not valid base64url JSON');
+  }
+  return validateMetadataAnswers(decoded);
+}
+
+function inputShape(answers) {
+  return {
+    goal: answers.goal,
+    successEvidence: answers.success_evidence,
+    scopeBoundaries: answers.scope_boundaries,
+    constraints: answers.constraints,
+    visualDirection: answers.visual_direction,
+  };
 }
 
 export function parseIntentContract(source) {
+  const metadata = parseMetadata(source);
+  if (metadata) return inputShape(metadata);
+
   const parsed = sections(source);
-  return {
+  return inputShape(normalizeAnswers({
     goal: parseValue(parsed.get('Goal'), MISSING.goal),
-    successEvidence: parseValue(parsed.get('Success evidence'), MISSING.success_evidence),
-    scopeBoundaries: parseValue(parsed.get('Scope boundaries'), MISSING.scope_boundaries),
+    success_evidence: parseValue(parsed.get('Success evidence'), MISSING.success_evidence),
+    scope_boundaries: parseValue(parsed.get('Scope boundaries'), MISSING.scope_boundaries),
     constraints: parseValue(parsed.get('Non-negotiable constraints'), '') ?? [],
-    visualDirection: parseValue(parsed.get('Visual direction'), MISSING.visual_direction),
-  };
+    visual_direction: parseValue(parsed.get('Visual direction'), MISSING.visual_direction),
+  }));
 }
 
 export function unresolvedIntent() {

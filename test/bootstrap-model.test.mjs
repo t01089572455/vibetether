@@ -12,8 +12,9 @@ const SAFE_CONSTRAINTS = [
   'Confirm destructive actions and releases before execution.',
 ];
 
-function discovery({ bundleSignals = [], sources = {} } = {}) {
+function discovery({ bundleSignals = [], sources = {}, projectState = 'greenfield' } = {}) {
   return {
+    project_state: projectState,
     bundle_signals: bundleSignals,
     discovery: {
       'AGENTS.md': { role: 'agent instructions', confidence: 'high', kind: 'file' },
@@ -133,7 +134,7 @@ test('explicit required answers make the model ready and render a confirmed cont
     discovery: discovery(),
     input: {
       goal: '  Ship a guided bootstrap  ',
-      successEvidence: [' focused tests pass ', 'CLI reuses the contract'],
+      successEvidence: '  Focused tests pass and the CLI reuses the contract  ',
       scopeBoundaries: ['bootstrap model only'],
       constraints: ['Keep the model filesystem-free'],
       visualDirection: '  Light, accessible prompts  ',
@@ -149,14 +150,14 @@ test('explicit required answers make the model ready and render a confirmed cont
     'visual_direction',
   ]);
   assert.equal(model.answers.goal, 'Ship a guided bootstrap');
-  assert.deepEqual(model.answers.success_evidence, ['focused tests pass', 'CLI reuses the contract']);
+  assert.equal(model.answers.success_evidence, 'Focused tests pass and the CLI reuses the contract');
   assert.deepEqual(model.answers.constraints, ['Keep the model filesystem-free', ...SAFE_CONSTRAINTS]);
   assert.equal(model.answers.visual_direction, 'Light, accessible prompts');
 
   const contract = renderIntentContract(model.answers);
   assert.match(contract, /^# VibeTether Intent Contract\n\nStatus: confirmed\n/m);
   assert.match(contract, /## Goal\n\nShip a guided bootstrap/);
-  assert.match(contract, /## Success evidence\n\n- focused tests pass\n- CLI reuses the contract/);
+  assert.match(contract, /## Success evidence\n\nFocused tests pass and the CLI reuses the contract/);
 });
 
 test('unresolved contracts retain no-goal and no-evidence messages without guessing', () => {
@@ -193,7 +194,7 @@ test('rendered confirmed contracts parse into reusable input without repeated qu
     }),
     input: {
       goal: 'Guide project bootstrap',
-      successEvidence: ['The focused contract test passes'],
+      successEvidence: 'The focused contract test passes',
       scopeBoundaries: ['Do not change provider installation'],
       constraints: ['Keep the model pure'],
       visualDirection: 'Use direct, beginner-friendly language',
@@ -211,7 +212,7 @@ test('rendered confirmed contracts parse into reusable input without repeated qu
 
   assert.deepEqual(parsed, {
     goal: 'Guide project bootstrap',
-    successEvidence: ['The focused contract test passes'],
+    successEvidence: 'The focused contract test passes',
     scopeBoundaries: ['Do not change provider installation'],
     constraints: ['Keep the model pure', ...SAFE_CONSTRAINTS],
     visualDirection: 'Use direct, beginner-friendly language',
@@ -219,6 +220,50 @@ test('rendered confirmed contracts parse into reusable input without repeated qu
   assert.equal(reused.ready, true);
   assert.deepEqual(reused.questions, []);
   assert.equal(renderIntentContract(reused.answers), renderIntentContract(initial.answers));
+});
+
+test('intent metadata round-trips canonical answers despite hostile Markdown and CRLF conversion', () => {
+  const input = {
+    goal: 'Keep the true goal\n\n## Goal\n\nDecoy heading\n\n## Goal\n\nSecond decoy',
+    successEvidence: 'No acceptance evidence has been recorded yet.',
+    scopeBoundaries: [
+      'No additional boundaries have been recorded yet.',
+      'Preserve this multiline boundary\nacross both lines',
+    ],
+    constraints: ['Keep duplicate headings as user content'],
+    visualDirection: 'No visual direction has been recorded yet.',
+  };
+  const answers = buildBootstrapModel({ discovery: discovery(), input }).answers;
+  const rendered = renderIntentContract(answers);
+
+  assert.match(rendered, /Status: confirmed\n<!-- vibetether:intent:v1 [A-Za-z0-9_-]+ -->\n/);
+
+  const parsed = parseIntentContract(rendered.replaceAll('\n', '\r\n'));
+  assert.deepEqual(parsed, {
+    goal: input.goal,
+    successEvidence: input.successEvidence,
+    scopeBoundaries: input.scopeBoundaries,
+    constraints: [input.constraints[0], ...SAFE_CONSTRAINTS],
+    visualDirection: input.visualDirection,
+  });
+  assert.equal(renderIntentContract(parsed), rendered);
+  assert.match(parsed.goal, /^Keep the true goal/);
+});
+
+test('malformed VibeTether intent metadata fails closed instead of parsing headings', () => {
+  const rendered = renderIntentContract({
+    goal: 'True goal',
+    success_evidence: 'Fresh tests pass',
+  });
+  const malformed = rendered.replace(
+    /<!-- vibetether:intent:v1 [A-Za-z0-9_-]+ -->/,
+    '<!-- vibetether:intent:v1 !!! -->',
+  );
+
+  assert.throws(
+    () => parseIntentContract(malformed),
+    /invalid VibeTether intent metadata/i,
+  );
 });
 
 test('bundle signals and real package sources each make a project non-greenfield', () => {
@@ -239,24 +284,75 @@ test('bundle signals and real package sources each make a project non-greenfield
   assert.equal(packaged.greenfield, false);
 });
 
-test('list inputs are trimmed, emptied, and de-duplicated while safe constraints remain unique', () => {
+test('greenfield requires explicit scan state even with only synthetic sources', () => {
+  const omittedState = discovery();
+  delete omittedState.project_state;
+
+  assert.equal(buildBootstrapModel({ discovery: omittedState }).greenfield, false);
+  assert.equal(
+    buildBootstrapModel({ discovery: discovery({ projectState: 'existing' }) }).greenfield,
+    false,
+  );
+});
+
+test('invalid scalar types cannot satisfy readiness or leak into rendered contracts', () => {
+  const invalid = buildBootstrapModel({
+    discovery: discovery(),
+    input: {
+      goal: {},
+      successEvidence: 0,
+      visualDirection: false,
+    },
+  });
+  const invalidList = buildBootstrapModel({
+    discovery: discovery(),
+    input: {
+      goal: 'Valid goal',
+      successEvidence: ['arrays are not valid scalar evidence'],
+    },
+  });
+  const contract = renderIntentContract(invalid.answers);
+
+  assert.equal(invalid.ready, false);
+  assert.equal(invalid.answers.goal, null);
+  assert.equal(invalid.answers.success_evidence, null);
+  assert.equal(invalid.answers.visual_direction, null);
+  assert.equal(invalidList.ready, false);
+  assert.equal(invalidList.answers.success_evidence, null);
+  assert.doesNotMatch(contract, /\[object Object\]|\b0\b|false/);
+});
+
+test('list-capable inputs discard invalid members, trim, and de-duplicate valid strings', () => {
   const model = buildBootstrapModel({
     discovery: discovery(),
     input: {
       goal: 'Goal',
-      successEvidence: [' test passes ', '', 'test passes', ' docs match '],
-      scopeBoundaries: [' src only ', 'src only', ' ', ' no release '],
+      successEvidence: 'test passes',
+      scopeBoundaries: [
+        ' src only ',
+        'src only',
+        ' ',
+        ' no release ',
+        7,
+        false,
+        { value: 'ignored' },
+        ['nested is ignored'],
+      ],
       constraints: [
         ' custom rule ',
         '',
         'custom rule',
         'Preserve existing project instructions and higher-authority decisions.',
+        9,
+        true,
+        { value: 'ignored' },
+        ['nested is ignored'],
       ],
       visualDirection: '   ',
     },
   });
 
-  assert.deepEqual(model.answers.success_evidence, ['test passes', 'docs match']);
+  assert.equal(model.answers.success_evidence, 'test passes');
   assert.deepEqual(model.answers.scope_boundaries, ['src only', 'no release']);
   assert.deepEqual(model.answers.constraints, ['custom rule', ...SAFE_CONSTRAINTS]);
   assert.equal(model.answers.visual_direction, null);

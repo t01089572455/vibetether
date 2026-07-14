@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { CliError } from './errors.mjs';
 
@@ -13,6 +13,10 @@ async function kind(root, relativePath) {
 }
 
 export async function scanProject(root, enabledAdapters, profile) {
+  const topLevelEntries = await readdir(root, { withFileTypes: true });
+  const projectState = topLevelEntries.some((entry) => entry.name !== '.git')
+    ? 'existing'
+    : 'greenfield';
   const discovery = {};
   const bundleSignals = [];
   const addBundleSignal = (bundle, signal, signalPath, reason, confidence = 'high') => {
@@ -107,6 +111,7 @@ export async function scanProject(root, enabledAdapters, profile) {
   return {
     schema_version: 1,
     project_id: path.basename(root).toLowerCase().replace(/[^a-z0-9._-]+/g, '-'),
+    project_state: projectState,
     profile,
     bundle_signals: bundleSignals,
     goal_source: goalSource,

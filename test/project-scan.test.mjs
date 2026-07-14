@@ -45,3 +45,30 @@ test('project scan emits Production signals without enabling a bundle by itself'
   assert.deepEqual(manifest.bundle_signals.map((entry) => entry.signal), ['ci', 'migration']);
   assert.equal(manifest.bundles, undefined);
 });
+
+test('project scan marks only empty or git-only roots as greenfield', async () => {
+  const empty = await project('empty');
+  const gitOnly = await project('git-only');
+  await mkdir(path.join(gitOnly, '.git'));
+
+  assert.equal((await scanProject(empty, ['codex'], 'core')).project_state, 'greenfield');
+  assert.equal((await scanProject(gitOnly, ['codex'], 'core')).project_state, 'greenfield');
+});
+
+test('project scan marks non-Web package, README, source, and instruction roots as existing', async () => {
+  const packageRoot = await project('package-existing');
+  await writeFile(path.join(packageRoot, 'package.json'), JSON.stringify({ name: 'plain-node-project' }), 'utf8');
+
+  const readmeRoot = await project('readme-existing');
+  await writeFile(path.join(readmeRoot, 'README.md'), '# Existing project\n', 'utf8');
+
+  const sourceRoot = await project('source-existing');
+  await mkdir(path.join(sourceRoot, 'src'));
+
+  const instructionsRoot = await project('instructions-existing');
+  await writeFile(path.join(instructionsRoot, 'AGENTS.md'), '# Existing instructions\n', 'utf8');
+
+  for (const root of [packageRoot, readmeRoot, sourceRoot, instructionsRoot]) {
+    assert.equal((await scanProject(root, ['codex'], 'core')).project_state, 'existing');
+  }
+});
