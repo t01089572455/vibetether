@@ -30,6 +30,19 @@ test('README gives exact install, bootstrap, routing, health, and uninstall comm
   assert.doesNotMatch(readme, /<github-owner>|your-username|OWNER\/vibetether/i);
 });
 
+test('README states the long-task control promise without a Token-savings claim', async () => {
+  const readme = await text('README.md');
+  assert.match(readme, /stronger agents such as Claude Fable 5 and GPT-5\.6/i);
+  assert.match(readme, /aims to reduce long-task drift and expensive rework/i);
+  assert.doesNotMatch(readme, /net Token savings|saves? Tokens|reduce(?:s|d)? Token usage|lower Token cost/i);
+  assert.match(readme, /npx --yes github:t01089572455\/vibetether init/);
+  assert.match(readme, /outer `npx --yes`[\s\S]*VibeTether's own `--yes`/i);
+  assert.match(readme, /vibetether bootstrap/);
+  assert.match(readme, /experience-index\.yaml/);
+  assert.match(readme, /applicable_experience/);
+  assert.match(readme, /first-proven-path/);
+});
+
 test('README is a complete scenario-led product and operations guide', async () => {
   const readme = await text('README.md');
   for (const heading of [
@@ -73,12 +86,12 @@ test('README is a complete scenario-led product and operations guide', async () 
 
 test('README makes provider fetching and Agent discovery explicit for beginners', async () => {
   const readme = await text('README.md');
-  assert.match(readme, /## What gets installed\?/i);
+  assert.match(readme, /### What gets installed\?/i);
   assert.match(readme, /VibeTether does not require community Skills/i);
   assert.match(readme, /does not search GitHub by star count/i);
   assert.match(readme, /explicit non-core `init`/i);
   assert.match(readme, /no provider is downloaded during active work/i);
-  assert.match(readme, /## How agents discover installed Skills/i);
+  assert.match(readme, /### How agents discover installed Skills/i);
   for (const artifact of [
     '.vibetether/capabilities.yaml',
     '.vibetether/providers.lock.yaml',
@@ -171,6 +184,7 @@ test('package metadata points to the authenticated public repository', async () 
   assert.equal(pkg.homepage, 'https://github.com/t01089572455/vibetether#readme');
   assert.equal(pkg.bugs.url, 'https://github.com/t01089572455/vibetether/issues');
   assert.equal(pkg.version, '0.2.2');
+  assert.equal(pkg.description, 'Direction control, guided readiness, Skill routing, and Proven Path recall for long-running coding agents.');
   assert.equal(pkg.files.includes('docs/operations'), true);
 });
 

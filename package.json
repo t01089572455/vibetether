@@ -1,7 +1,7 @@
 {
   "name": "vibetether",
   "version": "0.2.2",
-  "description": "Advisory Skill routing and drift control for long-running coding agents.",
+  "description": "Direction control, guided readiness, Skill routing, and Proven Path recall for long-running coding agents.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/t01089572455/vibetether.git"
