@@ -3,12 +3,12 @@
 import { access, lstat, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { isSafeProjectRelativeArtifactPath, isSensitiveArtifactPath } from './artifact-safety.mjs';
+import { assertCapabilityBoard, resolveCapabilityRoute } from './capability-routing.mjs';
 import {
-  capabilityBoardRouteFromManifest,
-  experienceIndexRouteFromManifest,
   matchExperience,
   parseExperienceIndex,
 } from './experience-index.mjs';
+import { authorityRoutesFromManifest } from './manifest.mjs';
 
 function fail(message, code = 2) {
   console.error(`ERROR ${message}`);
@@ -36,22 +36,11 @@ function parseArgs(args) {
   return options;
 }
 
-function matches(route, signals) {
-  if ((route.signals?.all ?? []).some((signal) => !signals.has(signal))) return false;
-  const any = route.signals?.any ?? [];
-  return any.length === 0 || any.some((signal) => signals.has(signal));
-}
-
-function available(route, harness) {
-  const harnesses = route.recommendation?.available_in ?? [];
-  return harness ? harnesses.includes(harness) : harnesses.length > 0;
-}
-
-async function readSafeProjectFile(root, relativePath, label, { experienceRoute = false } = {}) {
+async function readSafeProjectFile(root, relativePath, label, { authorityRoute = false } = {}) {
   if (typeof relativePath !== 'string'
       || relativePath.length === 0
       || !isSafeProjectRelativeArtifactPath(relativePath)
-      || (experienceRoute && isSensitiveArtifactPath(relativePath))) {
+      || (authorityRoute && isSensitiveArtifactPath(relativePath))) {
     throw new Error(`${label} path is unsafe`);
   }
   const target = path.resolve(root, relativePath);
@@ -90,106 +79,63 @@ async function refreshAvailability(board, root) {
   }
 }
 
-function resolve(board, request) {
-  const phase = request.phase.toUpperCase();
-  const signals = new Set(request.signals);
-  const capability = (board.capabilities ?? []).find((entry) => entry.id === request.capability);
-  if (!capability) throw new Error(`Unknown capability: ${request.capability}`);
-  const routes = (board.routes ?? [])
-    .filter((route) => String(route.phase).toUpperCase() === phase && route.capability === request.capability)
-    .filter((route) => matches(route, signals))
-    .sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0));
-  const preferred = routes[0] ?? null;
-  const usable = routes.find((route) => available(route, request.agent)) ?? null;
-  const confirmationGates = (board.high_risk_gates ?? []).filter((gate) => signals.has(gate));
-  if (!preferred) {
-    return {
-      advisory: true,
-      phase,
-      capability: request.capability,
-      signals: [...signals],
-      recommendation: null,
-      selection: { skill: 'vibe-tether', source: 'built-in-fallback', reason: capability.fallback },
-      should_invoke_provider: false,
-      expected_outputs: capability.expected_outputs ?? [],
-      exit_evidence: capability.exit_evidence ?? [],
-      confirmation_required: confirmationGates.length > 0,
-      confirmation_gates: confirmationGates,
-    };
-  }
-  const source = usable
-    ? usable.id === preferred.id ? 'recommended' : 'available-alternative'
-    : 'declared-fallback';
-  return {
-    advisory: true,
-    phase,
-    capability: request.capability,
-    signals: [...signals],
-    recommendation: {
-      skill: preferred.recommendation.skill,
-      available: available(preferred, request.agent),
-      available_in: preferred.recommendation.available_in ?? [],
-      reason: preferred.recommendation.reason,
-    },
-    selection: {
-      skill: usable?.recommendation?.skill ?? preferred.fallback ?? 'vibe-tether',
-      source,
-      reason: source === 'recommended'
-        ? 'The preferred matching Skill is available.'
-        : source === 'available-alternative'
-          ? 'The preferred Skill is unavailable; use the next matching installed route.'
-          : 'No matching provider is available; use the declared fallback and record why.',
-    },
-    should_invoke_provider: Boolean(usable),
-    alternatives: routes.slice(1).map((route) => ({
-      skill: route.recommendation.skill,
-      available: available(route, request.agent),
-      reason: route.recommendation.reason,
-    })),
-    expected_outputs: preferred.expected_outputs ?? capability.expected_outputs ?? [],
-    exit_evidence: preferred.exit_evidence ?? capability.exit_evidence ?? [],
-    confirmation_required: confirmationGates.length > 0,
-    confirmation_gates: confirmationGates,
-  };
+let options;
+try {
+  options = parseArgs(process.argv.slice(2));
+} catch (error) {
+  fail(error.message, 2);
 }
 
-try {
-  const options = parseArgs(process.argv.slice(2));
-  const root = await realpath(path.resolve(options.project));
-  let boardPath;
-  let experiencePath;
+if (options) {
   try {
-    const manifestSource = await readSafeProjectFile(root, '.vibetether/project.yaml', 'VibeTether manifest');
-    boardPath = capabilityBoardRouteFromManifest(manifestSource);
-    experiencePath = experienceIndexRouteFromManifest(manifestSource);
-  } catch {
-    throw new Error('Cannot read VibeTether manifest because it is missing, linked, or structurally invalid. Run vibetether doctor for details.');
-  }
-  let board;
-  try {
-    board = JSON.parse(await readSafeProjectFile(root, boardPath, 'Capability board'));
-  } catch {
-    throw new Error('Cannot read the zero-dependency capability board. Run vibetether doctor for details.');
-  }
-  await refreshAvailability(board, root);
-  let experience;
-  try {
-    const experienceSource = await readSafeProjectFile(
+    const root = await realpath(path.resolve(options.project));
+    let boardPath;
+    let experiencePath;
+    try {
+      const manifestSource = await readSafeProjectFile(root, '.vibetether/project.yaml', 'VibeTether manifest');
+      const routes = authorityRoutesFromManifest(manifestSource);
+      boardPath = routes.capabilityBoard;
+      experiencePath = routes.experienceIndex;
+    } catch {
+      throw new Error('Cannot read VibeTether manifest because it is missing, linked, or structurally invalid. Run vibetether doctor for details.');
+    }
+    let board;
+    try {
+      board = JSON.parse(await readSafeProjectFile(
+        root,
+        boardPath,
+        'Capability board',
+        { authorityRoute: true },
+      ));
+      assertCapabilityBoard(board);
+    } catch {
+      throw new Error('Cannot read the zero-dependency capability board. Run vibetether doctor for details.');
+    }
+    await refreshAvailability(board, root);
+    let experience;
+    try {
+      const experienceSource = await readSafeProjectFile(
+        root,
+        experiencePath,
+        'Experience index',
+        { authorityRoute: true },
+      );
+      experience = parseExperienceIndex(experienceSource);
+    } catch {
+      throw new Error('Cannot read experience index because it is missing, unsafe, or structurally invalid. Run vibetether doctor for details.');
+    }
+    const resolution = resolveCapabilityRoute(board, {
+      phase: options.phase,
+      capability: options.capability,
+      signals: options.signals,
+      harness: options.agent,
+    });
+    const applicableExperience = await matchExperience(experience, {
       root,
-      experiencePath,
-      'Experience index',
-      { experienceRoute: true },
-    );
-    experience = parseExperienceIndex(experienceSource);
-  } catch {
-    throw new Error('Cannot read experience index because it is missing, unsafe, or structurally invalid. Run vibetether doctor for details.');
+      signals: options.signals,
+    });
+    console.log(JSON.stringify({ ...resolution, applicable_experience: applicableExperience }, null, 2));
+  } catch (error) {
+    fail(error.message, error.exitCode ?? 3);
   }
-  const resolution = resolve(board, options);
-  const applicableExperience = await matchExperience(experience, {
-    root,
-    signals: options.signals,
-  });
-  console.log(JSON.stringify({ ...resolution, applicable_experience: applicableExperience }, null, 2));
-} catch (error) {
-  fail(error.message);
 }

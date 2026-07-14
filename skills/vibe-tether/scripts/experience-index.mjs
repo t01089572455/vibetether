@@ -257,33 +257,6 @@ export function parseExperienceIndex(source) {
   return assertExperienceIndex(index);
 }
 
-export function experienceIndexRouteFromManifest(source) {
-  if (typeof source !== 'string') throw new Error('VibeTether manifest source must be text');
-  let route;
-  for (const line of source.replace(/\r\n/g, '\n').split('\n')) {
-    const match = line.match(/^experience_index:\s*(.*)$/);
-    if (!match) continue;
-    if (route !== undefined) throw new Error('VibeTether manifest has duplicate experience_index fields');
-    if (!match[1]) throw new Error('VibeTether manifest experience_index requires a path');
-    route = scalar(match[1]);
-  }
-  return route ?? '.vibetether/experience-index.yaml';
-}
-
-export function capabilityBoardRouteFromManifest(source) {
-  if (typeof source !== 'string') throw new Error('VibeTether manifest source must be text');
-  let route;
-  for (const line of source.replace(/\r\n/g, '\n').split('\n')) {
-    const match = line.match(/^capability_board:\s*(.*)$/);
-    if (!match) continue;
-    if (route !== undefined) throw new Error('VibeTether manifest has duplicate capability_board fields');
-    if (!match[1]) throw new Error('VibeTether manifest capability_board requires a path');
-    route = scalar(match[1]);
-  }
-  if (route === undefined) throw new Error('VibeTether manifest requires capability_board');
-  return route;
-}
-
 async function safeRegularArtifact(root, artifact) {
   if (!isSafeProjectRelativeArtifactPath(artifact) || isSensitiveArtifactPath(artifact)) return false;
   const target = path.resolve(root, artifact);

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import YAML from 'yaml';
@@ -12,6 +12,9 @@ import {
   serializeExperienceIndex,
 } from '../src/experience-index.mjs';
 import { initialize } from '../src/init.mjs';
+
+const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const packageCli = path.join(packageRoot, 'bin', 'vibetether.mjs');
 
 function entry(overrides = {}) {
   return {
@@ -43,6 +46,8 @@ async function fixture(name) {
   await writeArtifact(root, 'docs/operations/github-publishing.md', '# GitHub publishing\n');
   return {
     root,
+    boardPath: path.join(root, '.vibetether', 'capabilities.yaml'),
+    manifestPath: path.join(root, '.vibetether', 'project.yaml'),
     indexPath: path.join(root, '.vibetether', 'experience-index.yaml'),
     resolver: path.join(root, '.agents', 'skills', 'vibe-tether', 'scripts', 'resolve-route.mjs'),
     parser: path.join(root, '.agents', 'skills', 'vibe-tether', 'scripts', 'experience-index.mjs'),
@@ -92,9 +97,112 @@ async function assertAuthorityFailure(state, label) {
     },
   );
   const local = installedResolve(state, ['publish']);
-  assert.notEqual(local.status, 0, `installed: ${label}`);
+  assert.equal(local.status, 3, `installed authority exit code: ${label}\n${local.stderr || local.stdout}`);
   assert.match(local.stderr, /vibetether doctor/i, `installed guidance: ${label}`);
 }
+
+function routingBoard(routes = []) {
+  return {
+    schema_version: 1,
+    mode: 'advisory-router',
+    high_risk_gates: ['release-scope'],
+    capabilities: [{
+      id: 'release-verification',
+      phases: ['SHIP'],
+      expected_outputs: ['release-report'],
+      exit_evidence: ['Release evidence is current.'],
+      fallback: 'vibe-tether-built-in-release',
+    }],
+    routes,
+    providers: [],
+  };
+}
+
+function route(id, overrides = {}) {
+  return {
+    id,
+    phase: 'SHIP',
+    capability: 'release-verification',
+    priority: 100,
+    signals: { all: [], any: [] },
+    recommendation: {
+      skill: id,
+      available_in: ['codex'],
+      reason: `${id} route`,
+    },
+    workflow_role: 'primary',
+    selection: 'recommend',
+    fallback: 'vibe-tether-built-in-release',
+    expected_outputs: ['release-report'],
+    exit_evidence: ['Release evidence is current.'],
+    ...overrides,
+  };
+}
+
+async function assertRouteParity(state, board, signals = ['publish']) {
+  await writeFile(state.boardPath, `${JSON.stringify(board, null, 2)}\n`, 'utf8');
+  const packageOutput = await packageResolve(state, signals);
+  const installed = installedResolve(state, signals);
+  assert.equal(installed.status, 0, installed.stderr || installed.stdout);
+  const installedOutput = JSON.parse(installed.stdout);
+  assert.deepEqual(installedOutput, packageOutput);
+  return packageOutput;
+}
+
+test('actual installed and package resolvers have full route semantic parity', async (context) => {
+  const state = await fixture('route-semantic-parity');
+  const overlay = route('karpathy-guidelines', {
+    priority: 300,
+    workflow_role: 'policy',
+    selection: 'recommend-overlay',
+  });
+  const primary = route('shipping-and-launch', { priority: 200 });
+  const unavailable = route('preferred-unavailable', {
+    priority: 250,
+    recommendation: {
+      skill: 'preferred-unavailable',
+      available_in: [],
+      reason: 'Preferred but unavailable.',
+    },
+    fallback: 'explicit-fallback',
+  });
+  const alternative = route('available-alternative', { priority: 150 });
+
+  await context.test('policy-only route stays an overlay and never becomes primary', async () => {
+    const result = await assertRouteParity(state, routingBoard([overlay]));
+    assert.equal(result.primary, null);
+    assert.equal(result.recommendation, null);
+    assert.equal(result.selection.skill, 'vibe-tether');
+    assert.deepEqual(result.overlays.map(({ skill }) => skill), ['karpathy-guidelines']);
+  });
+  await context.test('primary plus policy overlay', async () => {
+    const result = await assertRouteParity(state, routingBoard([overlay, primary]));
+    assert.equal(result.primary.skill, 'shipping-and-launch');
+    assert.equal(result.selection.skill, 'shipping-and-launch');
+    assert.deepEqual(result.overlays.map(({ skill }) => skill), ['karpathy-guidelines']);
+  });
+  await context.test('declared fallback', async () => {
+    const result = await assertRouteParity(state, routingBoard([unavailable]));
+    assert.equal(result.selection.skill, 'explicit-fallback');
+    assert.equal(result.selection.source, 'declared-fallback');
+  });
+  await context.test('available alternative', async () => {
+    const result = await assertRouteParity(state, routingBoard([unavailable, alternative]));
+    assert.equal(result.selection.skill, 'available-alternative');
+    assert.equal(result.selection.source, 'available-alternative');
+  });
+  await context.test('high-risk confirmation', async () => {
+    const result = await assertRouteParity(state, routingBoard([primary]), ['publish', 'release-scope']);
+    assert.equal(result.confirmation_required, true);
+    assert.deepEqual(result.confirmation_gates, ['release-scope']);
+  });
+  await context.test('no matching primary route', async () => {
+    const gated = route('signal-gated', { signals: { all: ['production'], any: [] } });
+    const result = await assertRouteParity(state, routingBoard([gated]), ['publish']);
+    assert.equal(result.primary, null);
+    assert.equal(result.selection.source, 'built-in-fallback');
+  });
+});
 
 test('the actually installed resolver matches package experience semantics across the contract matrix', async (context) => {
   const state = await fixture('matrix');
@@ -464,4 +572,203 @@ test('package and installed resolvers reject linked manifest and index authority
     await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
     await assertAuthorityFailure(state, 'custom index intermediate-directory junction');
   });
+});
+
+test('capability-board route uses the same safe authority boundary in package and installed resolvers', async () => {
+  const state = await fixture('board-route-authority');
+  const manifest = YAML.parse(await readFile(state.manifestPath, 'utf8'));
+  const validBoard = `${JSON.stringify(routingBoard([route('shipping-and-launch')]), null, 2)}\n`;
+
+  manifest.capability_board = 'docs/custom-capabilities.json';
+  await writeFile(state.manifestPath, YAML.stringify(manifest), 'utf8');
+  await writeArtifact(state.root, manifest.capability_board, validBoard);
+  await assertRouteParity(state, routingBoard([route('shipping-and-launch')]));
+
+  const secret = `github_pat_${'B'.repeat(30)}`;
+  const external = path.join(await mkdtemp(path.join(os.tmpdir(), 'vibetether-board-external-')), 'board.json');
+  await writeFile(external, validBoard, 'utf8');
+  await mkdir(path.join(state.root, 'docs', 'board-directory'), { recursive: true });
+  for (const unsafe of [
+    '.npmrc',
+    '.aws/credentials.json',
+    'config/client-secret.json',
+    `docs/${secret}.json`,
+  ]) {
+    await writeArtifact(state.root, unsafe, validBoard);
+  }
+
+  for (const [label, boardRoute] of [
+    ['npm credential control file', '.npmrc'],
+    ['hidden credential root', '.aws/credentials.json'],
+    ['credential-like file name', 'config/client-secret.json'],
+    ['token-like route', `docs/${secret}.json`],
+    ['parent escape', '../outside.json'],
+    ['absolute route', external],
+    ['UNC route', '\\\\server\\share\\capabilities.json'],
+    ['project root', '.'],
+    ['directory route', 'docs/board-directory'],
+  ]) {
+    manifest.capability_board = boardRoute;
+    await writeFile(state.manifestPath, YAML.stringify(manifest), 'utf8');
+    await assertAuthorityFailure(state, label);
+    const packageError = await packageResolve(state, ['publish']).catch((error) => error);
+    const installed = installedResolve(state, ['publish']);
+    assert.doesNotMatch(packageError.message, new RegExp(secret), label);
+    assert.doesNotMatch(installed.stderr, new RegExp(secret), label);
+  }
+
+  const escapedSecret = `github_pat_${'Z'.repeat(30)}`;
+  const encodedRoute = `docs/github_pat_${'\\u005a'.repeat(30)}.json`;
+  const canonicalManifest = YAML.stringify({ ...manifest, capability_board: 'placeholder.json' });
+  await writeFile(
+    state.manifestPath,
+    canonicalManifest.replace('capability_board: placeholder.json', `capability_board: "${encodedRoute}"`),
+    'utf8',
+  );
+  await assertAuthorityFailure(state, 'post-decode secret route');
+  const packageError = await packageResolve(state, ['publish']).catch((error) => error);
+  const installed = installedResolve(state, ['publish']);
+  assert.doesNotMatch(packageError.message, new RegExp(escapedSecret));
+  assert.doesNotMatch(installed.stderr, new RegExp(escapedSecret));
+});
+
+test('capability-board authority rejects linked files and intermediate directories', async (context) => {
+  await context.test('board file symlink', async (subtest) => {
+    const state = await fixture('board-file-link');
+    const external = path.join(await mkdtemp(path.join(os.tmpdir(), 'vibetether-board-file-link-')), 'board.json');
+    await writeFile(external, await readFile(state.boardPath, 'utf8'), 'utf8');
+    await rm(state.boardPath);
+    try {
+      await symlink(external, state.boardPath, 'file');
+    } catch (error) {
+      if (process.platform === 'win32' && ['EACCES', 'EPERM'].includes(error.code)) {
+        subtest.skip(`Windows denied file symlink creation: ${error.code}`);
+        return;
+      }
+      throw error;
+    }
+    await assertAuthorityFailure(state, 'board file symlink');
+  });
+
+  await context.test('custom board intermediate-directory junction', async (subtest) => {
+    const state = await fixture('board-directory-link');
+    const external = await mkdtemp(path.join(os.tmpdir(), 'vibetether-board-directory-link-'));
+    await writeFile(path.join(external, 'board.json'), await readFile(state.boardPath, 'utf8'), 'utf8');
+    const linked = path.join(state.root, 'docs', 'linked-board');
+    await mkdir(path.dirname(linked), { recursive: true });
+    try {
+      await symlink(external, linked, 'junction');
+    } catch (error) {
+      if (process.platform === 'win32' && ['EACCES', 'EPERM'].includes(error.code)) {
+        subtest.skip(`Windows denied junction creation: ${error.code}`);
+        return;
+      }
+      throw error;
+    }
+    const manifest = YAML.parse(await readFile(state.manifestPath, 'utf8'));
+    manifest.capability_board = 'docs/linked-board/board.json';
+    await writeFile(state.manifestPath, YAML.stringify(manifest), 'utf8');
+    await assertAuthorityFailure(state, 'custom board intermediate-directory junction');
+  });
+});
+
+test('capability-board documents require the complete advisory-router envelope', async () => {
+  const state = await fixture('board-envelope');
+  const valid = routingBoard([route('shipping-and-launch')]);
+  for (const [label, invalid] of [
+    ['root array', []],
+    ['unsupported schema', { ...valid, schema_version: 2 }],
+    ['unsupported mode', { ...valid, mode: 'automatic-router' }],
+  ]) {
+    await writeFile(state.boardPath, `${JSON.stringify(invalid, null, 2)}\n`, 'utf8');
+    await assertAuthorityFailure(state, label);
+  }
+  await writeFile(state.boardPath, YAML.stringify(valid, { lineWidth: 0 }), 'utf8');
+  await assertAuthorityFailure(state, 'YAML-only board document');
+});
+
+test('installed resolver validates the complete canonical manifest before extracting routes', async () => {
+  const state = await fixture('canonical-manifest');
+  const base = YAML.parse(await readFile(state.manifestPath, 'utf8'));
+  const board = routingBoard([route('shipping-and-launch')]);
+  await writeFile(state.boardPath, `${JSON.stringify(board, null, 2)}\n`, 'utf8');
+
+  for (const profile of ['core', 'standard', 'extended']) {
+    const manifest = {
+      ...base,
+      profile,
+      bundle_signals: profile === 'core' ? [] : [{
+        bundle: 'web',
+        signal: 'react',
+        path: 'package.json',
+        confidence: 'high',
+        reason: 'React dependency detected.',
+      }],
+      bundles: profile === 'core' ? [] : ['web'],
+    };
+    await writeFile(state.manifestPath, YAML.stringify(manifest, { lineWidth: 0 }), 'utf8');
+    await assertRouteParity(state, board);
+  }
+
+  const canonical = YAML.stringify({
+    ...base,
+    profile: 'extended',
+    bundle_signals: [{
+      bundle: 'web',
+      signal: 'react',
+      path: 'package.json',
+      confidence: 'high',
+      reason: 'React dependency detected.',
+    }],
+    bundles: ['web'],
+  }, { lineWidth: 0 });
+  const malformed = [
+    ['appended malformed flow', `${canonical}profile: [unterminated\n`],
+    ['invalid root indentation', canonical.replace('schema_version: 1', ' schema_version: 1')],
+    ['invalid nested indentation', canonical.replace('  always:', '   always:')],
+    ['duplicate route', `${canonical}capability_board: docs/other-board.json\n`],
+    ['prototype key cannot supply inherited authority', canonical.replace(
+      'capability_board: .vibetether/capabilities.yaml',
+      '__proto__:\n  capability_board: .vibetether/capabilities.yaml',
+    )],
+    ['non-empty flow', canonical.replace('bundles:\n  - web', 'bundles: [web]')],
+    ['anchor', canonical.replace('profile: extended', 'profile: &profile extended')],
+    ['tag', canonical.replace('profile: extended', 'profile: !profile extended')],
+    ['literal block', canonical.replace('profile: extended', 'profile: |\n  extended')],
+    ['comment', canonical.replace('profile: extended', '# hidden\nprofile: extended')],
+    ['tab', canonical.replace('profile: extended', 'profile:\textended')],
+  ];
+  for (const [label, source] of malformed) {
+    await writeFile(state.manifestPath, source, 'utf8');
+    await assertAuthorityFailure(state, label);
+  }
+});
+
+test('installed resolver reserves exit code 2 for argument errors and 3 for project authority failures', async () => {
+  const state = await fixture('exit-codes');
+  const installedUnknown = spawnSync(process.execPath, [state.resolver, '--unknown'], {
+    cwd: state.root,
+    encoding: 'utf8',
+  });
+  const packageUnknown = spawnSync(process.execPath, [packageCli, 'capabilities', '--unknown'], {
+    cwd: state.root,
+    encoding: 'utf8',
+  });
+  assert.equal(installedUnknown.status, 2);
+  assert.equal(packageUnknown.status, installedUnknown.status);
+  await rm(state.manifestPath);
+  const installedAuthority = installedResolve(state);
+  const packageAuthority = spawnSync(process.execPath, [
+    packageCli,
+    'capabilities',
+    '--project', state.root,
+    '--phase', 'SHIP',
+    '--capability', 'release-verification',
+    '--agent', 'codex',
+    '--json',
+  ], { cwd: state.root, encoding: 'utf8' });
+  assert.equal(installedAuthority.status, 3, installedAuthority.stderr || installedAuthority.stdout);
+  assert.equal(packageAuthority.status, installedAuthority.status, packageAuthority.stderr || packageAuthority.stdout);
+  assert.match(installedAuthority.stderr, /vibetether doctor/i);
+  assert.match(packageAuthority.stderr, /vibetether doctor/i);
 });

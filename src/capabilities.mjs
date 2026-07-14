@@ -1,9 +1,14 @@
 import { access, lstat, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
-import YAML from 'yaml';
 import { CliError } from './errors.mjs';
 import { isSafeProjectRelativeArtifactPath, isSensitiveArtifactPath } from './artifact-safety.mjs';
 import { matchExperience, parseExperienceIndex } from './experience-index.mjs';
+import { parseManifest } from './manifest.mjs';
+import {
+  assertCapabilityBoard,
+  resolveCapabilityRoute,
+} from '../skills/vibe-tether/scripts/capability-routing.mjs';
+import { parseCanonicalManifest } from '../skills/vibe-tether/scripts/manifest.mjs';
 
 const DEFAULT_EXPERIENCE_INDEX = '.vibetether/experience-index.yaml';
 
@@ -16,21 +21,19 @@ function inside(root, relativePath, label) {
   return target;
 }
 
-function parseYamlSource(source, label) {
+function parseBoardSource(source) {
   try {
-    const value = YAML.parse(source);
-    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('document must be a mapping');
-    return value;
-  } catch (error) {
-    throw new CliError(`Cannot parse ${label}. Run vibetether doctor for details.`, 3);
+    return JSON.parse(source);
+  } catch {
+    throw new CliError('Cannot parse capability board. Run vibetether doctor for details.', 3);
   }
 }
 
-async function readSafeProjectFile(root, relativePath, label, { experienceRoute = false } = {}) {
+async function readSafeProjectFile(root, relativePath, label, { authorityRoute = false } = {}) {
   if (typeof relativePath !== 'string'
       || relativePath.length === 0
       || !isSafeProjectRelativeArtifactPath(relativePath)
-      || (experienceRoute && isSensitiveArtifactPath(relativePath))) {
+      || (authorityRoute && isSensitiveArtifactPath(relativePath))) {
     throw new CliError(`${label} path is unsafe. Run vibetether doctor for details.`, 3);
   }
   const target = path.resolve(root, relativePath);
@@ -48,17 +51,6 @@ async function readSafeProjectFile(root, relativePath, label, { experienceRoute 
     }
   }
   return readFile(target, 'utf8');
-}
-
-function routeMatches(route, signals) {
-  if ((route.signals?.all ?? []).some((signal) => !signals.has(signal))) return false;
-  const any = route.signals?.any ?? [];
-  return any.length === 0 || any.some((signal) => signals.has(signal));
-}
-
-function routeAvailable(route, harness) {
-  const available = route.recommendation?.available_in ?? [];
-  return harness ? available.includes(harness) : available.length > 0;
 }
 
 export async function refreshBoardAvailability(board, root) {
@@ -93,105 +85,12 @@ export async function refreshBoardAvailability(board, root) {
 }
 
 export function resolveBoardRoute(board, request) {
-  const phase = String(request.phase ?? '').toUpperCase();
-  const signals = new Set(request.signals ?? []);
-  const capability = (board.capabilities ?? []).find((entry) => entry.id === request.capability);
-  if (!capability) throw new CliError(`Unknown capability: ${request.capability}`);
-
-  const matches = (board.routes ?? [])
-    .filter((route) => String(route.phase).toUpperCase() === phase && route.capability === request.capability)
-    .filter((route) => routeMatches(route, signals))
-    .sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0));
-  const overlayMatches = matches.filter(
-    (route) => route.workflow_role === 'policy' || route.selection === 'recommend-overlay',
-  );
-  const primaryMatches = matches.filter((route) => !overlayMatches.includes(route));
-  const preferred = primaryMatches[0] ?? null;
-  const available = primaryMatches.find((route) => routeAvailable(route, request.harness)) ?? null;
-  const confirmationGates = (board.high_risk_gates ?? []).filter((gate) => signals.has(gate));
-  const overlays = overlayMatches.map((route) => ({
-    id: route.id,
-    skill: route.recommendation.skill,
-    available: routeAvailable(route, request.harness),
-    available_in: route.recommendation.available_in ?? [],
-    reason: route.recommendation.reason,
-    expected_outputs: route.expected_outputs ?? [],
-    exit_evidence: route.exit_evidence ?? [],
-  }));
-
-  if (!preferred) {
-    const rationale = capability.fallback;
-    return {
-      advisory: true,
-      phase,
-      capability: request.capability,
-      signals: [...signals],
-      detected_signals: [...signals],
-      recommendation: null,
-      primary: null,
-      overlays,
-      selection: {
-        skill: 'vibe-tether',
-        source: 'built-in-fallback',
-        reason: rationale,
-      },
-      should_invoke_provider: overlays.some((overlay) => overlay.available),
-      alternatives: [],
-      rationale,
-      fallback: capability.fallback,
-      expected_outputs: capability.expected_outputs ?? [],
-      required_outputs: capability.expected_outputs ?? [],
-      exit_evidence: capability.exit_evidence ?? [],
-      confirmation_required: confirmationGates.length > 0,
-      confirmation_gates: confirmationGates,
-    };
+  try {
+    return resolveCapabilityRoute(board, request);
+  } catch (error) {
+    if (error instanceof CliError) throw error;
+    throw new CliError(error.message, error.exitCode ?? 2);
   }
-
-  const preferredAvailable = routeAvailable(preferred, request.harness);
-  const selectedSkill = available?.recommendation?.skill ?? preferred.fallback ?? 'vibe-tether';
-  const selectionSource = available
-    ? available.id === preferred.id ? 'recommended' : 'available-alternative'
-    : 'declared-fallback';
-  const rationale = selectionSource === 'available-alternative'
-    ? `The preferred Skill is unavailable in ${request.harness ?? 'enabled harnesses'}; use the next matching installed route.`
-    : selectionSource === 'declared-fallback'
-      ? 'No matching provider is available; use the declared fallback and record why.'
-      : 'The preferred matching Skill is available.';
-  const primary = {
-    skill: preferred.recommendation.skill,
-    available: preferredAvailable,
-    available_in: preferred.recommendation.available_in ?? [],
-    reason: preferred.recommendation.reason,
-  };
-  const requiredOutputs = preferred.expected_outputs ?? capability.expected_outputs ?? [];
-  return {
-    advisory: true,
-    phase,
-    capability: request.capability,
-    signals: [...signals],
-    detected_signals: [...signals],
-    recommendation: primary,
-    primary,
-    overlays,
-    selection: {
-      skill: selectedSkill,
-      source: selectionSource,
-      reason: rationale,
-    },
-    should_invoke_provider: Boolean(available) || overlays.some((overlay) => overlay.available),
-    alternatives: primaryMatches.slice(1).map((route) => ({
-      skill: route.recommendation.skill,
-      available: routeAvailable(route, request.harness),
-      reason: route.recommendation.reason,
-    })),
-    rationale,
-    fallback: preferred.fallback ?? capability.fallback,
-    expected_outputs: requiredOutputs,
-    required_outputs: requiredOutputs,
-    exit_evidence: preferred.exit_evidence ?? capability.exit_evidence ?? [],
-    confirmation_required: confirmationGates.length > 0,
-    confirmation_gates: confirmationGates,
-  };
 }
 
 async function loadCapabilitySnapshot(project, { includeExperience = false } = {}) {
@@ -204,28 +103,38 @@ async function loadCapabilitySnapshot(project, { includeExperience = false } = {
   let manifest;
   try {
     const source = await readSafeProjectFile(root, '.vibetether/project.yaml', 'VibeTether manifest');
-    manifest = parseYamlSource(source, 'VibeTether manifest');
+    parseCanonicalManifest(source);
+    manifest = parseManifest(source);
   } catch {
     throw new CliError('Cannot read VibeTether manifest because it is missing, linked, or structurally invalid. Run vibetether doctor for details.', 3);
   }
-  if (!manifest.capability_board) throw new CliError('Manifest does not declare capability_board. Run VibeTether init to upgrade the project.', 3);
+  if (!manifest.capability_board) {
+    throw new CliError('Manifest does not declare capability_board. Run vibetether doctor, then init to upgrade the project.', 3);
+  }
   let board;
   try {
-    const source = await readSafeProjectFile(root, manifest.capability_board, 'Capability board');
-    board = parseYamlSource(source, 'capability board');
+    const source = await readSafeProjectFile(
+      root,
+      manifest.capability_board,
+      'Capability board',
+      { authorityRoute: true },
+    );
+    board = parseBoardSource(source);
   } catch (error) {
     if (error instanceof CliError) throw error;
     throw new CliError('Cannot read capability board. Run vibetether doctor for details.', 3);
   }
-  if (board.schema_version !== 1 || board.mode !== 'advisory-router') {
-    throw new CliError('Unsupported capability board; expected schema_version 1 and advisory-router mode.', 3);
+  try {
+    assertCapabilityBoard(board);
+  } catch {
+    throw new CliError('Unsupported capability board; expected schema_version 1 and advisory-router mode. Run vibetether doctor for details.', 3);
   }
   if (!includeExperience) return { root, manifest, board };
   try {
     const route = manifest.experience_index === undefined
       ? DEFAULT_EXPERIENCE_INDEX
       : manifest.experience_index;
-    const source = await readSafeProjectFile(root, route, 'Experience index', { experienceRoute: true });
+    const source = await readSafeProjectFile(root, route, 'Experience index', { authorityRoute: true });
     const experience = parseExperienceIndex(source);
     return { root, manifest, board, experience };
   } catch {
