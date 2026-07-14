@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -134,6 +134,19 @@ test('project scan detects arbitrary files inside the VibeTether control directo
   await writeFile(path.join(root, '.vibetether', 'USER-NOTES.md'), '# User notes\n', 'utf8');
 
   assert.equal((await scanProject(root, ['codex'], 'core')).project_state, 'existing');
+});
+
+test('project scan requires reserved control roots to be directories', async (context) => {
+  for (const reserved of ['state', 'transaction', 'quarantine']) {
+    await context.test(reserved, async () => {
+      const root = await managedProject(`control-file-${reserved}`);
+      const target = path.join(root, '.vibetether', reserved);
+      await rm(target, { recursive: true, force: true });
+      await writeFile(target, 'User content\n', 'utf8');
+
+      assert.equal((await scanProject(root, ['codex'], 'core')).project_state, 'existing');
+    });
+  }
 });
 
 test('project scan detects a modified canonical VibeTether Skill', async () => {

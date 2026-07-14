@@ -293,7 +293,7 @@ async function managedBlockOnly(root, relativePath) {
 }
 
 function isInside(relativePath, directory) {
-  return relativePath === directory || relativePath.startsWith(`${directory}/`);
+  return relativePath.startsWith(`${directory}/`);
 }
 
 function isAncestor(relativePath, target) {
@@ -312,7 +312,7 @@ async function managedTreeOnly(root, relativeRoot, { files = new Set(), director
       const relativePath = `${relativeDirectory}/${entry.name}`;
       if (entry.isSymbolicLink()) return false;
       if (entry.isDirectory()) {
-        if ([...prefixes].some((prefix) => isInside(relativePath, prefix))) {
+        if ([...prefixes].some((prefix) => relativePath === prefix || isInside(relativePath, prefix))) {
           if (!(await visit(relativePath))) return false;
           continue;
         }
