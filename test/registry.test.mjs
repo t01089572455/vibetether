@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { loadProviderRegistry, validateProviderRegistry } from '../src/provider-registry.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -56,17 +57,40 @@ test('curated bundles are separate from inert discovery candidates and never ins
   assert.equal(registry.policy.curated_bundle_registry, '../bundles.json');
 });
 
-test('every lifecycle phase has exactly one built-in primary workflow provider', async () => {
+test('every generic lifecycle phase has exactly one built-in default primary workflow provider', async () => {
   const registry = await json('registry/providers/core.json');
   const phases = ['discover', 'align', 'design', 'plan', 'execute', 'verify', 'review', 'ship'];
 
   for (const phase of phases) {
     const matches = registry.providers.filter(
-      (provider) => provider.workflow_role === 'primary' && provider.phases.includes(phase) && provider.enabled_by_default,
+      (provider) =>
+        provider.workflow_role === 'primary' &&
+        provider.default_scope === 'lifecycle' &&
+        provider.phases.includes(phase) &&
+        provider.enabled_by_default,
     );
     assert.equal(matches.length, 1, `${phase} must have exactly one default primary provider`);
     assert.equal(matches[0].kind, 'built-in');
   }
+});
+
+test('the built-in proven-path recall provider is default-available without becoming a lifecycle primary', async () => {
+  const registry = await json('registry/providers/core.json');
+  const recall = registry.providers.find((provider) => provider.id === 'vibetether-built-in-recall');
+
+  assert.equal(recall.enabled_by_default, true);
+  assert.equal(recall.default_scope, 'capability');
+});
+
+test('registry validation requires each enabled built-in primary to declare its default scope', async () => {
+  const registry = await loadProviderRegistry();
+  const recall = registry.built_in_providers.find((provider) => provider.id === 'vibetether-built-in-recall');
+  delete recall.default_scope;
+
+  assert.throws(
+    () => validateProviderRegistry(registry),
+    /Enabled built-in primary vibetether-built-in-recall requires a default_scope/,
+  );
 });
 
 test('remote candidates are auditable, inert by default, and constrained for UI page types', async () => {

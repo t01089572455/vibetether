@@ -121,6 +121,13 @@ export function validateProviderRegistry(registry) {
   const ids = new Set();
   const exposedNames = new Set();
   const capabilityIds = new Set((registry.capability_catalog ?? []).map((capability) => capability.id));
+  const defaultScopes = new Set(['lifecycle', 'capability']);
+  for (const provider of registry.built_in_providers ?? []) {
+    if (provider.kind !== 'built-in' || provider.workflow_role !== 'primary' || !provider.enabled_by_default) continue;
+    if (!defaultScopes.has(provider.default_scope)) {
+      throw new Error(`Enabled built-in primary ${provider.id} requires a default_scope of lifecycle or capability`);
+    }
+  }
   for (const source of registry.sources ?? []) {
     if (registry.schema_version >= 2) {
       if (!['complete', 'selected'].includes(source.catalog_mode) || !source.skill_root) {

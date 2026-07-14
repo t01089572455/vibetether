@@ -13,6 +13,7 @@
       "id": "vibetether-built-in-alignment",
       "kind": "built-in",
       "workflow_role": "primary",
+      "default_scope": "lifecycle",
       "phases": ["discover", "align"],
       "capabilities": ["requirements-clarification", "project-bootstrap"],
       "enabled_by_default": true
@@ -21,13 +22,16 @@
       "id": "vibetether-built-in-recall",
       "kind": "built-in",
       "workflow_role": "primary",
+      "default_scope": "capability",
       "phases": ["align", "plan", "execute", "verify", "ship"],
-      "capabilities": ["proven-path-recall"]
+      "capabilities": ["proven-path-recall"],
+      "enabled_by_default": true
     },
     {
       "id": "vibetether-built-in-design",
       "kind": "built-in",
       "workflow_role": "primary",
+      "default_scope": "lifecycle",
       "phases": ["design"],
       "capabilities": ["product-design", "frontend-product-design"],
       "page_types": ["all"],
@@ -37,6 +41,7 @@
       "id": "vibetether-built-in-planning",
       "kind": "built-in",
       "workflow_role": "primary",
+      "default_scope": "lifecycle",
       "phases": ["plan"],
       "capabilities": ["planning"],
       "enabled_by_default": true
@@ -45,6 +50,7 @@
       "id": "vibetether-built-in-execution",
       "kind": "built-in",
       "workflow_role": "primary",
+      "default_scope": "lifecycle",
       "phases": ["execute"],
       "capabilities": ["implementation", "tdd", "debugging", "frontend-engineering"],
       "enabled_by_default": true
@@ -53,6 +59,7 @@
       "id": "vibetether-built-in-verification",
       "kind": "built-in",
       "workflow_role": "primary",
+      "default_scope": "lifecycle",
       "phases": ["verify"],
       "capabilities": ["browser-verification", "release-verification", "success-capture"],
       "enabled_by_default": true
@@ -61,6 +68,7 @@
       "id": "vibetether-built-in-review",
       "kind": "built-in",
       "workflow_role": "primary",
+      "default_scope": "lifecycle",
       "phases": ["review"],
       "capabilities": ["code-review", "security-review", "success-capture"],
       "enabled_by_default": true
@@ -69,6 +77,7 @@
       "id": "vibetether-built-in-release",
       "kind": "built-in",
       "workflow_role": "primary",
+      "default_scope": "lifecycle",
       "phases": ["ship"],
       "capabilities": ["release-verification", "success-capture"],
       "enabled_by_default": true
