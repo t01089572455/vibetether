@@ -747,7 +747,7 @@ test('schema rejects escaping artifacts and secret-bearing metadata', async () =
     /escapes the project/i,
   );
   await assert.rejects(
-    validateExperienceIndex({ ...index, entries: [{ ...index.entries[0], token: 'ghp_abcdefghijklmnopqrstuvwxyz123456' }] }, root),
+    validateExperienceIndex({ ...index, entries: [{ ...index.entries[0], token: 'redacted-test-value' }] }, root),
     /unexpected field.*token|secret-bearing/i,
   );
 });
@@ -1169,7 +1169,7 @@ test('doctor accepts already-encoded operations only when an index entry remains
 
 test('doctor rejects secret-bearing and escaping index entries', async () => {
   const root = await initializedProject('unsafe-index');
-  await writeFile(path.join(root, '.vibetether', 'experience-index.yaml'), `schema_version: 1\nentries:\n  - id: unsafe\n    use_when: [release]\n    artifacts: [../secret.md]\n    verified_at: 2026-07-14\n    revalidate_when: []\n    status: proven\n    token: ghp_abcdefghijklmnopqrstuvwxyz123456\n`);
+  await writeFile(path.join(root, '.vibetether', 'experience-index.yaml'), `schema_version: 1\nentries:\n  - id: unsafe\n    use_when: [release]\n    artifacts: [../secret.md]\n    verified_at: 2026-07-14\n    revalidate_when: []\n    status: proven\n    token: redacted-test-value\n`);
   const report = await doctorFailure(root);
   assert.equal(report.issues.some((issue) => ['invalid-experience-index', 'experience-artifact-escape'].includes(issue.code)), true);
 });
