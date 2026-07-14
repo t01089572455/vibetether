@@ -113,7 +113,9 @@ function sameAnswers(discovery, priorInput, model) {
 }
 
 function proposedIntent({ discovery, prior, model }) {
-  if (prior.source !== null && sameAnswers(discovery, prior.input, model)) return prior.source;
+  if (prior.source !== null
+      && isConfirmedIntent(prior.source)
+      && sameAnswers(discovery, prior.input, model)) return prior.source;
   return renderIntentContract(model.answers);
 }
 
@@ -315,12 +317,13 @@ async function unattendedBootstrap(options, dependencies) {
   const explicitRequiredDirection = Boolean(
     options.explicit?.goal && options.explicit?.successEvidence,
   );
-  const proposal = explicitRequiredDirection
-    ? renderIntentContract(context.model.answers)
-    : proposedIntent(context);
-  const exactConfirmedReuse = isConfirmedIntent(context.prior.source)
-    && proposal === context.prior.source;
-  if (!context.model.ready || (!explicitRequiredDirection && !exactConfirmedReuse)) {
+  const priorConfirmed = isConfirmedIntent(context.prior.source);
+  const answersUnchanged = sameAnswers(context.discovery, context.prior.input, context.model);
+  const proposal = proposedIntent(context);
+  if (priorConfirmed && !answersUnchanged) {
+    throw new CliError('Confirmed direction changes require interactive prior/proposed preview and confirmation. Rerun `vibetether bootstrap` without --yes.');
+  }
+  if (!context.model.ready || (!priorConfirmed && !explicitRequiredDirection)) {
     throw new CliError('Unattended bootstrap requires byte-identical reuse of a confirmed Intent Contract or explicit --goal and --success-evidence; user-owned direction cannot be fabricated.');
   }
   return initialize(

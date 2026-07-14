@@ -519,12 +519,53 @@ test('bootstrap yes rejects partial or optional-only changes to confirmed direct
 
     await assert.rejects(
       main(['bootstrap', '--project', target, '--yes', ...extra], runtime(null, stageCounter)),
-      /explicit.*--goal.*--success-evidence|cannot be fabricated|unattended.*requires/i,
+      /confirmed direction.*interactive.*prior.*proposed.*confirm|interactive.*preview.*confirm/i,
     );
 
     assert.deepEqual(await snapshot(target), before);
     assert.equal(stageCounter.calls, 0);
   }
+});
+
+test('bootstrap yes rejects a changed explicit goal and success pair for confirmed direction', async () => {
+  const target = await project('bootstrap-confirmed-changed-pair');
+  await main([
+    'init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes',
+    '--goal', 'Original confirmed goal', '--success-evidence', 'Original confirmed evidence',
+  ]);
+  const before = await snapshot(target);
+  const stageCounter = { calls: 0 };
+
+  await assert.rejects(
+    main([
+      'bootstrap', '--project', target, '--yes',
+      '--goal', 'Changed unattended goal', '--success-evidence', 'Changed unattended evidence',
+    ], runtime(null, stageCounter)),
+    /confirmed direction.*interactive.*prior.*proposed.*confirm|interactive.*preview.*confirm/i,
+  );
+
+  assert.deepEqual(await snapshot(target), before);
+  assert.equal(stageCounter.calls, 0);
+});
+
+test('bootstrap yes reuses confirmed direction when the explicit required pair is unchanged', async () => {
+  const target = await project('bootstrap-confirmed-same-pair');
+  const goal = 'Reuse the confirmed canonical goal';
+  const evidence = 'The Intent remains byte-identical';
+  await main([
+    'init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes',
+    '--goal', goal, '--success-evidence', evidence,
+  ]);
+  const before = await snapshot(target);
+  const stageCounter = { calls: 0 };
+
+  const result = await main([
+    'bootstrap', '--project', target, '--yes', '--goal', goal, '--success-evidence', evidence,
+  ], runtime(null, stageCounter));
+
+  assert.match(result, /bootstrap/i);
+  assert.deepEqual(await snapshot(target), before);
+  assert.equal(stageCounter.calls, 0);
 });
 
 test('bootstrap yes accepts explicit required direction for an unresolved initialized project', async () => {
@@ -732,7 +773,8 @@ test('interactive bootstrap shows the prior confirmed contract when explicit dir
   const promptAdapter = prompts();
 
   await main([
-    'bootstrap', '--project', target, '--goal', 'Changed confirmed goal',
+    'bootstrap', '--project', target,
+    '--goal', 'Changed confirmed goal', '--success-evidence', 'Changed confirmed evidence',
   ], runtime(promptAdapter));
 
   assert.deepEqual(promptAdapter.asked, []);
@@ -740,6 +782,38 @@ test('interactive bootstrap shows the prior confirmed contract when explicit dir
   assert.match(promptAdapter.confirmations[0], /Original confirmed goal/);
   assert.match(promptAdapter.confirmations[0], /Proposed Intent Contract/i);
   assert.match(promptAdapter.confirmations[0], /Changed confirmed goal/);
+  const applied = parseIntentContract(
+    await readFile(path.join(target, '.vibetether', 'intent.md'), 'utf8'),
+  );
+  assert.equal(applied.goal, 'Changed confirmed goal');
+  assert.equal(applied.successEvidence, 'Changed confirmed evidence');
+});
+
+test('interactive bootstrap canonicalizes populated unresolved direction after prior and proposal review', async () => {
+  const target = await project('bootstrap-populated-unresolved-interactive');
+  await main(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']);
+  const intentPath = path.join(target, '.vibetether', 'intent.md');
+  const goal = 'Resolve populated legacy direction interactively';
+  const evidence = 'The confirmed canonical contract is written';
+  const unresolved = legacyUnresolvedIntent(goal, evidence);
+  await writeFile(intentPath, unresolved, 'utf8');
+  const promptAdapter = prompts();
+  const stageCounter = { calls: 0 };
+
+  await main(['bootstrap', '--project', target], runtime(promptAdapter, stageCounter));
+
+  assert.deepEqual(promptAdapter.asked, []);
+  assert.match(promptAdapter.confirmations[0], /Prior Intent Contract/i);
+  assert.match(promptAdapter.confirmations[0], /^Status: unresolved$/m);
+  assert.match(promptAdapter.confirmations[0], /Proposed Intent Contract/i);
+  assert.match(promptAdapter.confirmations[0], /^Status: confirmed$/m);
+  const appliedSource = await readFile(intentPath, 'utf8');
+  assert.match(appliedSource, /^Status: confirmed$/m);
+  assert.notEqual(appliedSource, unresolved);
+  const applied = parseIntentContract(appliedSource);
+  assert.equal(applied.goal, goal);
+  assert.equal(applied.successEvidence, evidence);
+  assert.equal(stageCounter.calls, 0);
 });
 
 test('interactive bootstrap reviews a differing unresolved prior before confirmation and writes nothing first', async () => {
