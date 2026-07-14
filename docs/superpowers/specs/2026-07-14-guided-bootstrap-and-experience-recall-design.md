@@ -1,6 +1,6 @@
 # Guided Bootstrap and Experience Recall Design
 
-Status: Approved direction; pending written-spec review
+Status: Approved
 Date: 2026-07-14
 Target: VibeTether CLI, project control Skill, generated project surfaces, and public README
 
@@ -396,3 +396,5 @@ Implementation is accepted only with fresh evidence for all applicable cases.
 This design does not claim that project instructions are a security sandbox or that every host model will obey every advisory route. It improves visibility, default behavior, recovery, and auditability through redundant project instructions, explicit capabilities, deterministic metadata, checkpoints, tests, and doctor checks.
 
 The release remains preview until independent, multi-session Codex and Claude trials show acceptable routing accuracy, false-positive experience recall, latency, context cost, and long-task drift reduction.
+
+Token savings are not a product claim or an evaluation target. Public positioning may say that VibeTether is designed for stronger agents such as Claude Fable 5 and GPT-5.6 and aims to reduce long-task drift and expensive rework, but it must not claim measured net Token savings.
