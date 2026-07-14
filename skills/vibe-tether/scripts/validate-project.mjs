@@ -244,7 +244,7 @@ async function validateProject(projectRoot) {
     const instructionPath = path.resolve(projectRoot, harness.instruction_file);
     const instructions = await readFile(instructionPath, 'utf8');
     if (!instructions.includes(managedStart) || !instructions.includes(managedEnd)) {
-      errors.push(`Missing VibeTether managed block: ${harness.instruction_file}`);
+      errors.push('Missing VibeTether managed block in instruction file');
     }
   }
 

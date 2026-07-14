@@ -715,6 +715,26 @@ test('doctor redacts config-derived instruction-file paths in managed-block issu
   assert.doesNotMatch(JSON.stringify(report.issues), new RegExp(secret));
 });
 
+test('installed validator redacts config-derived instruction-file paths in managed-block diagnostics', async () => {
+  const target = await initializedProject('installed-validator-redacted-instruction-file');
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
+  const secret = `github_pat_${'V'.repeat(30)}.md`;
+  manifest.harnesses.codex.instruction_file = secret;
+  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+  await writeFile(path.join(target, secret), '# User instructions only\n', 'utf8');
+
+  const installedValidator = path.join(target, '.agents', 'skills', 'vibe-tether', 'scripts', 'validate-project.mjs');
+  const validator = spawnSync(process.execPath, [installedValidator, '--project', target], {
+    cwd: target,
+    encoding: 'utf8',
+  });
+
+  assert.equal(validator.status, 1, validator.stderr || validator.stdout);
+  assert.match(validator.stderr, /missing VibeTether managed block/i);
+  assert.doesNotMatch(validator.stderr, new RegExp(secret));
+});
+
 test('doctor and the installed validator reject a non-string checkpoint route without crashing', async () => {
   const target = await initializedProject('non-string-checkpoint-route');
   const manifestPath = path.join(target, '.vibetether', 'project.yaml');
