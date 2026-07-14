@@ -87,6 +87,37 @@ test('doctor reports a healthy initialized project as machine-readable JSON', as
   assert.deepEqual(report.harnesses, ['codex', 'claude']);
 });
 
+test('doctor enforces the same canonical manifest grammar as runtime routing', async () => {
+  const target = await initializedProject('doctor-canonical-manifest');
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  await writeFile(manifestPath, `# non-canonical comment\n${await readFile(manifestPath, 'utf8')}`, 'utf8');
+
+  const runtime = runCli(['capabilities', '--project', target, '--json']);
+  assert.equal(runtime.status, 3, runtime.stderr || runtime.stdout);
+
+  const result = runCli(['doctor', '--project', target, '--json']);
+
+  assert.equal(result.status, 4, result.stderr || result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.issues.some((entry) => entry.code === 'invalid-manifest'), true);
+  assert.match(JSON.stringify(report.issues), /canonical|manifest/i);
+});
+
+test('doctor neutralizes malformed provider-lock diagnostics without echoing secrets', async () => {
+  const target = await initializedProject('doctor-provider-lock-redaction');
+  const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
+  const secret = `github_pat_${'L'.repeat(30)}`;
+  await writeFile(lockPath, `sources: [${secret}\n`, 'utf8');
+
+  const result = runCli(['doctor', '--project', target, '--json']);
+
+  assert.equal(result.status, 4, result.stderr || result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.issues.some((entry) => entry.code === 'invalid-provider-lock'), true);
+  assert.match(JSON.stringify(report.issues), /invalid provider-lock yaml/i);
+  assert.doesNotMatch(result.stdout, new RegExp(secret));
+});
+
 test('doctor reports malformed capability-board route structures', async () => {
   const target = await project('doctor-invalid-board-shape');
   assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);

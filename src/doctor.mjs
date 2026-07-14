@@ -9,6 +9,7 @@ import { parseExperienceIndex, validateExperienceIndex } from './experience-inde
 import { isSafeProjectRelativeArtifactPath, isSensitiveArtifactPath } from './artifact-safety.mjs';
 import { skillFingerprint, sourceSkill } from './skill-install.mjs';
 import { assertCapabilityBoard } from '../skills/vibe-tether/scripts/capability-routing.mjs';
+import { parseCanonicalManifest } from '../skills/vibe-tether/scripts/manifest.mjs';
 
 const COMPLETION_PHASES = new Set(['REVIEW', 'SHIP']);
 const CAPTURE_TRIGGERS = new Set(['first-proven-path', 'recovered-path', 'changed-proven-path']);
@@ -231,11 +232,11 @@ async function readYamlArtifact(root, relativePath, label, issues) {
     const value = YAML.parse(await readFile(entry.target, 'utf8'));
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('document must be a mapping');
     return value;
-  } catch (error) {
-    const message = label === 'capability-board'
-      ? 'Invalid capability-board YAML. Fix the document and rerun vibetether doctor.'
-      : `Invalid ${label} YAML: ${error.message}`;
-    issues.push(issue(`invalid-${label}`, message));
+  } catch {
+    issues.push(issue(
+      `invalid-${label}`,
+      `Invalid ${label} YAML. Fix the document and rerun vibetether doctor.`,
+    ));
     return null;
   }
 }
@@ -257,9 +258,9 @@ export async function inspectProject(options) {
     issues.push(issue('unsafe-manifest', unsafeAuthorityMessage('Manifest')));
   } else {
     try {
-      manifest = YAML.parse(await readFile(manifestEntry.target, 'utf8'));
+      manifest = parseCanonicalManifest(await readFile(manifestEntry.target, 'utf8'));
     } catch {
-      issues.push(issue('invalid-manifest', 'Invalid manifest YAML'));
+      issues.push(issue('invalid-manifest', 'Invalid manifest YAML. Use the canonical VibeTether manifest format and rerun vibetether doctor.'));
     }
   }
 
