@@ -43,7 +43,7 @@ const SENSITIVE_SINGLE_TERMS = new Set([
   'secret',
   'token',
 ]);
-const SENSITIVE_PHRASES = [
+export const SENSITIVE_CREDENTIAL_PHRASES = Object.freeze([
   ['access', 'key'],
   ['access', 'token'],
   ['api', 'key'],
@@ -62,7 +62,12 @@ const SENSITIVE_PHRASES = [
   ['refresh', 'token'],
   ['secret', 'access', 'key'],
   ['service', 'account'],
-];
+].map((phrase) => Object.freeze(phrase)));
+const COLLAPSED_SENSITIVE_PHRASES = new Set(SENSITIVE_CREDENTIAL_PHRASES.flatMap((phrase) => {
+  const prefix = phrase.slice(0, -1).join('');
+  const terminal = phrase.at(-1);
+  return [phrase.join(''), `${prefix}${terminal}s`];
+}));
 const SINGULAR_TERMS = new Map([
   ['accounts', 'account'],
   ['apikeys', 'apikey'],
@@ -175,7 +180,8 @@ function finalRealExtension(basename) {
 function hasSensitiveSemantics(artifact) {
   const pathWords = segments(artifact).flatMap(words);
   if (pathWords.some((word) => SENSITIVE_SINGLE_TERMS.has(word))) return true;
-  return SENSITIVE_PHRASES.some((phrase) => pathWords.some((_, index) => (
+  if (pathWords.some((word) => COLLAPSED_SENSITIVE_PHRASES.has(word))) return true;
+  return SENSITIVE_CREDENTIAL_PHRASES.some((phrase) => pathWords.some((_, index) => (
     phrase.every((word, offset) => pathWords[index + offset] === word)
   )));
 }

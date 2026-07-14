@@ -4,7 +4,10 @@ import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { isSensitiveArtifactPath } from '../src/artifact-safety.mjs';
+import {
+  isSensitiveArtifactPath,
+  SENSITIVE_CREDENTIAL_PHRASES,
+} from '../src/artifact-safety.mjs';
 import {
   EMPTY_EXPERIENCE_INDEX,
   matchExperience,
@@ -42,6 +45,19 @@ function entry(overrides = {}) {
 
 function index(entries = [entry()]) {
   return { schema_version: 1, entries };
+}
+
+function phraseVariants(phrase) {
+  const capitalizedTail = phrase.slice(1).map((word) => `${word[0].toUpperCase()}${word.slice(1)}`);
+  const pluralTail = `${phrase.at(-1)}s`;
+  return [...new Set([
+    phrase.join('-'),
+    phrase.join('_'),
+    phrase.join(' '),
+    [phrase[0], ...capitalizedTail].join(''),
+    phrase.join(''),
+    [...phrase.slice(0, -1), pluralTail].join(''),
+  ])];
 }
 
 test('empty experience index is deeply immutable and has stable canonical serialization', () => {
@@ -321,6 +337,56 @@ test('policy: ambiguous non-runbook credential structures fail closed and strong
     assert.deepEqual(
       (await matchExperience(candidate, { root, signals: ['publish'] })).map(({ id }) => id),
       [`structured-runbook-${position}`],
+      artifact,
+    );
+  }
+});
+
+test('every credential phrase matches separated, camel, underscore, collapsed, and controlled plural forms without substring false positives', async () => {
+  const root = await fixture();
+  for (const [phrasePosition, phrase] of SENSITIVE_CREDENTIAL_PHRASES.entries()) {
+    for (const [variantPosition, variant] of phraseVariants(phrase).entries()) {
+      const artifact = `docs/operations/${variant}.json`;
+      const candidate = index([entry({
+        id: `compound-${phrasePosition}-${variantPosition}`,
+        artifacts: [artifact],
+      })]);
+      assert.equal(isSensitiveArtifactPath(artifact), true, artifact);
+      await assert.rejects(validateExperienceIndex(candidate, root), /secret-bearing|credential|unsafe/i, artifact);
+      assert.throws(() => serializeExperienceIndex(candidate), /secret-bearing|credential|unsafe/i, artifact);
+      assert.deepEqual(await matchExperience(candidate, { root, signals: ['publish'] }), [], artifact);
+    }
+  }
+
+  for (const [position, artifact] of [
+    'docs/operations/secretary-notes.json',
+    'docs/operations/monkey-data.json',
+    'docs/operations/hockey-stats.json',
+  ].entries()) {
+    await writeArtifact(root, artifact, '{}\n');
+    const candidate = index([entry({ id: `innocent-word-${position}`, artifacts: [artifact] })]);
+    assert.equal(isSensitiveArtifactPath(artifact), false, artifact);
+    assert.deepEqual(await validateExperienceIndex(candidate, root), candidate, artifact);
+    assert.doesNotThrow(() => serializeExperienceIndex(candidate), artifact);
+    assert.deepEqual(
+      (await matchExperience(candidate, { root, signals: ['publish'] })).map(({ id }) => id),
+      [`innocent-word-${position}`],
+      artifact,
+    );
+  }
+
+  for (const [position, artifact] of [
+    'docs/operations/accesskey.md',
+    'docs/operations/secretaccesskey.md',
+    'docs/operations/keystores.adoc',
+  ].entries()) {
+    await writeArtifact(root, artifact, '# Explicit runbook\n');
+    const candidate = index([entry({ id: `collapsed-runbook-${position}`, artifacts: [artifact] })]);
+    assert.equal(isSensitiveArtifactPath(artifact), false, artifact);
+    assert.deepEqual(await validateExperienceIndex(candidate, root), candidate, artifact);
+    assert.deepEqual(
+      (await matchExperience(candidate, { root, signals: ['publish'] })).map(({ id }) => id),
+      [`collapsed-runbook-${position}`],
       artifact,
     );
   }

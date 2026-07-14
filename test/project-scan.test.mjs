@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { ADAPTERS, GITIGNORE_BODY } from '../src/adapters.mjs';
+import { SENSITIVE_CREDENTIAL_PHRASES } from '../src/artifact-safety.mjs';
 import { applyManagedBlock } from '../src/files.mjs';
 import { scanProject } from '../src/project-scan.mjs';
 import { sourceSkill } from '../src/skill-install.mjs';
@@ -60,6 +61,17 @@ async function managedProject(name) {
   await writeFile(path.join(root, '.gitignore'), applyManagedBlock('', GITIGNORE_BODY), 'utf8');
   await cp(sourceSkill, path.join(root, '.agents', 'skills', 'vibe-tether'), { recursive: true });
   return root;
+}
+
+function phraseVariants(phrase) {
+  const capitalizedTail = phrase.slice(1).map((word) => `${word[0].toUpperCase()}${word.slice(1)}`);
+  return [...new Set([
+    phrase.join('-'),
+    phrase.join('_'),
+    [phrase[0], ...capitalizedTail].join(''),
+    phrase.join(''),
+    [...phrase.slice(0, -1), `${phrase.at(-1)}s`].join(''),
+  ])];
 }
 
 test('project scan emits high-confidence Web bundle signals from package evidence', async () => {
@@ -302,6 +314,28 @@ test('project scan denies credential config and cloud credential roots despite a
     assert.deepEqual(manifest.sources.conditional.operations, [], denied.join('/'));
     assert.equal(manifest.discovery['docs/operations/'], undefined, denied.join('/'));
   }
+});
+
+test('project scan applies every credential phrase form without matching innocent word fragments', async () => {
+  for (const [phrasePosition, phrase] of SENSITIVE_CREDENTIAL_PHRASES.entries()) {
+    for (const [variantPosition, variant] of phraseVariants(phrase).entries()) {
+      const root = await project(`compound-${phrasePosition}-${variantPosition}`);
+      await mkdir(path.join(root, 'docs', 'operations'), { recursive: true });
+      await writeFile(path.join(root, 'docs', 'operations', 'safe.md'), '# Safe runbook\n', 'utf8');
+      await writeFile(path.join(root, 'docs', 'operations', `${variant}.json`), '{}\n', 'utf8');
+      const manifest = await scanProject(root, ['codex'], 'core');
+      assert.deepEqual(manifest.sources.conditional.operations, [], variant);
+    }
+  }
+
+  const root = await project('innocent-fragments');
+  await mkdir(path.join(root, 'docs', 'operations'), { recursive: true });
+  await writeFile(path.join(root, 'docs', 'operations', 'safe.md'), '# Safe runbook\n', 'utf8');
+  await writeFile(path.join(root, 'docs', 'operations', 'secretary-notes.json'), '{}\n', 'utf8');
+  await writeFile(path.join(root, 'docs', 'operations', 'monkey-data.json'), '{}\n', 'utf8');
+  await writeFile(path.join(root, 'docs', 'operations', 'hockey-stats.json'), '{}\n', 'utf8');
+  const manifest = await scanProject(root, ['codex'], 'core');
+  assert.deepEqual(manifest.sources.conditional.operations, ['docs/operations/']);
 });
 
 test('project scan surfaces unexpected operations filesystem errors without leaking their message', async () => {
