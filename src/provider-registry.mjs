@@ -242,12 +242,15 @@ function routeMatches(route, signals) {
   return true;
 }
 
-export function resolveRoute(routing, request) {
+export function matchingRoutes(routing, request) {
   const phase = String(request.phase ?? '').toUpperCase();
   const signals = new Set(request.signals ?? []);
-  const matches = routing.routes
+  return routing.routes
     .filter((route) => route.phase.toUpperCase() === phase && route.capability === request.capability)
     .filter((route) => routeMatches(route, signals))
     .sort((left, right) => right.priority - left.priority);
-  return matches[0] ?? null;
+}
+
+export function resolveRoute(routing, request) {
+  return matchingRoutes(routing, request)[0] ?? null;
 }

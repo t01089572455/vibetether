@@ -4,7 +4,7 @@ import { ADAPTERS } from './adapters.mjs';
 import { CliError } from './errors.mjs';
 import { rejectSymlinkPath, resolveInside } from './files.mjs';
 import { validateProviderLock } from './managed-project-state.mjs';
-import { buildRoutingDocument } from './provider-registry.mjs';
+import { buildRoutingDocument, matchingRoutes } from './provider-registry.mjs';
 import {
   LEGACY_VIBETETHER_FINGERPRINTS,
   skillFingerprint,
@@ -18,6 +18,12 @@ function sorted(values) {
 function sameValues(left, right) {
   return JSON.stringify(sorted(left)) === JSON.stringify(sorted(right));
 }
+
+export const BOOTSTRAP_TRANSITION_REQUEST = Object.freeze({
+  phase: 'DISCOVER',
+  capability: 'requirements-clarification',
+  signals: Object.freeze(['goal-unclear']),
+});
 
 function authorityError(detail) {
   return new CliError(
@@ -78,6 +84,7 @@ export async function validateBootstrapAuthority({
   proposedManifest = manifest,
   lock,
   registry,
+  request,
   adapters,
   profile,
   bundles,
@@ -112,8 +119,14 @@ export async function validateBootstrapAuthority({
 
   let requiredProviders;
   try {
+    if (!request
+        || typeof request.phase !== 'string'
+        || typeof request.capability !== 'string'
+        || !Array.isArray(request.signals)) {
+      throw new Error('an explicit phase, capability, and signals array are required');
+    }
     requiredProviders = new Set(
-      buildRoutingDocument(registry, profile).routes
+      matchingRoutes(buildRoutingDocument(registry, profile), request)
         .filter((route) => route.required === true)
         .map((route) => route.provider),
     );

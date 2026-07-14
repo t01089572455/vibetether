@@ -7,7 +7,10 @@ import {
   parseIntentContract,
   renderIntentContract,
 } from './bootstrap-model.mjs';
-import { validateBootstrapAuthority } from './bootstrap-authority.mjs';
+import {
+  BOOTSTRAP_TRANSITION_REQUEST,
+  validateBootstrapAuthority,
+} from './bootstrap-authority.mjs';
 import { CliError } from './errors.mjs';
 import { readTextIfPresent, resolveInside } from './files.mjs';
 import { initialize } from './init.mjs';
@@ -328,6 +331,7 @@ async function bootstrapContext(options, dependencies = {}) {
     proposedManifest: manifest,
     lock,
     registry,
+    request: BOOTSTRAP_TRANSITION_REQUEST,
     adapters: selectedAdapters(finalOptions.agent),
     profile: finalOptions.profile,
     bundles: finalOptions.bundles,

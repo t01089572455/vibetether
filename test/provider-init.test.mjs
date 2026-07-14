@@ -541,10 +541,58 @@ test('bootstrapOnly allows missing optional providers but rejects required missi
     assert.equal(stageCalls, 0);
   });
 
+  for (const variant of [
+    {
+      name: 'nonmatching phase',
+      configure(route) { route.phase = 'VERIFY'; },
+    },
+    {
+      name: 'unsatisfied when_any',
+      configure(route) { route.when_any = ['security-sensitive']; },
+    },
+    {
+      name: 'unsatisfied when_all',
+      configure(route) { route.when_all = ['goal-unclear', 'security-sensitive']; },
+    },
+  ]) {
+    await t.test(`conditionally required provider with ${variant.name}`, async () => {
+      const registryValue = completeRegistry(source);
+      registryValue.routes[0].required = true;
+      variant.configure(registryValue.routes[0]);
+      const target = await project(`bootstrap-authority-required-${variant.name.replaceAll(' ', '-')}`);
+      await initialize(options(target, { agent: 'codex' }), {
+        loadRegistry: async () => registryValue,
+      });
+      const providerPath = path.join(target, '.agents', 'skills', 'demo');
+      await rm(providerPath, { recursive: true });
+      const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
+      const lockBefore = await readFile(lockPath);
+      let stageCalls = 0;
+
+      const result = await initialize(options(target, {
+        agent: 'codex',
+        autoBundles: false,
+        bootstrapOnly: true,
+      }), {
+        loadRegistry: async () => registryValue,
+        stageProviders: async () => {
+          stageCalls += 1;
+          throw new Error('bootstrapOnly must not stage');
+        },
+      });
+
+      assert.match(result, /bootstrap/i);
+      assert.deepEqual(await readFile(lockPath), lockBefore);
+      assert.equal(await exists(providerPath), false);
+      assert.equal(stageCalls, 0);
+    });
+  }
+
   for (const state of ['missing', 'modified']) {
     await t.test(`required provider ${state}`, async () => {
       const registryValue = completeRegistry(source);
       registryValue.routes[0].required = true;
+      registryValue.routes[0].when_any = ['goal-unclear'];
       const target = await project(`bootstrap-authority-required-${state}`);
       await initialize(options(target, { agent: 'codex' }), {
         loadRegistry: async () => registryValue,
@@ -577,6 +625,35 @@ test('bootstrapOnly allows missing optional providers but rejects required missi
       assert.equal(stageCalls, 0);
     });
   }
+});
+
+test('bootstrap CLI uses the same transition context for conditional required providers', async () => {
+  const source = await completeUpstream();
+  const registryValue = completeRegistry(source);
+  registryValue.routes[0].required = true;
+  registryValue.routes[0].when_any = ['security-sensitive'];
+  const target = await project('bootstrap-authority-cli-conditional-required');
+  await initialize(options(target, { agent: 'codex' }), {
+    loadRegistry: async () => registryValue,
+  });
+  const providerPath = path.join(target, '.agents', 'skills', 'demo');
+  await rm(providerPath, { recursive: true });
+  const before = await snapshot(target);
+  let stageCalls = 0;
+
+  const result = await main(['bootstrap', '--project', target, '--dry-run'], {
+    initializeDependencies: {
+      loadRegistry: async () => registryValue,
+      stageProviders: async () => {
+        stageCalls += 1;
+        throw new Error('must not stage');
+      },
+    },
+  });
+
+  assert.match(result, /DRY RUN/);
+  assert.deepEqual(await snapshot(target), before);
+  assert.equal(stageCalls, 0);
 });
 
 test('bootstrapOnly verifies managed provider, catalog, and VibeTether Skill copies before writes', async (t) => {

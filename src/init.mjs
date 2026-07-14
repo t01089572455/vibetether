@@ -3,7 +3,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import YAML from 'yaml';
 import { ADAPTERS, GITIGNORE_BODY, LEGACY_MANAGED_BODIES, MANAGED_END, MANAGED_START, selectedAdapters } from './adapters.mjs';
-import { validateBootstrapAuthority } from './bootstrap-authority.mjs';
+import {
+  BOOTSTRAP_TRANSITION_REQUEST,
+  validateBootstrapAuthority,
+} from './bootstrap-authority.mjs';
 import { CliError } from './errors.mjs';
 import {
   applyManagedBlock,
@@ -224,11 +227,10 @@ export async function initialize(options, dependencies = {}) {
   }
   let providers = resolveProfileProviders(registry, options.profile);
   let providerSources = resolveProfileSources(registry, options.profile);
-  const initialRoute = resolveRoute(buildRoutingDocument(registry, options.profile), {
-    phase: 'DISCOVER',
-    capability: 'requirements-clarification',
-    signals: ['goal-unclear'],
-  });
+  const initialRoute = resolveRoute(
+    buildRoutingDocument(registry, options.profile),
+    BOOTSTRAP_TRANSITION_REQUEST,
+  );
   const initialRecommendation = initialRoute?.provider ?? 'vibetether-built-in-alignment';
   const textPlans = [];
   for (const adapter of adapters) {
@@ -419,6 +421,7 @@ export async function initialize(options, dependencies = {}) {
       proposedManifest: manifest,
       lock: existingLock,
       registry,
+      request: BOOTSTRAP_TRANSITION_REQUEST,
       adapters,
       profile: options.profile,
       bundles: options.bundles ?? [],
