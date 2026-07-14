@@ -9,6 +9,83 @@ function routeAvailable(route, harness) {
   return harness ? available.includes(harness) : available.length > 0;
 }
 
+function isRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function assertArray(value, label) {
+  if (!Array.isArray(value)) throw new Error(`Capability board ${label} must be an array`);
+}
+
+function assertOptionalStringArray(value, label) {
+  if (value === undefined) return;
+  assertArray(value, label);
+  if (value.some((entry) => typeof entry !== 'string')) {
+    throw new Error(`Capability board ${label} must contain strings`);
+  }
+}
+
+function assertOptionalRecord(value, label) {
+  if (value !== undefined && !isRecord(value)) {
+    throw new Error(`Capability board ${label} must be a mapping`);
+  }
+}
+
+function assertInstallations(value, label) {
+  assertOptionalRecord(value, label);
+  if (value !== undefined && Object.values(value).some((entry) => typeof entry !== 'string')) {
+    throw new Error(`Capability board ${label} must map harnesses to paths`);
+  }
+}
+
+function assertCapability(capability) {
+  if (!isRecord(capability) || typeof capability.id !== 'string' || capability.id.length === 0) {
+    throw new Error('Capability board capabilities must contain identified mappings');
+  }
+  for (const field of [
+    'phases',
+    'invoke_when',
+    'required_inputs',
+    'expected_outputs',
+    'exit_evidence',
+    'provider_options',
+    'catalog_alternatives',
+  ]) {
+    assertOptionalStringArray(capability[field], `capability ${capability.id}.${field}`);
+  }
+}
+
+function assertProvider(provider) {
+  if (!isRecord(provider) || typeof provider.skill !== 'string' || provider.skill.length === 0) {
+    throw new Error('Capability board providers must contain identified mappings');
+  }
+  for (const field of ['capabilities', 'available_in', 'routed_by', 'use_when', 'auto_covered_by']) {
+    assertOptionalStringArray(provider[field], `provider ${provider.skill}.${field}`);
+  }
+  assertInstallations(provider.installations, `provider ${provider.skill}.installations`);
+}
+
+function assertRoute(route) {
+  if (!isRecord(route)
+      || typeof route.id !== 'string' || route.id.length === 0
+      || typeof route.phase !== 'string' || route.phase.length === 0
+      || typeof route.capability !== 'string' || route.capability.length === 0) {
+    throw new Error('Capability board routes must contain identified phase and capability mappings');
+  }
+  assertOptionalRecord(route.signals, `route ${route.id}.signals`);
+  for (const field of ['all', 'any']) {
+    assertOptionalStringArray(route.signals?.[field], `route ${route.id}.signals.${field}`);
+  }
+  if (!isRecord(route.recommendation)
+      || typeof route.recommendation.skill !== 'string' || route.recommendation.skill.length === 0) {
+    throw new Error(`Capability board route ${route.id} requires a recommendation mapping`);
+  }
+  assertOptionalStringArray(route.recommendation.available_in, `route ${route.id}.recommendation.available_in`);
+  assertInstallations(route.recommendation.installations, `route ${route.id}.recommendation.installations`);
+  assertOptionalStringArray(route.expected_outputs, `route ${route.id}.expected_outputs`);
+  assertOptionalStringArray(route.exit_evidence, `route ${route.id}.exit_evidence`);
+}
+
 export function assertCapabilityBoard(board) {
   if (board === null || typeof board !== 'object' || Array.isArray(board)) {
     throw new Error('Capability board must be a mapping');
@@ -16,6 +93,13 @@ export function assertCapabilityBoard(board) {
   if (board.schema_version !== 1 || board.mode !== 'advisory-router') {
     throw new Error('Capability board requires schema_version 1 and advisory-router mode');
   }
+  assertArray(board.capabilities, 'capabilities');
+  assertArray(board.providers, 'providers');
+  assertArray(board.routes, 'routes');
+  assertOptionalStringArray(board.high_risk_gates, 'high_risk_gates');
+  board.capabilities.forEach(assertCapability);
+  board.providers.forEach(assertProvider);
+  board.routes.forEach(assertRoute);
   return board;
 }
 

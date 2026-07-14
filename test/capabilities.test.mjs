@@ -31,6 +31,7 @@ test('route resolution recommends the best fit but falls through to an available
       exit_evidence: ['Slice is verified.'],
       fallback: 'vibetether-built-in-execution',
     }],
+    providers: [],
     routes: [
       {
         id: 'delegated',
@@ -93,6 +94,7 @@ test('runtime availability refresh removes deleted providers before route select
       exit_evidence: ['Plan is reviewable.'],
       fallback: 'Use the built-in planning loop.',
     }],
+    providers: [],
     routes: [{
       id: 'planning',
       phase: 'PLAN',

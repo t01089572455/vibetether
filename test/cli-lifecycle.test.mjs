@@ -40,6 +40,27 @@ test('doctor reports a healthy initialized project as machine-readable JSON', as
   assert.deepEqual(report.harnesses, ['codex', 'claude']);
 });
 
+test('doctor reports malformed capability-board route structures', async () => {
+  const target = await project('doctor-invalid-board-shape');
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
+  const boardPath = path.join(target, '.vibetether', 'capabilities.yaml');
+  const board = JSON.parse(await readFile(boardPath, 'utf8'));
+  board.routes = [{
+    id: 'missing-recommendation',
+    phase: 'PLAN',
+    capability: 'requirements-clarification',
+    signals: { all: [], any: [] },
+  }];
+  await writeFile(boardPath, `${JSON.stringify(board, null, 2)}\n`, 'utf8');
+
+  const result = runCli(['doctor', '--project', target, '--json']);
+
+  assert.equal(result.status, 4, result.stderr || result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.issues.some((issue) => issue.code === 'invalid-capability-board'), true);
+  assert.match(JSON.stringify(report.issues), /recommendation mapping/i);
+});
+
 test('doctor exits 4 when a declared truth source is missing', async () => {
   const target = await project('doctor-fail');
   await mkdir(path.join(target, 'docs'), { recursive: true });

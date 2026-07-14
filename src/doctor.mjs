@@ -6,6 +6,7 @@ import { ADAPTERS, MANAGED_END, MANAGED_START } from './adapters.mjs';
 import { CliError } from './errors.mjs';
 import { managedBlockBody } from './files.mjs';
 import { skillFingerprint, sourceSkill } from './skill-install.mjs';
+import { assertCapabilityBoard } from '../skills/vibe-tether/scripts/capability-routing.mjs';
 
 const COMPLETION_PHASES = new Set(['REVIEW', 'SHIP']);
 const CAPTURE_TRIGGERS = new Set(['first-proven-path', 'recovered-path', 'changed-proven-path']);
@@ -218,14 +219,13 @@ export async function inspectProject(options) {
     const board = await readYamlArtifact(root, manifest.capability_board, 'capability-board', issues);
     const lock = await readYamlArtifact(root, manifest.provider_lock, 'provider-lock', issues);
     if (board) {
-      if (board.schema_version !== 1 || board.mode !== 'advisory-router') {
-        issues.push(issue('invalid-capability-board', 'Capability board must use schema_version 1 and advisory-router mode'));
+      try {
+        assertCapabilityBoard(board);
+      } catch (error) {
+        issues.push(issue('invalid-capability-board', error.message));
       }
       if (board.selection_policy?.provider_selection !== 'advisory') {
         issues.push(issue('invalid-capability-policy', 'Capability board provider selection must be advisory'));
-      }
-      if (!Array.isArray(board.capabilities) || !Array.isArray(board.providers) || !Array.isArray(board.routes)) {
-        issues.push(issue('invalid-capability-board', 'Capability board must declare capabilities, providers, and routes arrays'));
       }
     }
     if (lock) {

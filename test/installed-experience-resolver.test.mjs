@@ -687,6 +687,36 @@ test('capability-board documents require the complete advisory-router envelope',
   await assertAuthorityFailure(state, 'YAML-only board document');
 });
 
+test('capability-board structural failures are neutral project-authority failures in both resolvers', async () => {
+  const cases = [
+    ['capabilities is not an array', (board) => { board.capabilities = {}; }],
+    ['providers is not an array', (board) => { board.providers = {}; }],
+    ['routes is not an array', (board) => { board.routes = {}; }],
+    ['route lacks a recommendation mapping', (board) => {
+      const missingRecommendation = route('missing-recommendation');
+      delete missingRecommendation.recommendation;
+      board.routes = [missingRecommendation];
+    }],
+  ];
+
+  for (const [label, mutate] of cases) {
+    const state = await fixture(`board-shape-${label.replaceAll(/[^a-z]+/gi, '-')}`);
+    const malformed = routingBoard([route('shipping-and-launch')]);
+    mutate(malformed);
+    await writeFile(state.boardPath, `${JSON.stringify(malformed, null, 2)}\n`, 'utf8');
+
+    const packageError = await packageResolve(state, ['publish']).catch((error) => error);
+    assert.equal(packageError.exitCode, 3, `package authority exit code: ${label}`);
+    assert.match(packageError.message, /capability board[\s\S]*vibetether doctor/i, `package guidance: ${label}`);
+    assert.doesNotMatch(packageError.message, /typeerror|cannot read properties/i, `package raw error: ${label}`);
+
+    const installed = installedResolve(state, ['publish']);
+    assert.equal(installed.status, 3, `installed authority exit code: ${label}\n${installed.stderr || installed.stdout}`);
+    assert.match(installed.stderr, /capability board[\s\S]*vibetether doctor/i, `installed guidance: ${label}`);
+    assert.doesNotMatch(installed.stderr, /typeerror|cannot read properties/i, `installed raw error: ${label}`);
+  }
+});
+
 test('installed resolver validates the complete canonical manifest before extracting routes', async () => {
   const state = await fixture('canonical-manifest');
   const base = YAML.parse(await readFile(state.manifestPath, 'utf8'));
@@ -756,6 +786,26 @@ test('installed resolver reserves exit code 2 for argument errors and 3 for proj
   });
   assert.equal(installedUnknown.status, 2);
   assert.equal(packageUnknown.status, installedUnknown.status);
+
+  const installedUnknownCapability = spawnSync(process.execPath, [
+    state.resolver,
+    '--project', state.root,
+    '--phase', 'SHIP',
+    '--capability', 'not-a-declared-capability',
+    '--agent', 'codex',
+  ], { cwd: state.root, encoding: 'utf8' });
+  const packageUnknownCapability = spawnSync(process.execPath, [
+    packageCli,
+    'capabilities',
+    '--project', state.root,
+    '--phase', 'SHIP',
+    '--capability', 'not-a-declared-capability',
+    '--agent', 'codex',
+    '--json',
+  ], { cwd: state.root, encoding: 'utf8' });
+  assert.equal(installedUnknownCapability.status, 2, installedUnknownCapability.stderr || installedUnknownCapability.stdout);
+  assert.equal(packageUnknownCapability.status, installedUnknownCapability.status, packageUnknownCapability.stderr || packageUnknownCapability.stdout);
+
   await rm(state.manifestPath);
   const installedAuthority = installedResolve(state);
   const packageAuthority = spawnSync(process.execPath, [
