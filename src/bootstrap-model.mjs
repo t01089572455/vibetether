@@ -44,7 +44,7 @@ const QUESTION_DEFINITIONS = {
     id: 'visual_direction',
     prompt: 'What existing brand, reference, or visual direction governs the interface?',
     required: false,
-    recommended: null,
+    recommended: 'Preserve existing brand assets and request approval before propagating a visual direction.',
     answered: false,
   },
 };

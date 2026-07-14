@@ -95,12 +95,14 @@ test('high-confidence Web evidence adds the visual direction question', () => {
       id: visual.id,
       prompt: visual.prompt,
       required: visual.required,
+      recommended: visual.recommended,
       answered: visual.answered,
     },
     {
       id: 'visual_direction',
       prompt: 'What existing brand, reference, or visual direction governs the interface?',
       required: false,
+      recommended: 'Preserve existing brand assets and request approval before propagating a visual direction.',
       answered: false,
     },
   );

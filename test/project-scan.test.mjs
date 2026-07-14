@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -10,6 +10,24 @@ import { sourceSkill } from '../src/skill-install.mjs';
 
 async function project(name) {
   return mkdtemp(path.join(os.tmpdir(), `vibetether-scan-${name}-`));
+}
+
+async function linkDirectory(target, linkPath) {
+  try {
+    await symlink(target, linkPath, 'dir');
+    return null;
+  } catch (error) {
+    const permissionDenied = ['EACCES', 'EPERM'].includes(error.code);
+    if (process.platform !== 'win32' || !permissionDenied) throw error;
+  }
+
+  try {
+    await symlink(target, linkPath, 'junction');
+    return null;
+  } catch (error) {
+    if (!['EACCES', 'EPERM'].includes(error.code)) throw error;
+    return `Windows denied both directory symlink and junction creation: ${error.code}`;
+  }
 }
 
 async function managedProject(name) {
@@ -143,6 +161,24 @@ test('project scan requires reserved control roots to be directories', async (co
       const target = path.join(root, '.vibetether', reserved);
       await rm(target, { recursive: true, force: true });
       await writeFile(target, 'User content\n', 'utf8');
+
+      assert.equal((await scanProject(root, ['codex'], 'core')).project_state, 'existing');
+    });
+  }
+});
+
+test('project scan treats linked reserved control roots as existing', async (context) => {
+  for (const reserved of ['state', 'transaction', 'quarantine']) {
+    await context.test(reserved, async (subtest) => {
+      const root = await managedProject(`control-link-${reserved}`);
+      const target = await project(`control-link-target-${reserved}`);
+      const linkPath = path.join(root, '.vibetether', reserved);
+      await rm(linkPath, { recursive: true, force: true });
+      const skipReason = await linkDirectory(target, linkPath);
+      if (skipReason) {
+        subtest.skip(skipReason);
+        return;
+      }
 
       assert.equal((await scanProject(root, ['codex'], 'core')).project_state, 'existing');
     });
