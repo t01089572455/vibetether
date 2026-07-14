@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { lstat, readFile } from 'node:fs/promises';
 import { ADAPTERS } from './adapters.mjs';
 import { CliError } from './errors.mjs';
 import { rejectSymlinkPath, resolveInside } from './files.mjs';
 import { validateProviderLock } from './managed-project-state.mjs';
+import { buildRoutingDocument } from './provider-registry.mjs';
 import {
   LEGACY_VIBETETHER_FINGERPRINTS,
   skillFingerprint,
@@ -29,20 +30,29 @@ function rejectAuthority(detail) {
   throw authorityError(detail);
 }
 
-async function actualSkillFingerprint(root, relativePath, label) {
+async function actualSkillFingerprint(root, relativePath, label, { allowMissing = false } = {}) {
+  const target = resolveInside(root, relativePath);
   try {
     await rejectSymlinkPath(root, relativePath);
-    return await skillFingerprint(resolveInside(root, relativePath));
+    await lstat(target);
+  } catch (error) {
+    if (allowMissing && error.code === 'ENOENT') return null;
+    throw authorityError(`${label} at ${relativePath} cannot be verified: ${error.message}`);
+  }
+  try {
+    return await skillFingerprint(target);
   } catch (error) {
     throw authorityError(`${label} at ${relativePath} cannot be verified: ${error.message}`);
   }
 }
 
-async function verifySkill(root, relativePath, expectedFingerprint, label) {
-  const actual = await actualSkillFingerprint(root, relativePath, label);
+async function verifySkill(root, relativePath, expectedFingerprint, label, options = {}) {
+  const actual = await actualSkillFingerprint(root, relativePath, label, options);
+  if (actual === null) return false;
   if (actual !== expectedFingerprint) {
     rejectAuthority(`${label} at ${relativePath} does not match its recorded fingerprint.`);
   }
+  return true;
 }
 
 async function verifyLicense(root, source) {
@@ -65,7 +75,9 @@ async function verifyLicense(root, source) {
 export async function validateBootstrapAuthority({
   root,
   manifest,
+  proposedManifest = manifest,
   lock,
+  registry,
   adapters,
   profile,
   bundles,
@@ -76,18 +88,42 @@ export async function validateBootstrapAuthority({
   const enabledHarnesses = Object.entries(manifest?.harnesses ?? {})
     .filter(([, harness]) => harness?.enabled === true)
     .map(([name]) => name);
+  const proposedHarnesses = Object.entries(proposedManifest?.harnesses ?? {})
+    .filter(([, harness]) => harness?.enabled === true)
+    .map(([name]) => name);
   if (!sameValues(enabledHarnesses, adapters)) {
     rejectAuthority(`requested harnesses (${sorted(adapters).join(', ')}) do not exactly match persisted enabled harnesses (${sorted(enabledHarnesses).join(', ')}).`);
   }
-  if (manifest.profile !== profile || lock.profile !== profile) {
+  if (!sameValues(proposedHarnesses, adapters)) {
+    rejectAuthority(`proposed harnesses (${sorted(proposedHarnesses).join(', ')}) do not exactly match persisted bootstrap authority.`);
+  }
+  if (manifest.profile !== profile || proposedManifest.profile !== profile || lock.profile !== profile) {
     rejectAuthority(`requested profile ${profile} does not exactly match the persisted manifest and provider lock.`);
   }
   if (!Array.isArray(manifest.bundles)
+      || !Array.isArray(proposedManifest.bundles)
       || !Array.isArray(lock.bundles)
       || !Array.isArray(bundles)
       || !sameValues(manifest.bundles, bundles)
+      || !sameValues(proposedManifest.bundles, bundles)
       || !sameValues(lock.bundles, bundles)) {
     rejectAuthority('requested bundles do not exactly match the persisted manifest and provider lock.');
+  }
+
+  let requiredProviders;
+  try {
+    requiredProviders = new Set(
+      buildRoutingDocument(registry, profile).routes
+        .filter((route) => route.required === true)
+        .map((route) => route.provider),
+    );
+  } catch (error) {
+    throw authorityError(`provider requirements cannot be established from the registry: ${error.message}`);
+  }
+  for (const provider of requiredProviders) {
+    if (!validated.exposures.some((exposure) => exposure.active && exposure.install_name === provider)) {
+      rejectAuthority(`required provider ${provider} has no active exposure record in the provider lock.`);
+    }
   }
 
   const allowedVibeTetherFingerprints = new Set(LEGACY_VIBETETHER_FINGERPRINTS);
@@ -112,11 +148,16 @@ export async function validateBootstrapAuthority({
     }
     for (const [harness, installation] of installations) {
       if (!exposure.active && installation.ownership !== 'vibetether') continue;
+      const required = exposure.active && requiredProviders.has(exposure.install_name);
+      const kind = required
+        ? 'required active'
+        : exposure.active ? 'optional active' : 'retained managed';
       await verifySkill(
         root,
         installation.path,
         exposure.fingerprint,
-        `${exposure.active ? 'active' : 'retained managed'} exposure ${exposure.id} for ${harness}`,
+        `${kind} exposure ${exposure.id} for ${harness}`,
+        { allowMissing: exposure.active && !required },
       );
     }
   }

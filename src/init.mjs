@@ -298,7 +298,7 @@ export async function initialize(options, dependencies = {}) {
     }
   }
   const selectedBundles = new Set(options.bundles ?? []);
-  if (options.autoBundles !== false && options.profile !== 'core') {
+  if (!options.bootstrapOnly && options.autoBundles !== false && options.profile !== 'core') {
     for (const signal of scanned.bundle_signals ?? []) {
       if (signal.confidence === 'high') selectedBundles.add(signal.bundle);
     }
@@ -416,7 +416,9 @@ export async function initialize(options, dependencies = {}) {
     await validateBootstrapAuthority({
       root,
       manifest: persistedManifest,
+      proposedManifest: manifest,
       lock: existingLock,
+      registry,
       adapters,
       profile: options.profile,
       bundles: options.bundles ?? [],

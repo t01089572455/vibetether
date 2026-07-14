@@ -439,6 +439,146 @@ test('bootstrapOnly rejects incomplete active harness installations without writ
   assert.equal(stageCalls, 0);
 });
 
+test('direct bootstrapOnly ignores new automatic bundle signals and preserves proposed bundle authority', async () => {
+  const source = await completeUpstream();
+  const registryValue = completeRegistry(source);
+  registryValue.bundles = { web: { catalog_sources: [] } };
+  const target = await project('bootstrap-authority-bundle-signal');
+  const dependencies = { loadRegistry: async () => registryValue };
+  await initialize(options(target, {
+    agent: 'codex',
+    bundles: [],
+    autoBundles: false,
+  }), dependencies);
+  await writeFile(path.join(target, 'package.json'), JSON.stringify({
+    dependencies: { react: '^19.0.0' },
+  }, null, 2), 'utf8');
+  const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
+  const lockBefore = await readFile(lockPath);
+  const beforeDryRun = await snapshot(target);
+  let stageCalls = 0;
+  const bootstrapOptions = {
+    agent: 'codex',
+    bundles: [],
+    bootstrapOnly: true,
+  };
+
+  const preview = await initialize(options(target, {
+    ...bootstrapOptions,
+    dryRun: true,
+    yes: false,
+  }), {
+    ...dependencies,
+    stageProviders: async () => {
+      stageCalls += 1;
+      throw new Error('bootstrapOnly must not stage');
+    },
+  });
+
+  assert.match(preview, /DRY RUN/);
+  assert.doesNotMatch(preview, /^\+\s+- web\s*$/m);
+  assert.deepEqual(await snapshot(target), beforeDryRun);
+
+  await initialize(options(target, bootstrapOptions), {
+    ...dependencies,
+    stageProviders: async () => {
+      stageCalls += 1;
+      throw new Error('bootstrapOnly must not stage');
+    },
+  });
+
+  const manifest = YAML.parse(await readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'));
+  const lock = YAML.parse(await readFile(lockPath, 'utf8'));
+  assert.deepEqual(manifest.bundles, []);
+  assert.deepEqual(lock.bundles, []);
+  assert.deepEqual(await readFile(lockPath), lockBefore);
+  assert.equal(stageCalls, 0);
+});
+
+test('bootstrapOnly allows missing optional providers but rejects required missing or modified providers', async (t) => {
+  const source = await completeUpstream();
+
+  await t.test('optional provider missing', async () => {
+    const registryValue = completeRegistry(source);
+    const target = await project('bootstrap-authority-optional-missing');
+    await initialize(options(target, { agent: 'codex' }), {
+      loadRegistry: async () => registryValue,
+    });
+    const providerPath = path.join(target, '.agents', 'skills', 'demo');
+    await rm(providerPath, { recursive: true });
+    const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
+    const lockBefore = await readFile(lockPath);
+    const beforeDryRun = await snapshot(target);
+    let stageCalls = 0;
+    const dependencies = {
+      loadRegistry: async () => registryValue,
+      stageProviders: async () => {
+        stageCalls += 1;
+        throw new Error('bootstrapOnly must not stage');
+      },
+    };
+
+    await initialize(options(target, {
+      agent: 'codex',
+      autoBundles: false,
+      bootstrapOnly: true,
+      dryRun: true,
+      yes: false,
+    }), dependencies);
+    assert.deepEqual(await snapshot(target), beforeDryRun);
+
+    const result = await initialize(options(target, {
+      agent: 'codex',
+      autoBundles: false,
+      bootstrapOnly: true,
+    }), dependencies);
+
+    assert.match(result, /bootstrap/i);
+    assert.deepEqual(await readFile(lockPath), lockBefore);
+    const lock = YAML.parse(lockBefore.toString('utf8'));
+    assert.equal(lock.exposures[0].installations.codex.path, '.agents/skills/demo');
+    assert.equal(await exists(providerPath), false);
+    assert.equal(stageCalls, 0);
+  });
+
+  for (const state of ['missing', 'modified']) {
+    await t.test(`required provider ${state}`, async () => {
+      const registryValue = completeRegistry(source);
+      registryValue.routes[0].required = true;
+      const target = await project(`bootstrap-authority-required-${state}`);
+      await initialize(options(target, { agent: 'codex' }), {
+        loadRegistry: async () => registryValue,
+      });
+      const providerPath = path.join(target, '.agents', 'skills', 'demo');
+      if (state === 'missing') {
+        await rm(providerPath, { recursive: true });
+      } else {
+        await writeFile(path.join(providerPath, 'guide.md'), '# modified required provider\n', 'utf8');
+      }
+      const before = await snapshot(target);
+      let stageCalls = 0;
+
+      await assert.rejects(
+        initialize(options(target, {
+          agent: 'codex',
+          autoBundles: false,
+          bootstrapOnly: true,
+        }), {
+          loadRegistry: async () => registryValue,
+          stageProviders: async () => {
+            stageCalls += 1;
+            throw new Error('bootstrapOnly must not stage');
+          },
+        }),
+        /bootstrap authority.*required.*(cannot be verified|fingerprint)|bootstrap authority.*exposure.*(cannot be verified|fingerprint)/i,
+      );
+
+      assert.deepEqual(await snapshot(target), before);
+      assert.equal(stageCalls, 0);
+    });
+  }
+});
+
 test('bootstrapOnly verifies managed provider, catalog, and VibeTether Skill copies before writes', async (t) => {
   const source = await completeUpstream();
   for (const variant of [

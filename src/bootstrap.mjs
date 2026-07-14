@@ -14,6 +14,7 @@ import { initialize } from './init.mjs';
 import { validateProviderLock } from './managed-project-state.mjs';
 import { parseManifest } from './manifest.mjs';
 import { scanProject } from './project-scan.mjs';
+import { loadProviderRegistry } from './provider-registry.mjs';
 import { createTerminalPromptAdapter } from './terminal-prompts.mjs';
 
 const AGENTS = new Set(['codex', 'claude', 'both']);
@@ -307,7 +308,7 @@ function unresolvedQuestions(model) {
   return `Unresolved directional questions:\n${model.questions.map((question) => `- ${question.prompt}`).join('\n')}`;
 }
 
-async function bootstrapContext(options) {
+async function bootstrapContext(options, dependencies = {}) {
   const root = await projectRoot(options.project);
   const { manifest, lock } = await initializedProject(root);
   const finalOptions = bootstrapOptions(options, manifest);
@@ -315,10 +316,18 @@ async function bootstrapContext(options) {
   if (!PROFILES.has(finalOptions.profile)) {
     throw new CliError(`Invalid initialized profile: ${finalOptions.profile}. Run \`vibetether init\` to repair it.`, 3);
   }
+  let registry;
+  try {
+    registry = await (dependencies.loadRegistry ?? loadProviderRegistry)();
+  } catch (error) {
+    throw new CliError(`Cannot load the provider registry: ${error.message}`, 3);
+  }
   await validateBootstrapAuthority({
     root,
     manifest,
+    proposedManifest: manifest,
     lock,
+    registry,
     adapters: selectedAdapters(finalOptions.agent),
     profile: finalOptions.profile,
     bundles: finalOptions.bundles,
@@ -330,7 +339,7 @@ async function bootstrapContext(options) {
 }
 
 async function dryRunBootstrap(options, dependencies) {
-  const context = await bootstrapContext(options);
+  const context = await bootstrapContext(options, dependencies);
   const intentContent = proposedIntent(context);
   const preview = await initialize(
     { ...context.finalOptions, dryRun: true, yes: false, intentContent },
@@ -340,7 +349,7 @@ async function dryRunBootstrap(options, dependencies) {
 }
 
 async function unattendedBootstrap(options, dependencies) {
-  const context = await bootstrapContext(options);
+  const context = await bootstrapContext(options, dependencies);
   const explicitRequiredDirection = Boolean(
     options.explicit?.goal && options.explicit?.successEvidence,
   );
@@ -365,7 +374,7 @@ async function unattendedBootstrap(options, dependencies) {
 }
 
 async function interactiveBootstrap(options, promptAdapter, dependencies, preparedContext = null) {
-  const context = preparedContext ?? await bootstrapContext(options);
+  const context = preparedContext ?? await bootstrapContext(options, dependencies);
   const model = await askDirection(
     context.model,
     context.discovery,
@@ -390,7 +399,7 @@ export async function runBootstrap(options, runtime = {}) {
   const dependencies = runtime.initializeDependencies ?? {};
   if (options.dryRun) return dryRunBootstrap(options, dependencies);
   if (options.yes) return unattendedBootstrap(options, dependencies);
-  const context = await bootstrapContext(options);
+  const context = await bootstrapContext(options, dependencies);
   const promptAdapter = promptForInteractive(runtime);
   return withPromptCleanup(
     promptAdapter,
