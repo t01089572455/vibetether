@@ -1,9 +1,9 @@
-import { access, readFile, realpath } from 'node:fs/promises';
+import { access, lstat, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import YAML from 'yaml';
 import { CliError } from './errors.mjs';
+import { isSafeProjectRelativeArtifactPath, isSensitiveArtifactPath } from './artifact-safety.mjs';
 import { matchExperience, parseExperienceIndex } from './experience-index.mjs';
-import { rejectSymlinkPath } from './files.mjs';
 
 const DEFAULT_EXPERIENCE_INDEX = '.vibetether/experience-index.yaml';
 
@@ -16,16 +16,38 @@ function inside(root, relativePath, label) {
   return target;
 }
 
-async function parseYaml(target, label) {
+function parseYamlSource(source, label) {
   try {
-    const value = YAML.parse(await readFile(target, 'utf8'));
+    const value = YAML.parse(source);
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('document must be a mapping');
     return value;
   } catch (error) {
-    if (error.code === 'ENOENT') throw new CliError(`Missing ${label}: ${target}`, 3);
-    if (error instanceof CliError) throw error;
-    throw new CliError(`Cannot read ${label}: ${error.message}`, 3);
+    throw new CliError(`Cannot parse ${label}. Run vibetether doctor for details.`, 3);
   }
+}
+
+async function readSafeProjectFile(root, relativePath, label, { experienceRoute = false } = {}) {
+  if (typeof relativePath !== 'string'
+      || relativePath.length === 0
+      || !isSafeProjectRelativeArtifactPath(relativePath)
+      || (experienceRoute && isSensitiveArtifactPath(relativePath))) {
+    throw new CliError(`${label} path is unsafe. Run vibetether doctor for details.`, 3);
+  }
+  const target = path.resolve(root, relativePath);
+  const relative = path.relative(root, target);
+  let current = root;
+  if (!relative) throw new CliError(`${label} must be a regular file. Run vibetether doctor for details.`, 3);
+  for (const part of relative.split(path.sep).filter(Boolean)) {
+    current = path.join(current, part);
+    const metadata = await lstat(current);
+    if (metadata.isSymbolicLink()) {
+      throw new CliError(`${label} path is linked. Run vibetether doctor for details.`, 3);
+    }
+    if (current === target && !metadata.isFile()) {
+      throw new CliError(`${label} must be a regular file. Run vibetether doctor for details.`, 3);
+    }
+  }
+  return readFile(target, 'utf8');
 }
 
 function routeMatches(route, signals) {
@@ -172,43 +194,51 @@ export function resolveBoardRoute(board, request) {
   };
 }
 
-export async function loadCapabilityBoard(project) {
+async function loadCapabilitySnapshot(project, { includeExperience = false } = {}) {
   let root;
   try {
     root = await realpath(path.resolve(project));
   } catch {
     throw new CliError(`Project directory does not exist: ${project}`);
   }
-  const manifest = await parseYaml(path.join(root, '.vibetether', 'project.yaml'), 'VibeTether manifest');
+  let manifest;
+  try {
+    const source = await readSafeProjectFile(root, '.vibetether/project.yaml', 'VibeTether manifest');
+    manifest = parseYamlSource(source, 'VibeTether manifest');
+  } catch {
+    throw new CliError('Cannot read VibeTether manifest because it is missing, linked, or structurally invalid. Run vibetether doctor for details.', 3);
+  }
   if (!manifest.capability_board) throw new CliError('Manifest does not declare capability_board. Run VibeTether init to upgrade the project.', 3);
-  const board = await parseYaml(inside(root, manifest.capability_board, 'Capability board'), 'capability board');
+  let board;
+  try {
+    const source = await readSafeProjectFile(root, manifest.capability_board, 'Capability board');
+    board = parseYamlSource(source, 'capability board');
+  } catch (error) {
+    if (error instanceof CliError) throw error;
+    throw new CliError('Cannot read capability board. Run vibetether doctor for details.', 3);
+  }
   if (board.schema_version !== 1 || board.mode !== 'advisory-router') {
     throw new CliError('Unsupported capability board; expected schema_version 1 and advisory-router mode.', 3);
   }
-  return { root, board };
-}
-
-async function loadExperienceIndex(root, manifest) {
-  const route = manifest.experience_index === undefined
-    ? DEFAULT_EXPERIENCE_INDEX
-    : manifest.experience_index;
-  if (typeof route !== 'string' || route.length === 0) {
-    throw new CliError('Manifest experience_index must be a project-relative path. Run vibetether doctor for details.', 3);
-  }
+  if (!includeExperience) return { root, manifest, board };
   try {
-    const target = inside(root, route, 'Experience index');
-    await rejectSymlinkPath(root, route);
-    return parseExperienceIndex(await readFile(target, 'utf8'));
-  } catch (error) {
+    const route = manifest.experience_index === undefined
+      ? DEFAULT_EXPERIENCE_INDEX
+      : manifest.experience_index;
+    const source = await readSafeProjectFile(root, route, 'Experience index', { experienceRoute: true });
+    const experience = parseExperienceIndex(source);
+    return { root, manifest, board, experience };
+  } catch {
     throw new CliError('Cannot read experience index because it is missing, unsafe, or structurally invalid. Run vibetether doctor for details.', 3);
   }
 }
 
+export async function loadCapabilityBoard(project) {
+  return loadCapabilitySnapshot(project);
+}
+
 export async function loadCapabilityContext(project) {
-  const loaded = await loadCapabilityBoard(project);
-  const manifest = await parseYaml(path.join(loaded.root, '.vibetether', 'project.yaml'), 'VibeTether manifest');
-  const experience = await loadExperienceIndex(loaded.root, manifest);
-  return { ...loaded, manifest, experience };
+  return loadCapabilitySnapshot(project, { includeExperience: true });
 }
 
 function humanDashboard(root, board) {

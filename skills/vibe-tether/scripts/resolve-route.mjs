@@ -2,7 +2,9 @@
 
 import { access, lstat, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
+import { isSafeProjectRelativeArtifactPath, isSensitiveArtifactPath } from './artifact-safety.mjs';
 import {
+  capabilityBoardRouteFromManifest,
   experienceIndexRouteFromManifest,
   matchExperience,
   parseExperienceIndex,
@@ -45,21 +47,25 @@ function available(route, harness) {
   return harness ? harnesses.includes(harness) : harnesses.length > 0;
 }
 
-async function readSafeProjectFile(root, relativePath, label) {
-  if (typeof relativePath !== 'string' || relativePath.length === 0) {
-    throw new Error(`${label} path must be a non-empty project-relative string`);
+async function readSafeProjectFile(root, relativePath, label, { experienceRoute = false } = {}) {
+  if (typeof relativePath !== 'string'
+      || relativePath.length === 0
+      || !isSafeProjectRelativeArtifactPath(relativePath)
+      || (experienceRoute && isSensitiveArtifactPath(relativePath))) {
+    throw new Error(`${label} path is unsafe`);
   }
   const target = path.resolve(root, relativePath);
   const relative = path.relative(root, target);
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw new Error(`${label} path escapes the project: ${relativePath}`);
+    throw new Error(`${label} path is unsafe`);
   }
+  if (!relative) throw new Error(`${label} must be a regular file`);
   let current = root;
   for (const part of relative.split(path.sep).filter(Boolean)) {
     current = path.join(current, part);
     const metadata = await lstat(current);
-    if (metadata.isSymbolicLink()) throw new Error(`${label} path contains a symbolic link: ${relativePath}`);
-    if (current === target && !metadata.isFile()) throw new Error(`${label} must be a regular file: ${relativePath}`);
+    if (metadata.isSymbolicLink()) throw new Error(`${label} path contains a symbolic link`);
+    if (current === target && !metadata.isFile()) throw new Error(`${label} must be a regular file`);
   }
   return readFile(target, 'utf8');
 }
@@ -150,21 +156,32 @@ function resolve(board, request) {
 try {
   const options = parseArgs(process.argv.slice(2));
   const root = await realpath(path.resolve(options.project));
-  const boardPath = path.join(root, '.vibetether', 'capabilities.yaml');
+  let boardPath;
+  let experiencePath;
+  try {
+    const manifestSource = await readSafeProjectFile(root, '.vibetether/project.yaml', 'VibeTether manifest');
+    boardPath = capabilityBoardRouteFromManifest(manifestSource);
+    experiencePath = experienceIndexRouteFromManifest(manifestSource);
+  } catch {
+    throw new Error('Cannot read VibeTether manifest because it is missing, linked, or structurally invalid. Run vibetether doctor for details.');
+  }
   let board;
   try {
-    board = JSON.parse(await readFile(boardPath, 'utf8'));
-  } catch (error) {
-    throw new Error(`Cannot read the zero-dependency capability board at ${boardPath}: ${error.message}. Run VibeTether init to upgrade it.`);
+    board = JSON.parse(await readSafeProjectFile(root, boardPath, 'Capability board'));
+  } catch {
+    throw new Error('Cannot read the zero-dependency capability board. Run vibetether doctor for details.');
   }
   await refreshAvailability(board, root);
   let experience;
   try {
-    const manifestSource = await readSafeProjectFile(root, '.vibetether/project.yaml', 'VibeTether manifest');
-    const experiencePath = experienceIndexRouteFromManifest(manifestSource);
-    const experienceSource = await readSafeProjectFile(root, experiencePath, 'Experience index');
+    const experienceSource = await readSafeProjectFile(
+      root,
+      experiencePath,
+      'Experience index',
+      { experienceRoute: true },
+    );
     experience = parseExperienceIndex(experienceSource);
-  } catch (error) {
+  } catch {
     throw new Error('Cannot read experience index because it is missing, unsafe, or structurally invalid. Run vibetether doctor for details.');
   }
   const resolution = resolve(board, options);

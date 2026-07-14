@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
+  containsSecretValue,
   isSensitiveArtifactPath,
   SENSITIVE_CREDENTIAL_PHRASES,
 } from '../src/artifact-safety.mjs';
@@ -75,11 +76,11 @@ test('empty experience index is deeply immutable and has stable canonical serial
 test('parse and serialize reject unknown fields instead of silently normalizing them', () => {
   assert.throws(
     () => parseExperienceIndex('schema_version: 1\nentries: []\nnotes: hidden\n'),
-    /unexpected field.*notes/i,
+    /unexpected field|unsupported experience index shape/i,
   );
   assert.throws(
     () => serializeExperienceIndex(index([entry({ transcript: 'command output' })])),
-    /unexpected field.*transcript/i,
+    /unexpected field/i,
   );
 });
 
@@ -93,19 +94,19 @@ test('schema accepts only complete normalized entries with unique IDs and signal
   );
   await assert.rejects(
     validateExperienceIndex(index([entry(), entry({ id: 'github-publication' })]), root),
-    /duplicated.*github-publication|github-publication.*duplicated/i,
+    /id.*duplicated|duplicated.*id/i,
   );
   await assert.rejects(
     validateExperienceIndex(index([entry({ use_when: ['publish', 'Publish'] })]), root),
-    /invalid normalized signal.*Publish/i,
+    /invalid normalized signal/i,
   );
   await assert.rejects(
     validateExperienceIndex(index([entry({ use_when: ['publish', 'publish'] })]), root),
-    /duplicated.*signal.*publish|signal.*publish.*duplicated/i,
+    /duplicated.*signal|signal.*duplicated/i,
   );
   await assert.rejects(
     validateExperienceIndex(index([entry({ use_when: ['publish'], systems: ['publish'] })]), root),
-    /duplicated.*signal.*publish|signal.*publish.*duplicated/i,
+    /duplicated.*signal|signal.*duplicated/i,
   );
   await assert.rejects(
     validateExperienceIndex(index([entry({ artifacts: [] })]), root),
@@ -137,7 +138,7 @@ test('schema rejects escaping, missing, and secret-bearing artifact metadata', a
   const root = await fixture();
   await assert.rejects(
     validateExperienceIndex(index([entry({ artifacts: ['../secret.md'] })]), root),
-    /escapes the project|outside project/i,
+    /safe project-relative|escapes the project|outside project/i,
   );
   await assert.rejects(
     validateExperienceIndex(index([entry({ artifacts: ['docs/operations/missing.md'] })]), root),
@@ -303,7 +304,15 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
       artifact,
     );
     assert.throws(() => serializeExperienceIndex(denied), /secret-bearing|credential|unsafe|colon|relative/i, artifact);
-    assert.deepEqual(await matchExperience(denied, { root, signals: ['publish'] }), [], artifact);
+    if (containsSecretValue(artifact)) {
+      await assert.rejects(
+        matchExperience(denied, { root, signals: ['publish'] }),
+        /secret-bearing/i,
+        artifact,
+      );
+    } else {
+      assert.deepEqual(await matchExperience(denied, { root, signals: ['publish'] }), [], artifact);
+    }
   }
 });
 
@@ -519,10 +528,15 @@ test('matching isolates lexical, missing, and credential-bearing artifacts while
     entry({ id: 'unc-artifact', artifacts: ['\\\\server\\share\\operations.md'] }),
     entry({ id: 'missing-artifact', artifacts: ['docs/operations/missing.md'] }),
     entry({ id: 'credential-artifact', artifacts: ['.npmrc'] }),
-    entry({ id: 'token-artifact', artifacts: [`docs/operations/${githubToken}.md`] }),
   ]), { root, signals: ['publish'] });
 
   assert.deepEqual(result.map(({ id }) => id), ['safe-publication']);
+  await assert.rejects(
+    matchExperience(index([
+      entry({ id: 'token-artifact', artifacts: [`docs/operations/${githubToken}.md`] }),
+    ]), { root, signals: ['publish'] }),
+    /secret-bearing/i,
+  );
 });
 
 test('matching omits a symlinked artifact entry without hiding a safe match', async (context) => {

@@ -37,7 +37,22 @@ function normalize(value) {
   return String(value).trim().toLowerCase().replace(/[_\s]+/g, '-');
 }
 
+function containsObviousSecret(value, seen = new Set()) {
+  if (typeof value === 'string') return containsSecretValue(value);
+  if (value === null || typeof value !== 'object' || seen.has(value)) return false;
+  seen.add(value);
+  for (const [key, child] of Object.entries(value)) {
+    if (containsSecretValue(key) || containsObviousSecret(child, seen)) return true;
+  }
+  return false;
+}
+
+function assertNoObviousSecret(value) {
+  if (containsObviousSecret(value)) throw new Error('Experience index contains secret-bearing metadata');
+}
+
 function scalar(source) {
+  assertNoObviousSecret(source);
   const value = source.trim();
   if (!value) throw new Error('Experience index scalar must not be empty');
   if (value.startsWith('"')) {
@@ -58,7 +73,7 @@ function scalar(source) {
     return value.slice(1, -1).replaceAll("''", "'");
   }
   if (/^(?:null|true|false|~|[-+]?\d+(?:\.\d+)?)$/i.test(value)
-      || /^[!&*>{}|@[\]`]/.test(value)
+      || /^(?:[-?:](?:$|\s)|[%&*!|>@`\[\]{},#])/.test(value)
       || /:\s|\s#/.test(value)) {
     throw new Error('Unsupported unquoted experience scalar');
   }
@@ -67,18 +82,18 @@ function scalar(source) {
 
 function assertOnlyFields(value, allowed, label) {
   for (const field of Object.keys(value)) {
-    if (!allowed.has(field)) throw new Error(`${label} has unexpected field ${field}`);
+    if (!allowed.has(field)) throw new Error(`${label} has an unexpected field`);
   }
 }
 
 function assertStringArray(entry, field, { allowEmpty = false } = {}) {
   const values = entry[field];
   if (!Array.isArray(values) || (!allowEmpty && values.length === 0)) {
-    throw new Error(`Experience entry ${entry.id ?? 'unknown'} ${field} must be ${allowEmpty ? 'an' : 'a non-empty'} array`);
+    throw new Error(`Experience entry ${field} must be ${allowEmpty ? 'an' : 'a non-empty'} array`);
   }
   for (const value of values) {
     if (typeof value !== 'string' || value.length === 0) {
-      throw new Error(`Experience entry ${entry.id ?? 'unknown'} ${field} must contain non-empty strings`);
+      throw new Error(`Experience entry ${field} must contain non-empty strings`);
     }
   }
   return values;
@@ -87,7 +102,7 @@ function assertStringArray(entry, field, { allowEmpty = false } = {}) {
 function assertUnique(values, label) {
   const seen = new Set();
   for (const value of values) {
-    if (seen.has(value)) throw new Error(`${label} has duplicated signal ${value}`);
+    if (seen.has(value)) throw new Error(`${label} has a duplicated signal`);
     seen.add(value);
   }
 }
@@ -95,7 +110,7 @@ function assertUnique(values, label) {
 function assertNormalizedSignals(entry, values) {
   for (const signal of values) {
     if (normalize(signal) !== signal || !SIGNAL.test(signal)) {
-      throw new Error(`Experience entry ${entry.id} has invalid normalized signal: ${signal}`);
+      throw new Error('Experience entry has an invalid normalized signal');
     }
   }
 }
@@ -112,6 +127,7 @@ function isRealDate(value) {
 }
 
 export function assertExperienceIndex(value) {
+  assertNoObviousSecret(value);
   if (!isMapping(value)) throw new Error('experience index must be a mapping');
   assertOnlyFields(value, TOP_LEVEL_FIELDS, 'Experience index');
   if (value.schema_version !== 1) throw new Error('experience index schema_version must be 1');
@@ -120,19 +136,16 @@ export function assertExperienceIndex(value) {
   const ids = new Set();
   for (const entry of value.entries) {
     if (!isMapping(entry)) throw new Error('Experience index entries must be mappings');
-    assertOnlyFields(entry, ENTRY_FIELDS, `Experience entry ${entry.id ?? 'unknown'}`);
+    assertOnlyFields(entry, ENTRY_FIELDS, 'Experience entry');
     for (const field of REQUIRED_ENTRY_FIELDS) {
       if (!Object.hasOwn(entry, field)) {
-        throw new Error(`Experience entry ${entry.id ?? 'unknown'} requires field ${field}`);
+        throw new Error(`Experience entry requires field ${field}`);
       }
     }
-    if (containsSecretValue(JSON.stringify({ ...entry, artifacts: [] }))) {
-      throw new Error('Experience entry contains secret-bearing metadata');
-    }
     if (typeof entry.id !== 'string' || normalize(entry.id) !== entry.id || !SIGNAL.test(entry.id)) {
-      throw new Error(`Experience entry has invalid normalized id: ${entry.id ?? 'missing'}`);
+      throw new Error('Experience entry has an invalid normalized id');
     }
-    if (ids.has(entry.id)) throw new Error(`Experience entry id is duplicated: ${entry.id}`);
+    if (ids.has(entry.id)) throw new Error('Experience entry id is duplicated');
     ids.add(entry.id);
 
     const useWhen = assertStringArray(entry, 'use_when');
@@ -147,18 +160,18 @@ export function assertExperienceIndex(value) {
     const artifactSet = new Set();
     for (const artifact of artifacts) {
       if (artifact.trim() !== artifact) {
-        throw new Error(`Experience entry ${entry.id} has an invalid artifact path: ${artifact}`);
+        throw new Error('Experience entry has an invalid artifact path');
       }
       if (artifactSet.has(artifact)) {
-        throw new Error(`Experience entry ${entry.id} has duplicated artifact path: ${artifact}`);
+        throw new Error('Experience entry has a duplicated artifact path');
       }
       artifactSet.add(artifact);
     }
     if (!isRealDate(entry.verified_at)) {
-      throw new Error(`Experience entry ${entry.id} has invalid verified_at`);
+      throw new Error('Experience entry has invalid verified_at');
     }
     if (!ALLOWED_STATUS.has(entry.status)) {
-      throw new Error(`Experience entry ${entry.id} has invalid status: ${entry.status}`);
+      throw new Error('Experience entry has invalid status');
     }
   }
   return value;
@@ -166,6 +179,7 @@ export function assertExperienceIndex(value) {
 
 export function parseExperienceIndex(source) {
   if (typeof source !== 'string') throw new Error('Experience index source must be text');
+  assertNoObviousSecret(source);
   const normalized = source.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
   if (normalized.includes('\r') || normalized.includes('\t')) {
     throw new Error('Unsupported experience index whitespace');
@@ -215,15 +229,15 @@ export function parseExperienceIndex(source) {
       if (!current) throw new Error('Invalid experience index field placement');
       const field = match[1];
       const value = match[2];
-      if (!ENTRY_FIELDS.has(field)) throw new Error(`Experience entry ${current.id} has unexpected field ${field}`);
-      if (Object.hasOwn(current, field)) throw new Error(`Experience entry ${current.id} has duplicate field ${field}`);
+      if (!ENTRY_FIELDS.has(field)) throw new Error('Experience entry has an unexpected field');
+      if (Object.hasOwn(current, field)) throw new Error('Experience entry has a duplicate field');
       if (SCALAR_FIELDS.has(field)) {
-        if (!value) throw new Error(`Experience entry ${current.id} ${field} requires a scalar`);
+        if (!value) throw new Error(`Experience entry ${field} requires a scalar`);
         current[field] = scalar(value);
         listKey = null;
         continue;
       }
-      if (!LIST_FIELDS.has(field)) throw new Error(`Unsupported experience index field: ${field}`);
+      if (!LIST_FIELDS.has(field)) throw new Error('Unsupported experience index field');
       if (value === '[]') {
         current[field] = [];
         listKey = null;
@@ -254,6 +268,20 @@ export function experienceIndexRouteFromManifest(source) {
     route = scalar(match[1]);
   }
   return route ?? '.vibetether/experience-index.yaml';
+}
+
+export function capabilityBoardRouteFromManifest(source) {
+  if (typeof source !== 'string') throw new Error('VibeTether manifest source must be text');
+  let route;
+  for (const line of source.replace(/\r\n/g, '\n').split('\n')) {
+    const match = line.match(/^capability_board:\s*(.*)$/);
+    if (!match) continue;
+    if (route !== undefined) throw new Error('VibeTether manifest has duplicate capability_board fields');
+    if (!match[1]) throw new Error('VibeTether manifest capability_board requires a path');
+    route = scalar(match[1]);
+  }
+  if (route === undefined) throw new Error('VibeTether manifest requires capability_board');
+  return route;
 }
 
 async function safeRegularArtifact(root, artifact) {
