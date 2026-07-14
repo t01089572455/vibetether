@@ -272,8 +272,8 @@ async function initializedProject(root) {
     lock = YAML.parse(lockSource);
     if (!validateProviderLock(lock)) throw new Error('the complete schema_version 1 or 2 provider contract is required');
     if (lock.bundles !== undefined && !Array.isArray(lock.bundles)) throw new Error('bundles must be an array');
-  } catch (error) {
-    throw new CliError(`VibeTether bootstrap requires a valid provider lock. Run \`vibetether init\` to repair it: ${error.message}`, 3);
+  } catch {
+    throw new CliError('VibeTether bootstrap requires a valid provider lock. Run `vibetether init` to repair it.', 3);
   }
   return { manifest, lock };
 }

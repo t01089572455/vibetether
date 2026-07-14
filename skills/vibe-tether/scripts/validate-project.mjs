@@ -23,6 +23,7 @@ async function exists(target) {
 }
 
 async function projectEntryStatus(projectRoot, relativePath, expectedType = 'file') {
+  if (typeof relativePath !== 'string') return 'invalid';
   if (!isSafeProjectRelativeArtifactPath(relativePath)) return 'escape';
   const root = path.resolve(projectRoot);
   const target = path.resolve(root, relativePath);
@@ -159,7 +160,6 @@ async function validateProject(projectRoot) {
   }
 
   if (manifest.capability_board) {
-    const boardPath = path.resolve(projectRoot, manifest.capability_board);
     const boardStatus = await projectEntryStatus(projectRoot, manifest.capability_board);
     if (boardStatus === 'escape') {
       errors.push('Capability board escapes project root');
@@ -169,6 +169,7 @@ async function validateProject(projectRoot) {
       errors.push('Capability board must be a regular non-linked file');
     } else {
       try {
+        const boardPath = path.resolve(projectRoot, manifest.capability_board);
         const board = JSON.parse(await readFile(boardPath, 'utf8'));
         if (board.schema_version !== 1 || board.mode !== 'advisory-router') {
           errors.push('Capability board must use schema_version 1 and advisory-router mode');
@@ -196,7 +197,6 @@ async function validateProject(projectRoot) {
   }
 
   if (manifest.experience_index) {
-    const indexPath = path.resolve(projectRoot, manifest.experience_index);
     const indexStatus = await projectEntryStatus(projectRoot, manifest.experience_index);
     if (indexStatus === 'escape') {
       errors.push('Experience index escapes project root');
@@ -206,6 +206,7 @@ async function validateProject(projectRoot) {
       errors.push('Experience index must be a regular non-linked file');
     } else {
       try {
+        const indexPath = path.resolve(projectRoot, manifest.experience_index);
         const index = parseExperienceIndex(await readFile(indexPath, 'utf8'));
         for (const entry of index.entries) {
           for (const artifact of entry.artifacts) {
@@ -248,7 +249,6 @@ async function validateProject(projectRoot) {
   }
 
   if (manifest.checkpoint?.path) {
-    const checkpointPath = path.resolve(projectRoot, manifest.checkpoint.path);
     const checkpointStatus = await projectEntryStatus(projectRoot, manifest.checkpoint.path);
     if (checkpointStatus === 'escape') {
       errors.push('Checkpoint escapes project root');
@@ -257,6 +257,7 @@ async function validateProject(projectRoot) {
     } else if (checkpointStatus !== 'ok') {
       errors.push('Checkpoint must be a regular non-linked file');
     } else {
+      const checkpointPath = path.resolve(projectRoot, manifest.checkpoint.path);
       const checkpointSource = await readFile(checkpointPath, 'utf8');
       for (const field of ['goal', 'phase', 'slice', 'last_reanchor', 'next_intended_action']) {
         if (!new RegExp(`^${field}:\\s*.+$`, 'm').test(checkpointSource)) {

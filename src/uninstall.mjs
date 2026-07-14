@@ -29,6 +29,26 @@ function portablePath(value) {
   return String(value ?? '').replaceAll('\\', '/');
 }
 
+function mapping(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function providerLockError(reason) {
+  return new CliError(
+    `Cannot safely uninstall providers because ${reason}. Restore a valid provider lock and retry.`,
+    3,
+  );
+}
+
+async function providerLockTarget(root, relativePath, label) {
+  try {
+    await rejectSymlinkPath(root, relativePath);
+    return resolveInside(root, relativePath);
+  } catch {
+    throw providerLockError(`${label} must be a safe regular project path`);
+  }
+}
+
 export async function applyUninstallPlans(textPlans, skillPlans, operations = {}) {
   const run = { mkdir, rename, rm, writeAtomic, ...operations };
   const quarantined = [];
@@ -132,14 +152,19 @@ export async function uninstall(options) {
   if (lockOriginal !== null) {
     try {
       lock = YAML.parse(lockOriginal);
-      const validV1 = lock?.schema_version === 1 && Array.isArray(lock?.skills);
+      const validV1 = lock?.schema_version === 1 && Array.isArray(lock?.sources) && Array.isArray(lock?.skills);
       const validV2 =
         lock?.schema_version === 2 &&
+        Array.isArray(lock?.sources) &&
         Array.isArray(lock?.catalog) &&
         Array.isArray(lock?.exposures) &&
         Array.isArray(lock?.skills);
       if (!validV1 && !validV2) {
         throw new Error('expected schema_version 1 or 2 and the matching provider arrays');
+      }
+      const records = [lock.sources, lock.skills, ...(validV2 ? [lock.catalog, lock.exposures] : [])];
+      if (records.some((entries) => entries.some((entry) => !mapping(entry)))) {
+        throw new Error('provider records must be mappings');
       }
     } catch {
       throw new CliError(
@@ -148,32 +173,31 @@ export async function uninstall(options) {
       );
     }
     for (const skill of lock.skills) {
+      if (!mapping(skill) || !mapping(skill.installations) || typeof skill.install_name !== 'string') {
+        throw providerLockError('the provider lock contains an invalid Skill record');
+      }
       for (const [harness, installation] of Object.entries(skill.installations ?? {})) {
         if (installation?.ownership !== 'vibetether') continue;
         if (!installation.path) {
-          throw new CliError(`Provider lock is missing an install path for ${skill.install_name ?? skill.id}`, 3);
+          throw providerLockError('the provider lock is missing an install path');
         }
         const adapter = ADAPTERS[harness];
         const expectedPath = adapter
           ? portablePath(path.join(path.dirname(adapter.skillDirectory), skill.install_name))
           : null;
         if (!expectedPath || portablePath(installation.path) !== expectedPath) {
-          throw new CliError(
-            `Provider install path does not match ${harness}/${skill.install_name}: ${installation.path}`,
-            3,
-          );
+          throw providerLockError('the provider install path does not match the expected project path');
         }
-        await rejectSymlinkPath(root, installation.path);
-        const target = resolveInside(root, installation.path);
+        const target = await providerLockTarget(root, installation.path, 'The provider install path');
         if (!(await exists(target))) continue;
         let installedFingerprint;
         try {
           installedFingerprint = await skillFingerprint(target);
-        } catch (error) {
-          throw new CliError(`Cannot verify provider Skill at ${installation.path}: ${error.message}`, 3);
+        } catch {
+          throw providerLockError('a provider Skill declared by the provider lock cannot be verified');
         }
-        if (installedFingerprint !== skill.fingerprint) {
-          throw new CliError(`Refusing to remove modified provider Skill at ${installation.path}. Back up the customization first.`, 3);
+      if (installedFingerprint !== skill.fingerprint) {
+          throw providerLockError('a provider Skill declared by the provider lock has been modified');
         }
         if (!skillPlans.some((plan) => plan.target === target)) {
           skillPlans.push({ relativePath: installation.path, target, quarantineRoot });
@@ -181,45 +205,49 @@ export async function uninstall(options) {
       }
     }
     for (const skill of lock.catalog ?? []) {
+      if (!mapping(skill) || typeof skill.source_id !== 'string' || typeof skill.install_name !== 'string') {
+        throw providerLockError('the provider lock contains an invalid catalog record');
+      }
       const installation = skill.installation;
       if (installation?.ownership !== 'vibetether') continue;
       const expectedPath = `.vibetether/providers/catalog/${skill.source_id}/${skill.install_name}`;
       if (!installation.path || portablePath(installation.path) !== expectedPath) {
-        throw new CliError(`Catalog install path does not match ${skill.id}: ${installation?.path ?? 'missing'}`, 3);
+        throw providerLockError('the catalog install path does not match the expected project path');
       }
-      await rejectSymlinkPath(root, installation.path);
-      const target = resolveInside(root, installation.path);
+      const target = await providerLockTarget(root, installation.path, 'The catalog install path');
       if (!(await exists(target))) continue;
       let installedFingerprint;
       try {
         installedFingerprint = await skillFingerprint(target);
-      } catch (error) {
-        throw new CliError(`Cannot verify catalog Skill at ${installation.path}: ${error.message}`, 3);
+      } catch {
+        throw providerLockError('a catalog Skill declared by the provider lock cannot be verified');
       }
-      if (installedFingerprint !== skill.fingerprint) {
-        throw new CliError(`Refusing to remove modified catalog Skill at ${installation.path}. Back up the customization first.`, 3);
+        if (installedFingerprint !== skill.fingerprint) {
+        throw providerLockError('the provider lock declares a modified catalog Skill');
       }
       if (!skillPlans.some((plan) => plan.target === target)) {
         skillPlans.push({ relativePath: installation.path, target, quarantineRoot });
       }
     }
     for (const source of lock.sources ?? []) {
+      if (!mapping(source) || typeof source.id !== 'string') {
+        throw providerLockError('the provider lock contains an invalid source record');
+      }
       const installation = source.license_installation;
       if (installation?.ownership !== 'vibetether') continue;
       if (!installation.path || !source.license_sha256) {
-        throw new CliError(`Provider lock is missing an installed license record for ${source.id}`, 3);
+        throw providerLockError('the provider lock is missing an installed license record');
       }
       const expectedLicensePath = `.vibetether/licenses/${source.id}.LICENSE.txt`;
       if (portablePath(installation.path) !== expectedLicensePath) {
-        throw new CliError(`Provider license path does not match source ${source.id}: ${installation.path}`, 3);
+        throw providerLockError('the provider license path does not match the expected project path');
       }
-      await rejectSymlinkPath(root, installation.path);
-      const target = resolveInside(root, installation.path);
+      const target = await providerLockTarget(root, installation.path, 'The provider license path');
       const original = await readTextIfPresent(target);
       if (original === null) continue;
       const actual = createHash('sha256').update(original, 'utf8').digest('hex');
       if (actual !== source.license_sha256) {
-        throw new CliError(`Refusing to remove modified provider license at ${installation.path}. Back up the customization first.`, 3);
+        throw providerLockError('the provider lock declares a modified provider license');
       }
       textPlans.push({
         relativePath: installation.path,

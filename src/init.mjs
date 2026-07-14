@@ -413,8 +413,11 @@ export async function initialize(options, dependencies = {}) {
       if (!checkpoint || typeof checkpoint !== 'object' || Array.isArray(checkpoint)) {
         throw new Error('checkpoint must be a mapping');
       }
-    } catch (error) {
-      throw new CliError(`Checkpoint conflict in .vibetether/state/current.yaml: ${error.message}`, 3);
+    } catch {
+      throw new CliError(
+        'Checkpoint conflict in .vibetether/state/current.yaml: expected valid checkpoint YAML mapping. Restore the checkpoint and retry.',
+        3,
+      );
     }
     let checkpointChanged = false;
     if (!checkpoint.provider_selection) {
@@ -455,9 +458,12 @@ export async function initialize(options, dependencies = {}) {
         throw new Error('the complete schema_version 1 or 2 provider contract is required');
       }
       existingLock = parsedLock;
-    } catch (error) {
+    } catch {
       if (options.bootstrapOnly) {
-        throw new CliError(`Provider lock conflict in .vibetether/providers.lock.yaml: expected a valid provider lock. Run \`vibetether init\` to repair it: ${error.message}`, 3);
+        throw new CliError(
+          'Provider lock conflict in .vibetether/providers.lock.yaml: expected a valid provider lock. Run `vibetether init` to repair it.',
+          3,
+        );
       }
       existingLock = null;
       lockNeedsRepair = true;

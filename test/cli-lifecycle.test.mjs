@@ -632,6 +632,50 @@ test('uninstall redacts malformed manifest and provider-lock parser diagnostics'
   }
 });
 
+test('uninstall redacts structural provider-lock diagnostics', async () => {
+  const target = await initializedProject('uninstall-redacted-provider-lock-structure');
+  const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
+  const lock = YAML.parse(await readFile(lockPath, 'utf8'));
+  const secret = `github_pat_${'Z'.repeat(30)}`;
+  lock.skills = [{
+    id: 'safe',
+    install_name: secret,
+    fingerprint: 'bad',
+    installations: {
+      codex: { ownership: 'vibetether' },
+    },
+  }];
+  await writeFile(lockPath, YAML.stringify(lock), 'utf8');
+
+  const result = runCli(['uninstall', '--project', target, '--yes']);
+
+  assert.equal(result.status, 3, result.stderr || result.stdout);
+  assert.match(result.stderr, /provider lock is missing an install path/i);
+  assert.doesNotMatch(result.stderr, new RegExp(secret));
+});
+
+test('uninstall redacts provider-lock installation-path diagnostics', async () => {
+  const target = await initializedProject('uninstall-redacted-provider-lock-path');
+  const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
+  const lock = YAML.parse(await readFile(lockPath, 'utf8'));
+  const secret = `github_pat_${'P'.repeat(30)}`;
+  lock.skills = [{
+    id: 'safe',
+    install_name: 'safe',
+    fingerprint: 'bad',
+    installations: {
+      codex: { ownership: 'vibetether', path: secret },
+    },
+  }];
+  await writeFile(lockPath, YAML.stringify(lock), 'utf8');
+
+  const result = runCli(['uninstall', '--project', target, '--yes']);
+
+  assert.equal(result.status, 3, result.stderr || result.stdout);
+  assert.match(result.stderr, /provider install path does not match/i);
+  assert.doesNotMatch(result.stderr, new RegExp(secret));
+});
+
 test('doctor redacts untrusted provider-lock Skill identifiers', async () => {
   const target = await initializedProject('doctor-redacted-provider-lock-record');
   const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
@@ -652,6 +696,74 @@ test('doctor redacts untrusted provider-lock Skill identifiers', async () => {
   assert.equal(report.issues.some((entry) => entry.code === 'invalid-provider-lock'), true);
   assert.doesNotMatch(result.stdout, new RegExp(secret));
   assert.doesNotMatch(result.stderr, new RegExp(secret));
+});
+
+test('doctor redacts config-derived instruction-file paths in managed-block issues', async () => {
+  const target = await initializedProject('doctor-redacted-instruction-file');
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
+  const secret = `github_pat_${'I'.repeat(30)}.md`;
+  manifest.harnesses.codex.instruction_file = secret;
+  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+  await writeFile(path.join(target, secret), '# User instructions only\n', 'utf8');
+
+  const result = runCli(['doctor', '--project', target, '--json']);
+
+  assert.equal(result.status, 4, result.stderr || result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.issues.some((entry) => entry.code === 'invalid-managed-block'), true);
+  assert.doesNotMatch(JSON.stringify(report.issues), new RegExp(secret));
+});
+
+test('doctor and the installed validator reject a non-string checkpoint route without crashing', async () => {
+  const target = await initializedProject('non-string-checkpoint-route');
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
+  const secret = `github_pat_${'K'.repeat(30)}`;
+  manifest.checkpoint.path = { secret };
+  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+
+  const doctor = runCli(['doctor', '--project', target, '--json']);
+
+  assert.equal(doctor.status, 4, doctor.stderr || doctor.stdout);
+  const report = JSON.parse(doctor.stdout);
+  assert.equal(report.issues.some((entry) => entry.code === 'unsafe-checkpoint'), true);
+  assert.doesNotMatch(JSON.stringify(report), new RegExp(secret));
+
+  const installedValidator = path.join(target, '.agents', 'skills', 'vibe-tether', 'scripts', 'validate-project.mjs');
+  const validator = spawnSync(process.execPath, [installedValidator, '--project', target], {
+    cwd: target,
+    encoding: 'utf8',
+  });
+  assert.equal(validator.status, 1, validator.stderr || validator.stdout);
+  assert.match(validator.stderr, /checkpoint.*regular non-linked file/i);
+  assert.doesNotMatch(validator.stderr, new RegExp(secret));
+  assert.doesNotMatch(validator.stderr, /TypeError|validateProject/);
+});
+
+test('doctor and uninstall reject null provider-lock records with controlled diagnostics', async () => {
+  for (const [label, field] of [
+    ['source', 'sources'],
+    ['catalog', 'catalog'],
+    ['Skill', 'skills'],
+  ]) {
+    const target = await initializedProject(`null-provider-lock-${label.toLowerCase()}`);
+    const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
+    const lock = YAML.parse(await readFile(lockPath, 'utf8'));
+    lock[field] = [null];
+    await writeFile(lockPath, YAML.stringify(lock), 'utf8');
+
+    const doctor = runCli(['doctor', '--project', target, '--json']);
+    assert.equal(doctor.status, 4, `${label} doctor: ${doctor.stderr || doctor.stdout}`);
+    const report = JSON.parse(doctor.stdout);
+    assert.equal(report.issues.some((entry) => entry.code === 'invalid-provider-lock'), true, label);
+    assert.doesNotMatch(`${doctor.stdout}\n${doctor.stderr}`, /TypeError|Cannot read properties/i, label);
+
+    const uninstall = runCli(['uninstall', '--project', target, '--yes']);
+    assert.equal(uninstall.status, 3, `${label} uninstall: ${uninstall.stderr || uninstall.stdout}`);
+    assert.match(uninstall.stderr, /provider lock is invalid/i, label);
+    assert.doesNotMatch(`${uninstall.stdout}\n${uninstall.stderr}`, /TypeError|Cannot read properties/i, label);
+  }
 });
 
 test('doctor redacts untrusted harness and capability-board profile values', async () => {

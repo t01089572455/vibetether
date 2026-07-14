@@ -421,6 +421,23 @@ test('init keeps runtime checkpoint state out of version control', async () => {
   assert.equal(checkpoint.private_reasoning, undefined);
 });
 
+test('init redacts malformed checkpoint diagnostics', async () => {
+  const target = await project('redacted-malformed-checkpoint');
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
+  const secret = `github_pat_${'C'.repeat(30)}`;
+  await writeFile(
+    path.join(target, '.vibetether', 'state', 'current.yaml'),
+    `schema_version: [${secret}\n`,
+    'utf8',
+  );
+
+  const result = runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']);
+
+  assert.equal(result.status, 3, result.stderr || result.stdout);
+  assert.match(result.stderr, /checkpoint conflict in \.vibetether\/state\/current\.yaml/i);
+  assert.doesNotMatch(result.stderr, new RegExp(secret));
+});
+
 test('repeated init preserves curated manifest fields and existing harnesses', async () => {
   const target = await project('curated-manifest');
   assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
