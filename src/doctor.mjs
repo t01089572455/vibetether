@@ -4,7 +4,8 @@ import { createHash } from 'node:crypto';
 import YAML from 'yaml';
 import { ADAPTERS, MANAGED_END, MANAGED_START } from './adapters.mjs';
 import { CliError } from './errors.mjs';
-import { managedBlockBody } from './files.mjs';
+import { managedBlockBody, rejectSymlinkPath } from './files.mjs';
+import { parseExperienceIndex, validateExperienceIndex } from './experience-index.mjs';
 import { skillFingerprint, sourceSkill } from './skill-install.mjs';
 import { assertCapabilityBoard } from '../skills/vibe-tether/scripts/capability-routing.mjs';
 
@@ -48,7 +49,16 @@ function portablePath(value) {
   return String(value ?? '').replaceAll('\\', '/');
 }
 
-async function validateExperienceFeedback(root, state, manifest, issues) {
+function normalizedArtifactPath(value) {
+  return portablePath(value).replace(/^\.\//, '');
+}
+
+function isBuiltInExperienceArtifact(artifact) {
+  const normalized = normalizedArtifactPath(artifact);
+  return normalized.startsWith('skills/vibe-tether/') || normalized.startsWith('evals/');
+}
+
+async function validateExperienceFeedback(root, state, manifest, experienceIndex, issues) {
   const feedback = state.experience_feedback;
   const completionLike = COMPLETION_PHASES.has(String(state.phase ?? '').toUpperCase());
   if (!feedback || feedback.disposition === 'pending') {
@@ -87,6 +97,14 @@ async function validateExperienceFeedback(root, state, manifest, issues) {
     return;
   }
 
+  const indexedArtifacts = new Set(
+    (experienceIndex?.entries ?? [])
+      .filter((entry) => entry.status !== 'obsolete')
+      .flatMap((entry) => entry.artifacts)
+      .map(normalizedArtifactPath),
+  );
+  const requiresIndex = disposition === 'captured' || disposition === 'already-encoded';
+
   for (const artifact of artifacts) {
     if (typeof artifact !== 'string' || !artifact.trim()) {
       issues.push(issue('invalid-experience-feedback', 'Experience artifact paths must be non-empty strings'));
@@ -113,6 +131,41 @@ async function validateExperienceFeedback(root, state, manifest, issues) {
         ));
       }
     }
+    if (requiresIndex && !isBuiltInExperienceArtifact(artifact) && !indexedArtifacts.has(normalizedArtifactPath(artifact))) {
+      issues.push(issue(
+        'unindexed-experience-artifact',
+        `Reusable experience artifact is not indexed: ${artifact}`,
+      ));
+    }
+  }
+}
+
+async function readExperienceIndex(root, manifest, issues) {
+  const relativePath = manifest.experience_index;
+  if (typeof relativePath !== 'string' || !relativePath.trim()) {
+    issues.push(issue('missing-experience-index-field', 'Manifest experience_index is required'));
+    return null;
+  }
+  const target = projectPath(root, relativePath);
+  if (!target) {
+    issues.push(issue('experience-index-escape', 'Experience index path must stay inside the project'));
+    return null;
+  }
+  if (!(await exists(target))) {
+    issues.push(issue('missing-experience-index', 'Missing experience index declared by the project manifest'));
+    return null;
+  }
+  try {
+    await rejectSymlinkPath(root, relativePath);
+    const index = parseExperienceIndex(await readFile(target, 'utf8'));
+    await validateExperienceIndex(index, root);
+    return index;
+  } catch {
+    issues.push(issue(
+      'invalid-experience-index',
+      'Cannot validate experience index. Fix the index and rerun vibetether doctor.',
+    ));
+    return null;
   }
 }
 
@@ -219,6 +272,7 @@ export async function inspectProject(options) {
       }
     }
 
+    const experienceIndex = await readExperienceIndex(root, manifest, issues);
     const board = await readYamlArtifact(root, manifest.capability_board, 'capability-board', issues);
     const lock = await readYamlArtifact(root, manifest.provider_lock, 'provider-lock', issues);
     if (board) {
@@ -416,7 +470,7 @@ export async function inspectProject(options) {
             } else if (Date.now() - updatedAt > maxAge) {
               issues.push(issue('stale-checkpoint', `Runtime checkpoint is older than ${checkpoint.max_age_hours ?? 168} hours`));
             }
-            await validateExperienceFeedback(root, state, manifest, issues);
+            await validateExperienceFeedback(root, state, manifest, experienceIndex, issues);
           }
         } catch (error) {
           issues.push(issue('invalid-checkpoint', `Cannot parse runtime checkpoint: ${error.message}`));

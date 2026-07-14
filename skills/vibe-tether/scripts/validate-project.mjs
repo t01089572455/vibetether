@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
-import { access, readFile, readdir } from 'node:fs/promises';
+import { access, lstat, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { isSafeProjectRelativeArtifactPath, isSensitiveArtifactPath } from './artifact-safety.mjs';
+import { parseExperienceIndex } from './experience-index.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const skillDir = path.resolve(scriptDir, '..');
@@ -17,6 +19,29 @@ async function exists(target) {
   } catch {
     return false;
   }
+}
+
+async function projectRegularFileStatus(projectRoot, relativePath) {
+  if (!isSafeProjectRelativeArtifactPath(relativePath)) return 'escape';
+  const root = path.resolve(projectRoot);
+  const target = path.resolve(root, relativePath);
+  const relative = path.relative(root, target);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) return 'escape';
+  if (!relative) return 'not-file';
+  let current = root;
+  for (const part of relative.split(path.sep).filter(Boolean)) {
+    current = path.join(current, part);
+    let metadata;
+    try {
+      metadata = await lstat(current);
+    } catch (error) {
+      if (error.code === 'ENOENT') return 'missing';
+      throw error;
+    }
+    if (metadata.isSymbolicLink()) return 'linked';
+    if (current === target && !metadata.isFile()) return 'not-file';
+  }
+  return 'ok';
 }
 
 async function recursiveTextFiles(directory) {
@@ -130,6 +155,7 @@ function parseManifest(source) {
     intent_contract: topLevelScalar(source, 'intent_contract'),
     capability_board: topLevelScalar(source, 'capability_board'),
     provider_lock: topLevelScalar(source, 'provider_lock'),
+    experience_index: topLevelScalar(source, 'experience_index'),
     sources,
     harnesses,
     checkpoint,
@@ -154,6 +180,7 @@ async function validateProject(projectRoot) {
   if (!manifest?.intent_contract) errors.push('Manifest intent_contract is required');
   if (!manifest?.capability_board) errors.push('Manifest capability_board is required');
   if (!manifest?.provider_lock) errors.push('Manifest provider_lock is required');
+  if (!manifest?.experience_index) errors.push('Manifest experience_index is required');
   const declaredSources = [manifest?.goal_source, manifest?.intent_contract, ...manifest.sources].filter(Boolean);
   for (const source of [...new Set(declaredSources)]) {
     const sourcePath = path.resolve(projectRoot, source);
@@ -196,6 +223,40 @@ async function validateProject(projectRoot) {
       errors.push(`Provider lock escapes project root: ${manifest.provider_lock}`);
     } else if (!(await exists(lockPath))) {
       errors.push(`Missing provider lock: ${manifest.provider_lock}`);
+    }
+  }
+
+  if (manifest.experience_index) {
+    const indexPath = path.resolve(projectRoot, manifest.experience_index);
+    const indexStatus = await projectRegularFileStatus(projectRoot, manifest.experience_index);
+    if (indexStatus === 'escape') {
+      errors.push('Experience index escapes project root');
+    } else if (indexStatus === 'missing') {
+      errors.push('Missing experience index');
+    } else if (indexStatus !== 'ok') {
+      errors.push('Experience index must be a regular non-linked file');
+    } else {
+      try {
+        const index = parseExperienceIndex(await readFile(indexPath, 'utf8'));
+        for (const entry of index.entries) {
+          for (const artifact of entry.artifacts) {
+            if (!isSafeProjectRelativeArtifactPath(artifact) || isSensitiveArtifactPath(artifact)) {
+              errors.push('Experience index contains an unsafe artifact path');
+              continue;
+            }
+            const artifactStatus = await projectRegularFileStatus(projectRoot, artifact);
+            if (artifactStatus === 'escape') {
+              errors.push('Experience index artifact escapes project root');
+            } else if (artifactStatus === 'missing') {
+              errors.push('Experience index references a missing artifact');
+            } else if (artifactStatus !== 'ok') {
+              errors.push('Experience index artifact must be a regular non-linked file');
+            }
+          }
+        }
+      } catch {
+        errors.push('Invalid experience index');
+      }
     }
   }
 

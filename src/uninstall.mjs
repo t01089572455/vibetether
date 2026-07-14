@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import YAML from 'yaml';
 import { ADAPTERS } from './adapters.mjs';
 import { CliError } from './errors.mjs';
+import { EMPTY_EXPERIENCE_INDEX, serializeExperienceIndex } from './experience-index.mjs';
 import {
   inspectManagedBlock,
   readTextIfPresent,
@@ -253,7 +254,27 @@ export async function uninstall(options) {
     try {
       const manifest = YAML.parse(manifestOriginal);
       if (manifest && typeof manifest === 'object' && !Array.isArray(manifest)) {
-        const hadRouting = 'capability_board' in manifest || 'provider_lock' in manifest;
+        let removedCanonicalEmptyExperienceIndex = false;
+        const canonicalEmptyIndex = serializeExperienceIndex(EMPTY_EXPERIENCE_INDEX);
+        if (manifest.experience_index === '.vibetether/experience-index.yaml') {
+          await rejectSymlinkPath(root, manifest.experience_index);
+          const experiencePath = resolveInside(root, manifest.experience_index);
+          const experienceOriginal = await readTextIfPresent(experiencePath);
+          if (experienceOriginal === canonicalEmptyIndex) {
+            textPlans.push({
+              relativePath: manifest.experience_index,
+              target: experiencePath,
+              original: experienceOriginal,
+              content: '',
+              removeFile: true,
+            });
+            delete manifest.experience_index;
+            removedCanonicalEmptyExperienceIndex = true;
+          }
+        }
+        const hadRouting = 'capability_board' in manifest
+          || 'provider_lock' in manifest
+          || removedCanonicalEmptyExperienceIndex;
         delete manifest.capability_board;
         delete manifest.provider_lock;
         if (hadRouting) {

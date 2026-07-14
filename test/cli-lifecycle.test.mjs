@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import YAML from 'yaml';
+import { serializeExperienceIndex } from '../src/experience-index.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cli = path.join(root, 'bin', 'vibetether.mjs');
@@ -25,6 +26,52 @@ async function exists(target) {
   } catch {
     return false;
   }
+}
+
+async function initializedProject(name) {
+  const target = await project(name);
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
+  return target;
+}
+
+async function setExperienceFeedback(target, experienceFeedback) {
+  const checkpointPath = path.join(target, '.vibetether', 'state', 'current.yaml');
+  const checkpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
+  checkpoint.experience_feedback = experienceFeedback;
+  await writeFile(checkpointPath, YAML.stringify(checkpoint), 'utf8');
+}
+
+async function writeOperationalExperience(target, id, artifact) {
+  await mkdir(path.join(target, path.dirname(artifact)), { recursive: true });
+  await writeFile(path.join(target, artifact), '# Proven operation\n', 'utf8');
+
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
+  manifest.sources.conditional.operations = [`${path.posix.dirname(artifact)}/`];
+  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+
+  const index = {
+    schema_version: 1,
+    entries: [{
+      id,
+      use_when: ['release'],
+      artifacts: [artifact],
+      verified_at: '2026-07-14',
+      revalidate_when: [],
+      status: 'proven',
+    }],
+  };
+  await writeFile(
+    path.join(target, '.vibetether', 'experience-index.yaml'),
+    serializeExperienceIndex(index),
+    'utf8',
+  );
+}
+
+function doctorFailure(target) {
+  const result = runCli(['doctor', '--project', target, '--json']);
+  assert.equal(result.status, 4, result.stderr || result.stdout);
+  return JSON.parse(result.stdout);
 }
 
 test('doctor reports a healthy initialized project as machine-readable JSON', async () => {
@@ -239,12 +286,7 @@ test('doctor rejects a captured Markdown Proven Path that is not manifest-routed
 test('doctor accepts a captured first-proven path with a manifest-routed durable artifact', async () => {
   const target = await project('doctor-captured-success');
   assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
-  await mkdir(path.join(target, 'docs', 'operations'), { recursive: true });
-  await writeFile(path.join(target, 'docs', 'operations', 'publication.md'), '# Publication\n', 'utf8');
-  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
-  const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
-  manifest.sources.conditional.operations = ['docs/operations/'];
-  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+  await writeOperationalExperience(target, 'publication-path', 'docs/operations/publication.md');
   const checkpointPath = path.join(target, '.vibetether', 'state', 'current.yaml');
   const checkpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
   checkpoint.phase = 'REVIEW';
@@ -260,6 +302,133 @@ test('doctor accepts a captured first-proven path with a manifest-routed durable
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.equal(JSON.parse(result.stdout).ok, true);
+});
+
+test('doctor rejects captured reusable operations missing from the experience index', async () => {
+  const target = await initializedProject('captured-missing-index');
+  const artifact = 'docs/operations/release.md';
+  await mkdir(path.join(target, 'docs', 'operations'), { recursive: true });
+  await writeFile(path.join(target, artifact), '# Release\n', 'utf8');
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
+  manifest.sources.conditional.operations = ['docs/operations/'];
+  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+  await setExperienceFeedback(target, {
+    trigger: 'first-proven-path',
+    disposition: 'captured',
+    reason: 'The release workflow succeeded with fresh remote evidence.',
+    artifacts: [artifact],
+  });
+
+  const report = doctorFailure(target);
+
+  assert.equal(report.issues.some((entry) => entry.code === 'unindexed-experience-artifact'), true);
+});
+
+test('doctor accepts already-encoded operations only when a valid index entry remains', async () => {
+  const target = await initializedProject('already-encoded');
+  const artifact = 'docs/operations/release.md';
+  await writeOperationalExperience(target, 'release-path', artifact);
+  await setExperienceFeedback(target, {
+    trigger: 'repeat-proven-path',
+    disposition: 'already-encoded',
+    reason: 'The unchanged path is already documented and indexed.',
+    artifacts: [artifact],
+  });
+
+  const healthy = runCli(['doctor', '--project', target, '--json']);
+  assert.equal(healthy.status, 0, healthy.stderr || healthy.stdout);
+
+  await writeFile(
+    path.join(target, '.vibetether', 'experience-index.yaml'),
+    serializeExperienceIndex({ schema_version: 1, entries: [] }),
+    'utf8',
+  );
+  const report = doctorFailure(target);
+  assert.equal(report.issues.some((entry) => entry.code === 'unindexed-experience-artifact'), true);
+});
+
+test('doctor rejects secret-bearing and escaping index entries', async () => {
+  const target = await initializedProject('unsafe-index');
+  await writeFile(
+    path.join(target, '.vibetether', 'experience-index.yaml'),
+    'schema_version: 1\nentries:\n  - id: unsafe\n    use_when:\n      - release\n    artifacts:\n      - ../secret.md\n    verified_at: 2026-07-14\n    revalidate_when: []\n    status: proven\n    token: ghp_abcdefghijklmnopqrstuvwxyz123456\n',
+    'utf8',
+  );
+
+  const report = doctorFailure(target);
+
+  assert.equal(
+    report.issues.some((entry) => ['invalid-experience-index', 'experience-artifact-escape'].includes(entry.code)),
+    true,
+  );
+
+  const installedValidator = path.join(target, '.agents', 'skills', 'vibe-tether', 'scripts', 'validate-project.mjs');
+  const validator = spawnSync(process.execPath, [installedValidator, '--project', target], {
+    cwd: target,
+    encoding: 'utf8',
+  });
+  assert.equal(validator.status, 1, validator.stderr || validator.stdout);
+  assert.match(validator.stderr, /experience index/i);
+  assert.doesNotMatch(validator.stderr, /ghp_abcdefghijklmnopqrstuvwxyz123456/);
+});
+
+test('doctor and the installed validator reject a linked experience index authority', async (context) => {
+  const target = await initializedProject('linked-index');
+  const indexPath = path.join(target, '.vibetether', 'experience-index.yaml');
+  const external = path.join(await project('linked-index-external'), 'experience-index.yaml');
+  await writeFile(external, serializeExperienceIndex({ schema_version: 1, entries: [] }), 'utf8');
+  await rm(indexPath);
+  try {
+    await symlink(external, indexPath, 'file');
+  } catch (error) {
+    if (process.platform === 'win32' && ['EACCES', 'EPERM'].includes(error.code)) {
+      context.skip('Symbolic links are not available to this Windows test process');
+      return;
+    }
+    throw error;
+  }
+
+  const report = doctorFailure(target);
+  assert.equal(report.issues.some((entry) => entry.code === 'invalid-experience-index'), true);
+
+  const installedValidator = path.join(target, '.agents', 'skills', 'vibe-tether', 'scripts', 'validate-project.mjs');
+  const validator = spawnSync(process.execPath, [installedValidator, '--project', target], {
+    cwd: target,
+    encoding: 'utf8',
+  });
+  assert.equal(validator.status, 1, validator.stderr || validator.stdout);
+  assert.match(validator.stderr, /experience index/i);
+});
+
+test('doctor and the installed validator reject a project-directory experience artifact', async () => {
+  const target = await initializedProject('directory-artifact');
+  await writeFile(
+    path.join(target, '.vibetether', 'experience-index.yaml'),
+    serializeExperienceIndex({
+      schema_version: 1,
+      entries: [{
+        id: 'project-root',
+        use_when: ['release'],
+        artifacts: ['.'],
+        verified_at: '2026-07-14',
+        revalidate_when: [],
+        status: 'proven',
+      }],
+    }),
+    'utf8',
+  );
+
+  const report = doctorFailure(target);
+  assert.equal(report.issues.some((entry) => entry.code === 'invalid-experience-index'), true);
+
+  const installedValidator = path.join(target, '.agents', 'skills', 'vibe-tether', 'scripts', 'validate-project.mjs');
+  const validator = spawnSync(process.execPath, [installedValidator, '--project', target], {
+    cwd: target,
+    encoding: 'utf8',
+  });
+  assert.equal(validator.status, 1, validator.stderr || validator.stdout);
+  assert.match(validator.stderr, /experience index artifact.*regular non-linked file/i);
 });
 
 test('doctor detects changed managed instructions and customized Skill copies', async () => {
@@ -327,6 +496,31 @@ test('uninstall removes only VibeTether-managed content and preserves the Intent
   assert.equal(await exists(path.join(target, '.claude', 'skills', 'vibe-tether')), false);
   assert.equal(await exists(path.join(target, '.vibetether', 'project.yaml')), true);
   assert.equal(await exists(path.join(target, '.vibetether', 'intent.md')), true);
+});
+
+test('uninstall removes an unchanged empty VibeTether experience index', async () => {
+  const target = await initializedProject('uninstall-empty-index');
+
+  const result = runCli(['uninstall', '--project', target, '--yes']);
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(await exists(path.join(target, '.vibetether', 'experience-index.yaml')), false);
+  const manifest = YAML.parse(await readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'));
+  assert.equal(Object.hasOwn(manifest, 'experience_index'), false);
+});
+
+test('uninstall preserves a non-empty experience index and its manifest route', async () => {
+  const target = await initializedProject('uninstall-user-index');
+  const artifact = 'docs/operations/release.md';
+  await writeOperationalExperience(target, 'release-path', artifact);
+
+  const result = runCli(['uninstall', '--project', target, '--yes']);
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(await exists(path.join(target, '.vibetether', 'experience-index.yaml')), true);
+  assert.equal(await exists(path.join(target, artifact)), true);
+  const manifest = YAML.parse(await readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'));
+  assert.equal(manifest.experience_index, '.vibetether/experience-index.yaml');
 });
 
 test('init preserves a no-final-newline gitignore rule while active and uninstall restores exact bytes', async () => {

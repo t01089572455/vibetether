@@ -86,3 +86,35 @@ test('a locked Skill reports actionable Windows guidance without removing manage
   assert.equal(await readFile(instructions, 'utf8'), '# Before\nmanaged\n');
   assert.equal(await exists(skill), true);
 });
+
+test('rollback restores a removed canonical text artifact when a later write fails', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-uninstall-rollback-'));
+  const index = path.join(root, '.vibetether', 'experience-index.yaml');
+  const instructions = path.join(root, 'AGENTS.md');
+  const originalIndex = 'schema_version: 1\nentries: []\n';
+  const originalInstructions = '# Before\nmanaged\n';
+  await mkdir(path.dirname(index), { recursive: true });
+  await writeFile(index, originalIndex, 'utf8');
+  await writeFile(instructions, originalInstructions, 'utf8');
+  const writeFailure = new Error('injected text write failure');
+
+  await assert.rejects(
+    applyUninstallPlans(
+      [
+        { target: index, original: originalIndex, content: '', removeFile: true },
+        { target: instructions, original: originalInstructions, content: '# Before\n', removeFile: false },
+      ],
+      [],
+      {
+        writeAtomic: async (target, content) => {
+          if (target === instructions) throw writeFailure;
+          return writeAtomic(target, content);
+        },
+      },
+    ),
+    (error) => error === writeFailure,
+  );
+
+  assert.equal(await readFile(index, 'utf8'), originalIndex);
+  assert.equal(await readFile(instructions, 'utf8'), originalInstructions);
+});
