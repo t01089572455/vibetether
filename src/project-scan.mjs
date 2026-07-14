@@ -24,14 +24,15 @@ async function hasOperationsDocumentation(root, overrides = {}) {
       for (const entry of entries) {
         if (entry.isSymbolicLink()) return false;
         const relativePath = `${relativeDirectory}/${entry.name}`;
-        if (isSensitiveArtifactPath(relativePath)) return false;
         await io.rejectSymlinkPath(root, relativePath);
         const metadata = await io.lstat(resolveInside(root, relativePath));
         if (metadata.isSymbolicLink()) return false;
         if (metadata.isDirectory()) {
+          if (isSensitiveArtifactPath(relativePath, { documentationContainer: true })) return false;
           pending.push(relativePath);
           continue;
         }
+        if (isSensitiveArtifactPath(relativePath)) return false;
         if (
           metadata.isFile()
           && metadata.size > 0

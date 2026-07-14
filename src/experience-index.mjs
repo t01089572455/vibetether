@@ -1,6 +1,10 @@
-import { access } from 'node:fs/promises';
+import { lstat } from 'node:fs/promises';
 import YAML from 'yaml';
-import { isSafeProjectRelativeArtifactPath, isSensitiveArtifactPath } from './artifact-safety.mjs';
+import {
+  containsSecretValue,
+  isSafeProjectRelativeArtifactPath,
+  isSensitiveArtifactPath,
+} from './artifact-safety.mjs';
 import { rejectSymlinkPath, resolveInside } from './files.mjs';
 
 const EMPTY_ENTRIES = Object.freeze([]);
@@ -26,7 +30,6 @@ const REQUIRED_ENTRY_FIELDS = [
 ];
 const ALLOWED_STATUS = new Set(['proven', 'provisional', 'obsolete']);
 const SIGNAL = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const SECRET_METADATA = /-----BEGIN [A-Z ]+PRIVATE KEY-----|\b(?:gh[opusr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9_-]{20,}|A(?:KI|SI)A[A-Z0-9]{16})\b/;
 
 function isMapping(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -120,7 +123,7 @@ function assertSchema(value) {
         throw new Error(`Experience entry ${entry.id ?? 'unknown'} requires field ${field}`);
       }
     }
-    if (SECRET_METADATA.test(JSON.stringify({ ...entry, artifacts: [] }))) {
+    if (containsSecretValue(JSON.stringify({ ...entry, artifacts: [] }))) {
       throw new Error(`Experience entry ${entry.id ?? 'unknown'} contains secret-bearing metadata`);
     }
     if (typeof entry.id !== 'string' || normalize(entry.id) !== entry.id || !SIGNAL.test(entry.id)) {
@@ -168,13 +171,17 @@ async function validateArtifact(root, artifact, { allowMissing = false } = {}) {
   }
   const target = resolveInside(root, artifact);
   await rejectSymlinkPath(root, artifact);
+  let metadata;
   try {
-    await access(target);
-    return true;
+    metadata = await lstat(target);
   } catch (error) {
     if (allowMissing && error.code === 'ENOENT') return false;
     throw new Error(`Experience artifact does not exist: ${artifact}`, { cause: error });
   }
+  if (!metadata.isFile() || metadata.isSymbolicLink()) {
+    throw new Error(`Experience artifact must be a regular non-linked file: ${artifact}`);
+  }
+  return true;
 }
 
 export function parseExperienceIndex(source) {

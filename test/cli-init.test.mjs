@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -224,6 +224,73 @@ test('repeated init refreshes persisted project state from the live scan', async
   assert.equal(second.status, 0, second.stderr || second.stdout);
   const refreshed = YAML.parse(await readFile(manifestPath, 'utf8'));
   assert.equal(refreshed.project_state, 'existing');
+});
+
+test('re-init dry-run discovers a later canonical operations source, apply persists it, and repetition is idempotent', async () => {
+  const target = await project('operations-refresh');
+  const args = ['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes'];
+  assert.equal(runCli(args).status, 0);
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const before = await readFile(manifestPath, 'utf8');
+  await mkdir(path.join(target, 'docs', 'operations'), { recursive: true });
+  await writeFile(path.join(target, 'docs', 'operations', 'publishing.md'), '# Publishing\n', 'utf8');
+
+  const dryRun = runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--dry-run']);
+  assert.equal(dryRun.status, 0, dryRun.stderr || dryRun.stdout);
+  assert.match(dryRun.stdout, /docs\/operations\//);
+  assert.match(dryRun.stdout, /operational proven paths/);
+  assert.equal(await readFile(manifestPath, 'utf8'), before);
+
+  const applied = runCli(args);
+  assert.equal(applied.status, 0, applied.stderr || applied.stdout);
+  const after = await readFile(manifestPath, 'utf8');
+  const manifest = YAML.parse(after);
+  assert.deepEqual(manifest.sources.conditional.operations, ['docs/operations/']);
+  assert.deepEqual(manifest.discovery['docs/operations/'], {
+    role: 'operational proven paths',
+    confidence: 'high',
+    kind: 'directory',
+  });
+  assert.equal(runCli(args).status, 0);
+  assert.equal(await readFile(manifestPath, 'utf8'), after);
+});
+
+test('re-init removes only a stale or unsafe canonical operations route and preserves custom manifest sources', async () => {
+  for (const unsafe of [false, true]) {
+    const target = await project(`operations-stale-${unsafe ? 'unsafe' : 'missing'}`);
+    const args = ['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes'];
+    await mkdir(path.join(target, 'docs', 'operations'), { recursive: true });
+    await writeFile(path.join(target, 'docs', 'operations', 'publishing.md'), '# Publishing\n', 'utf8');
+    assert.equal(runCli(args).status, 0);
+    const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+    const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
+    manifest.sources.custom = ['docs/custom-truth.md'];
+    manifest.sources.conditional.operations.push('docs/custom-operations/');
+    manifest.sources.conditional.team_runbooks = ['docs/team-runbooks/'];
+    manifest.discovery['docs/custom-operations/'] = {
+      role: 'custom operational source',
+      confidence: 'medium',
+      kind: 'directory',
+    };
+    manifest.custom_extension = { preserve: true };
+    await writeFile(manifestPath, YAML.stringify(manifest, { lineWidth: 0 }), 'utf8');
+
+    if (unsafe) {
+      await writeFile(path.join(target, 'docs', 'operations', '.npmrc'), 'fixture\n', 'utf8');
+    } else {
+      await rm(path.join(target, 'docs', 'operations'), { recursive: true });
+    }
+
+    const result = runCli(args);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const refreshed = YAML.parse(await readFile(manifestPath, 'utf8'));
+    assert.deepEqual(refreshed.sources.conditional.operations, ['docs/custom-operations/']);
+    assert.deepEqual(refreshed.sources.custom, ['docs/custom-truth.md']);
+    assert.deepEqual(refreshed.sources.conditional.team_runbooks, ['docs/team-runbooks/']);
+    assert.equal(refreshed.discovery['docs/operations/'], undefined);
+    assert.equal(refreshed.discovery['docs/custom-operations/'].role, 'custom operational source');
+    assert.deepEqual(refreshed.custom_extension, { preserve: true });
+  }
 });
 
 test('init discovers existing truth sources with explicit confidence', async () => {

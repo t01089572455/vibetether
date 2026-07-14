@@ -183,6 +183,52 @@ test('project scan preserves discovery of a nested regular documentation file', 
   assert.deepEqual(manifest.sources.conditional.operations, ['docs/operations/']);
 });
 
+test('project scan allows strong runbook documentation under credential-named paths', async () => {
+  for (const allowed of [
+    ['credentials.md'],
+    ['secrets', 'rotation.mdx'],
+    ['tokens.markdown'],
+    ['credentials', 'rotation.adoc'],
+    ['credentials', 'guides', 'rotation.adoc'],
+    ['secret.rst'],
+  ]) {
+    const root = await project(`strong-runbook-${allowed.join('-')}`);
+    const target = path.join(root, 'docs', 'operations', ...allowed);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, '# Safe operational documentation\n', 'utf8');
+
+    const manifest = await scanProject(root, ['codex'], 'core');
+    assert.deepEqual(manifest.sources.conditional.operations, ['docs/operations/'], allowed.join('/'));
+    assert.equal(manifest.discovery['docs/operations/'].role, 'operational proven paths', allowed.join('/'));
+  }
+});
+
+test('project scan denies credential config and cloud credential roots despite a safe runbook sibling', async () => {
+  for (const denied of [
+    ['credentials', 'config.json'],
+    ['secrets', 'token.txt'],
+    ['.kube', 'config'],
+    ['.azure', 'accessTokens.json'],
+    ['.aws', 'credentials'],
+    ['.gnupg', 'private-keys-v1.d', 'key'],
+    ['.config', 'gcloud', 'application_default_credentials.json'],
+    ['api-key.json'],
+    ['client-secret.mdx'],
+    ['.envrc'],
+  ]) {
+    const root = await project(`credential-tree-${denied.join('-').replaceAll('.', 'dot')}`);
+    await mkdir(path.join(root, 'docs', 'operations'), { recursive: true });
+    await writeFile(path.join(root, 'docs', 'operations', 'safe.md'), '# Safe local runbook\n', 'utf8');
+    const target = path.join(root, 'docs', 'operations', ...denied);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, 'fixture\n', 'utf8');
+
+    const manifest = await scanProject(root, ['codex'], 'core');
+    assert.deepEqual(manifest.sources.conditional.operations, [], denied.join('/'));
+    assert.equal(manifest.discovery['docs/operations/'], undefined, denied.join('/'));
+  }
+});
+
 test('project scan surfaces unexpected operations filesystem errors without leaking their message', async () => {
   const root = await project('operations-io-error');
   await mkdir(path.join(root, 'docs', 'operations'), { recursive: true });

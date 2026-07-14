@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -141,6 +142,12 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
     'docs/operations/secrets-management.md',
     'docs/operations/tokens-in-parser.md',
     'docs/operations/authentication.md',
+    'docs/operations/credentials.md',
+    'docs/operations/secrets/rotation.md',
+    'docs/operations/tokens/parser.mdx',
+    'docs/operations/secret.rst',
+    'docs/operations/tokens.markdown',
+    'docs/operations/credentials/rotation.adoc',
   ];
   for (const [position, artifact] of allowedPaths.entries()) {
     await writeArtifact(root, artifact, `# Allowed runbook ${position}\n`);
@@ -167,16 +174,27 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
     '.git-credentials',
     '.env',
     '.env.local',
+    '.envrc',
     '.ssh/id_ed25519',
     '.docker/config.json',
-    'config/secrets/runbook.md',
-    'config/tokens/runbook.md',
-    'config/credentials/runbook.md',
-    'docs/operations/secret.md',
-    'docs/operations/secrets.md',
-    'docs/operations/token.md',
-    'docs/operations/tokens.md',
-    'docs/operations/credentials.md',
+    '.kube/config',
+    '.azure/accessTokens.json',
+    '.aws/credentials',
+    '.gnupg/private-keys-v1.d/key',
+    '.config/gcloud/application_default_credentials.json',
+    'accessTokens.json',
+    'application_default_credentials.json',
+    'kubeconfig',
+    'config/api-key.json',
+    'config/apikey.yaml',
+    'config/client-secret.txt',
+    'config/auth-token.json',
+    'docs/operations/access-token.md',
+    'docs/operations/api-key.md',
+    'docs/operations/client-secret.mdx',
+    'config/secrets/settings.json',
+    'config/tokens/token.txt',
+    'config/credentials/data.yaml',
     'docs/operations/private-key.md',
     'docs/operations/service-account.json',
     'keys/id_ed25519',
@@ -187,6 +205,10 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
     'certs/client.crt',
     'docs/operations/runbook:ads.md',
     ...tokenValues.map((token) => `docs/operations/${token}.md`),
+    `docs/operations/sk-proj-${'d'.repeat(40)}.md`,
+    `docs/operations/sk-ant-api03-${'e'.repeat(40)}.md`,
+    `docs/operations/AIza${'F'.repeat(35)}.md`,
+    `docs/operations/hf_${'g'.repeat(34)}.md`,
   ];
   for (const [position, artifact] of deniedPaths.entries()) {
     const denied = index([entry({ id: `denied-artifact-${position}`, artifacts: [artifact] })]);
@@ -197,6 +219,68 @@ test('path-aware safety allows runbook titles and rejects credential artifacts a
     );
     assert.throws(() => serializeExperienceIndex(denied), /secret-bearing|credential|unsafe|colon|relative/i, artifact);
     assert.deepEqual(await matchExperience(denied, { root, signals: ['publish'] }), [], artifact);
+  }
+});
+
+test('experience artifacts must be regular non-linked files while safe matches remain visible', async (context) => {
+  const root = await fixture();
+  await mkdir(path.join(root, 'docs', 'operations', 'credential-directory'), { recursive: true });
+  await writeFile(path.join(root, 'docs', 'operations', 'credential-directory', '.npmrc'), 'fixture\n', 'utf8');
+  await mkdir(path.join(root, 'docs', 'operations', 'linked-directory'), { recursive: true });
+  const outside = await mkdtemp(path.join(os.tmpdir(), 'vibetether-experience-linked-directory-'));
+  await writeFile(path.join(outside, 'outside.md'), '# Outside\n', 'utf8');
+  try {
+    await symlink(outside, path.join(root, 'docs', 'operations', 'linked-directory', 'nested'), 'junction');
+  } catch (error) {
+    if (process.platform === 'win32' && ['EACCES', 'EPERM'].includes(error.code)) {
+      context.diagnostic(`Windows denied nested junction creation: ${error.code}`);
+    } else {
+      throw error;
+    }
+  }
+  await writeFile(path.join(root, 'docs', 'operations', 'empty.md'), '', 'utf8');
+
+  for (const artifact of [
+    'docs/operations/credential-directory',
+    'docs/operations/linked-directory',
+  ]) {
+    const candidate = index([entry({ id: `directory-${path.basename(artifact)}`, artifacts: [artifact] })]);
+    await assert.rejects(validateExperienceIndex(candidate, root), /regular.*file|not.*file/i, artifact);
+  }
+
+  const mixed = index([
+    entry({ id: 'safe-publication' }),
+    entry({ id: 'directory-credential', artifacts: ['docs/operations/credential-directory'] }),
+    entry({ id: 'directory-linked', artifacts: ['docs/operations/linked-directory'] }),
+    entry({ id: 'empty-regular-file', artifacts: ['docs/operations/empty.md'] }),
+  ]);
+  assert.deepEqual(
+    (await matchExperience(mixed, { root, signals: ['publish'] })).map(({ id }) => id),
+    ['empty-regular-file', 'safe-publication'],
+  );
+  assert.deepEqual(
+    await validateExperienceIndex(index([entry({ artifacts: ['docs/operations/empty.md'] })]), root),
+    index([entry({ artifacts: ['docs/operations/empty.md'] })]),
+  );
+});
+
+test('experience artifacts omit non-file filesystem objects where portable', {
+  skip: process.platform === 'win32' ? 'Unix domain sockets are not portable on Windows' : false,
+}, async () => {
+  const root = await fixture();
+  const relative = 'docs/operations/runtime.sock';
+  const socketPath = path.join(root, 'docs', 'operations', 'runtime.sock');
+  const server = createServer();
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(socketPath, resolve);
+  });
+  try {
+    const candidate = index([entry({ id: 'socket-artifact', artifacts: [relative] })]);
+    await assert.rejects(validateExperienceIndex(candidate, root), /regular.*file|not.*file/i);
+    assert.deepEqual(await matchExperience(candidate, { root, signals: ['publish'] }), []);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
   }
 });
 

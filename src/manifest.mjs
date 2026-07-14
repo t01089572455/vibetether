@@ -2,6 +2,67 @@ import YAML from 'yaml';
 import { unresolvedIntent } from './bootstrap-model.mjs';
 
 export const EXPERIENCE_INDEX_PATH = '.vibetether/experience-index.yaml';
+export const OPERATIONS_SOURCE_PATH = 'docs/operations/';
+
+function isMapping(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function requireMapping(value, label) {
+  if (!isMapping(value)) throw new Error(`${label} must be a mapping`);
+  return value;
+}
+
+function hasSafeCanonicalOperationsSource(scanned) {
+  const routes = scanned?.sources?.conditional?.operations;
+  const discovery = scanned?.discovery?.[OPERATIONS_SOURCE_PATH];
+  return Array.isArray(routes)
+    && routes.includes(OPERATIONS_SOURCE_PATH)
+    && isMapping(discovery)
+    && discovery.role === 'operational proven paths'
+    && discovery.confidence === 'high'
+    && discovery.kind === 'directory';
+}
+
+export function refreshCanonicalOperationsSource(manifest, scanned) {
+  const sources = manifest.sources === undefined
+    ? {}
+    : requireMapping(manifest.sources, 'manifest sources');
+  const conditional = sources.conditional === undefined
+    ? {}
+    : requireMapping(sources.conditional, 'manifest conditional sources');
+  const operations = conditional.operations ?? [];
+  if (!Array.isArray(operations)) throw new Error('manifest conditional operations must be an array');
+  const customOperations = operations.filter((route) => route !== OPERATIONS_SOURCE_PATH);
+  const canonicalIsSafe = hasSafeCanonicalOperationsSource(scanned);
+  const nextOperations = [...customOperations];
+  if (canonicalIsSafe) {
+    const priorCanonicalIndex = operations.indexOf(OPERATIONS_SOURCE_PATH);
+    const insertionIndex = priorCanonicalIndex === -1
+      ? nextOperations.length
+      : Math.min(priorCanonicalIndex, nextOperations.length);
+    nextOperations.splice(insertionIndex, 0, OPERATIONS_SOURCE_PATH);
+  }
+  const discovery = manifest.discovery === undefined
+    ? {}
+    : requireMapping(manifest.discovery, 'manifest discovery');
+  const nextDiscovery = { ...discovery };
+  delete nextDiscovery[OPERATIONS_SOURCE_PATH];
+  if (canonicalIsSafe) {
+    nextDiscovery[OPERATIONS_SOURCE_PATH] = { ...scanned.discovery[OPERATIONS_SOURCE_PATH] };
+  }
+  return {
+    ...manifest,
+    sources: {
+      ...sources,
+      conditional: {
+        ...conditional,
+        operations: nextOperations,
+      },
+    },
+    discovery: nextDiscovery,
+  };
+}
 
 export function serializeManifest(manifest) {
   return YAML.stringify(manifest, { lineWidth: 0 });

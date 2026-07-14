@@ -31,6 +31,7 @@ import {
   enableHarnesses,
   EXPERIENCE_INDEX_PATH,
   parseManifest,
+  refreshCanonicalOperationsSource,
   serializeManifest,
 } from './manifest.mjs';
 import { validateProviderLock } from './managed-project-state.mjs';
@@ -302,8 +303,9 @@ export async function initialize(options, dependencies = {}) {
   } else {
     try {
       persistedManifest = parseManifest(manifestOriginal);
+      const refreshedManifest = refreshCanonicalOperationsSource(persistedManifest, scanned);
       manifest = {
-        ...enableHarnesses(persistedManifest, adapters),
+        ...enableHarnesses(refreshedManifest, adapters),
         profile: options.profile,
         project_state: scanned.project_state,
       };

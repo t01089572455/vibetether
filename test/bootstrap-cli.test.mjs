@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { access, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
 import { PassThrough } from 'node:stream';
 import os from 'node:os';
 import path from 'node:path';
@@ -762,6 +762,30 @@ test('bootstrap yes reuses a confirmed intent and never stages or rewrites provi
   assert.match(result, /bootstrap/i);
   assert.deepEqual(await readFile(intentPath), intentBefore);
   assert.deepEqual(await readFile(lockPath), lockBefore);
+  assert.equal(stageCounter.calls, 0);
+});
+
+test('bootstrapOnly dry-run and apply learn a later canonical operations source without staging providers', async () => {
+  const target = await project('bootstrap-operations-refresh');
+  await main([
+    'init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes',
+    '--goal', 'Refresh project truth', '--success-evidence', 'Canonical operations are routed',
+  ]);
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const before = await readFile(manifestPath, 'utf8');
+  await mkdir(path.join(target, 'docs', 'operations'), { recursive: true });
+  await writeFile(path.join(target, 'docs', 'operations', 'publishing.md'), '# Publishing\n', 'utf8');
+  const stageCounter = { calls: 0 };
+
+  const dryRun = await main(['bootstrap', '--project', target, '--dry-run'], runtime(null, stageCounter));
+  assert.match(dryRun, /docs\/operations\//);
+  assert.equal(await readFile(manifestPath, 'utf8'), before);
+  assert.equal(stageCounter.calls, 0);
+
+  await main(['bootstrap', '--project', target, '--yes'], runtime(null, stageCounter));
+  const refreshed = YAML.parse(await readFile(manifestPath, 'utf8'));
+  assert.deepEqual(refreshed.sources.conditional.operations, ['docs/operations/']);
+  assert.equal(refreshed.discovery['docs/operations/'].role, 'operational proven paths');
   assert.equal(stageCounter.calls, 0);
 });
 
