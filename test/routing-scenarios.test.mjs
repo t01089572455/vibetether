@@ -41,6 +41,8 @@ test('community routing scenario matrix keeps one recommendation and a safe fall
     ['migration planning', 'PLAN', 'migration', ['migration'], 'deprecation-and-migration'],
     ['security review', 'REVIEW', 'security-review', ['security'], 'security-and-hardening'],
     ['release preparation', 'SHIP', 'release-verification', ['release'], 'shipping-and-launch'],
+    ['greenfield project', 'DISCOVER', 'project-bootstrap', ['greenfield-directory', 'intent-unresolved'], 'grilling'],
+    ['known publication path', 'SHIP', 'proven-path-recall', ['publish', 'windows'], 'vibetether-built-in-recall'],
   ];
 
   for (const [name, phase, capability, signals, expected] of scenarios) {

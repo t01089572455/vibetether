@@ -169,9 +169,17 @@ export function createCapabilityBoard(registry, profile, lock, harnesses) {
       });
     });
   const routeDefinitions = [...routing.routes, ...specialistRoutes];
+  const builtInProviders = new Set(
+    (registry.built_in_providers ?? [])
+      .filter((provider) => provider.kind === 'built-in')
+      .map((provider) => provider.id),
+  );
   const routes = routeDefinitions.map((route) => {
     const installed = skills.get(route.provider);
-    const availableIn = harnesses.filter((harness) => installed?.installations?.[harness]);
+    const builtIn = builtInProviders.has(route.provider);
+    const availableIn = builtIn
+      ? [...harnesses]
+      : harnesses.filter((harness) => installed?.installations?.[harness]);
     const contract = catalog.get(route.capability);
     return {
       id: route.id,
@@ -187,7 +195,7 @@ export function createCapabilityBoard(registry, profile, lock, harnesses) {
         skill: route.provider,
         available_in: availableIn,
         installations: Object.fromEntries(
-          availableIn.map((harness) => [harness, installed.installations[harness].path]),
+          builtIn ? [] : availableIn.map((harness) => [harness, installed.installations[harness].path]),
         ),
         reason: route.reason,
       },

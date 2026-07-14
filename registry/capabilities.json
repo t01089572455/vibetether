@@ -422,6 +422,26 @@
       "required_outputs": ["integration_options", "user_decision", "cleanup_result"],
       "exit_evidence": ["The chosen integration path is complete and publication gates were respected."],
       "fallback": "Use the built-in branch finish and publication gate."
+    },
+    {
+      "id": "project-bootstrap",
+      "phases": ["DISCOVER", "ALIGN"],
+      "purpose": "Establish confirmed user-owned direction and route real project truth before implementation.",
+      "invoke_when": ["greenfield-directory", "truth-sources-missing", "intent-unresolved"],
+      "required_inputs": ["project_discovery", "known_direction", "unresolved_user_decisions"],
+      "required_outputs": ["intent_contract", "routed_project_truth", "readiness_verdict"],
+      "exit_evidence": ["Goal and success evidence are confirmed, or the checkpoint remains at DISCOVER without guessed direction."],
+      "fallback": "Use the built-in bootstrap readiness model and ask one recommended directional question at a time."
+    },
+    {
+      "id": "proven-path-recall",
+      "phases": ["ALIGN", "PLAN", "EXECUTE_ONE", "VERIFY", "SHIP"],
+      "purpose": "Recall applicable verified operational paths before rediscovering repeatable work.",
+      "invoke_when": ["build", "local-environment", "ci", "deployment", "publish", "migration", "authentication", "external-service", "recovery", "release"],
+      "required_inputs": ["task_signals", "experience_index", "environment_change_signals"],
+      "required_outputs": ["applicable_experience", "artifacts_read", "revalidation_needs", "selection_reason"],
+      "exit_evidence": ["A matching path was read, or a material no-match or stale reason was recorded before consequential action."],
+      "fallback": "Use the built-in metadata resolver; no community provider is required."
     }
   ]
 }

@@ -621,7 +621,8 @@
       "exposure": "standard",
       "capabilities": [
         "requirements-clarification",
-        "document-alignment"
+        "document-alignment",
+        "project-bootstrap"
       ],
       "conflicts": [],
       "fallback": "vibetether-built-in-alignment",

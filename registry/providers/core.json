@@ -14,8 +14,15 @@
       "kind": "built-in",
       "workflow_role": "primary",
       "phases": ["discover", "align"],
-      "capabilities": ["requirements-clarification"],
+      "capabilities": ["requirements-clarification", "project-bootstrap"],
       "enabled_by_default": true
+    },
+    {
+      "id": "vibetether-built-in-recall",
+      "kind": "built-in",
+      "workflow_role": "primary",
+      "phases": ["align", "plan", "execute", "verify", "ship"],
+      "capabilities": ["proven-path-recall"]
     },
     {
       "id": "vibetether-built-in-design",

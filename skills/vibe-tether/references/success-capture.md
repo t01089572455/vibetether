@@ -45,6 +45,12 @@ These questions enrich the record. They do not make first success optional.
 
 Use executable enforcement first when possible, then document when and why to use it. Do not create a universal success ledger. When a new durable source is created, route it from the project manifest so later re-anchors can find it.
 
+## Metadata Index Update
+
+The manifest's `experience_index` field normally points to `.vibetether/experience-index.yaml`. After a captured or materially changed Proven Path is written to its natural artifact, create or update the matching metadata entry. Keep the stable entry ID, add the artifact path, preserve applicable signals and revalidation conditions, and update verification facts only from fresh evidence. Deduplicate unchanged repeats by entry ID plus artifact path; do not create a second entry for the same durable path.
+
+The index is a safe routing aid, not a second runbook: persist only metadata and project-relative artifact paths, never commands with secrets, transcripts, credentials, or private reasoning. The next task resolves matching entries through [capability-routing.md](capability-routing.md) before reading a returned artifact.
+
 ## Minimum Proven Path
 
 A captured path records only durable facts:

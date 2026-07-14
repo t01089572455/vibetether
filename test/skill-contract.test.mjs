@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { LEGACY_VIBETETHER_FINGERPRINTS } from '../src/skill-install.mjs';
+import { ADAPTERS } from '../src/adapters.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const skillDir = path.join(root, 'skills', 'vibe-tether');
@@ -77,6 +78,19 @@ test('the public Skill blocks guess-driven implementation with an automatic read
   assert.match(content, /one recommended question at a time/i);
   assert.match(content, /grill-me.*alias.*grilling/is);
   assert.match(content, /grill-with-docs.*grilling.*domain-modeling/is);
+});
+
+test('managed instructions require bootstrap and proven-path recall before operational reinvention', async () => {
+  const managedBody = ADAPTERS.codex.managedBody;
+  const skill = await readFile(skillPath, 'utf8');
+
+  assert.match(managedBody, /experience-index\.yaml/);
+  assert.match(managedBody, /query applicable experience at task entry/i);
+  assert.match(managedBody, /read the returned artifacts before inventing a new operational path/i);
+  assert.match(managedBody, /record.*selected experience paths.*material reason/i);
+  assert.match(skill, /project-bootstrap/);
+  assert.match(skill, /proven-path-recall/);
+  assert.match(skill, /requires_revalidation/);
 });
 
 test('the public 0.1.0 Skill fingerprint remains an explicit upgrade allowlist entry', () => {

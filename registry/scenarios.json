@@ -120,6 +120,22 @@
       "capability": "completion-verification",
       "signals": ["about-to-claim-complete"],
       "expected_path": "verification-before-completion with fresh evidence and known limitations"
+    },
+    {
+      "id": "greenfield-bootstrap",
+      "situation": "A new or greenfield directory has no confirmed project direction yet.",
+      "phase": "DISCOVER",
+      "capability": "project-bootstrap",
+      "signals": ["greenfield-directory", "intent-unresolved"],
+      "expected_path": "grilling establishes a user-owned Intent Contract before implementation"
+    },
+    {
+      "id": "known-proven-path",
+      "situation": "A repeatable operational action has a matching verified publication or environment path.",
+      "phase": "SHIP",
+      "capability": "proven-path-recall",
+      "signals": ["publish", "windows"],
+      "expected_path": "vibetether-built-in-recall returns applicable sanitized artifacts before the operational path is reused"
     }
   ]
 }

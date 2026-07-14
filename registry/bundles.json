@@ -85,6 +85,27 @@
       "reason": "The request is vague or the goal, user, scope, constraints, or success evidence is unclear."
     },
     {
+      "id": "standard-project-bootstrap",
+      "profiles": [
+        "standard",
+        "extended"
+      ],
+      "phase": "DISCOVER",
+      "capability": "project-bootstrap",
+      "provider": "grilling",
+      "workflow_role": "primary",
+      "selection": "recommend",
+      "required": false,
+      "fallback": "vibetether-built-in-alignment",
+      "priority": 100,
+      "when_any": [
+        "greenfield-directory",
+        "truth-sources-missing",
+        "intent-unresolved"
+      ],
+      "reason": "A greenfield directory needs confirmed user-owned direction and routed project truth before implementation."
+    },
+    {
       "id": "standard-document-alignment",
       "profiles": [
         "standard",
@@ -416,6 +437,71 @@
       "fallback": "vibetether-built-in-release",
       "priority": 100,
       "reason": "A completed branch needs explicit integration, release, and cleanup choices."
+    },
+    {
+      "id": "standard-proven-path-recall-align",
+      "profiles": ["standard", "extended"],
+      "phase": "ALIGN",
+      "capability": "proven-path-recall",
+      "provider": "vibetether-built-in-recall",
+      "workflow_role": "primary",
+      "selection": "recommend",
+      "required": false,
+      "fallback": "vibetether-built-in-recall",
+      "priority": 100,
+      "reason": "Resolve applicable verified operational paths before rediscovering repeatable work."
+    },
+    {
+      "id": "standard-proven-path-recall-plan",
+      "profiles": ["standard", "extended"],
+      "phase": "PLAN",
+      "capability": "proven-path-recall",
+      "provider": "vibetether-built-in-recall",
+      "workflow_role": "primary",
+      "selection": "recommend",
+      "required": false,
+      "fallback": "vibetether-built-in-recall",
+      "priority": 100,
+      "reason": "Resolve applicable verified operational paths before rediscovering repeatable work."
+    },
+    {
+      "id": "standard-proven-path-recall-execute",
+      "profiles": ["standard", "extended"],
+      "phase": "EXECUTE_ONE",
+      "capability": "proven-path-recall",
+      "provider": "vibetether-built-in-recall",
+      "workflow_role": "primary",
+      "selection": "recommend",
+      "required": false,
+      "fallback": "vibetether-built-in-recall",
+      "priority": 100,
+      "reason": "Resolve applicable verified operational paths before rediscovering repeatable work."
+    },
+    {
+      "id": "standard-proven-path-recall-verify",
+      "profiles": ["standard", "extended"],
+      "phase": "VERIFY",
+      "capability": "proven-path-recall",
+      "provider": "vibetether-built-in-recall",
+      "workflow_role": "primary",
+      "selection": "recommend",
+      "required": false,
+      "fallback": "vibetether-built-in-recall",
+      "priority": 100,
+      "reason": "Resolve applicable verified operational paths before rediscovering repeatable work."
+    },
+    {
+      "id": "standard-proven-path-recall-ship",
+      "profiles": ["standard", "extended"],
+      "phase": "SHIP",
+      "capability": "proven-path-recall",
+      "provider": "vibetether-built-in-recall",
+      "workflow_role": "primary",
+      "selection": "recommend",
+      "required": false,
+      "fallback": "vibetether-built-in-recall",
+      "priority": 100,
+      "reason": "Resolve applicable verified operational paths before rediscovering repeatable work."
     }
   ],
   "catalogs": [

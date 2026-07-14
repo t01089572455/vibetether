@@ -27,6 +27,8 @@ test('capability contracts are unique, complete, and forbid runtime auto-install
     'code-review',
     'release-verification',
     'success-capture',
+    'project-bootstrap',
+    'proven-path-recall',
   ];
 
   assert.equal(registry.schema_version, 1);

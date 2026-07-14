@@ -16,6 +16,16 @@ Recommendations are advisory. Select the recommended Skill when it fits, otherwi
 
 The resolver separates `primary`, compatible `overlays`, and ordered `alternatives`. It also returns `detected_signals`, `rationale`, `fallback`, `required_outputs`, and `exit_evidence`, so the choice remains inspectable without exposing private reasoning. A policy overlay such as `karpathy-guidelines` may shape an implementation path but never owns the lifecycle phase.
 
+## Proven Path Recall
+
+The manifest's `experience_index` field normally points to `.vibetether/experience-index.yaml`. For repeatable build, environment, CI, deployment, publication, migration, authentication, external-service, recovery, or release work, resolve `proven-path-recall` with current task and environment signals:
+
+```bash
+node .agents/skills/vibe-tether/scripts/resolve-route.mjs --project . --phase SHIP --capability proven-path-recall --signal publish --signal windows --agent codex
+```
+
+Use `.claude/skills/vibe-tether/scripts/resolve-route.mjs` for Claude projects. The response's `applicable_experience` is metadata-only; read only the returned artifact paths before choosing an operational route. A `provisional` entry or `requires_revalidation: true` is a lead, not known-good evidence. Record selected paths or the material reason a matching path was stale or inapplicable. This reference owns read semantics; [success-capture.md](success-capture.md) owns capture and update semantics.
+
 ## Automatic Readiness Before Provider Selection
 
 The board's `readiness_gate` is automatic even though specialist recommendations remain advisory. At task entry and every re-anchor boundary, classify all readiness dimensions before implementation. Investigate discoverable facts autonomously; route unresolved direction to requirements clarification, document conflicts to document alignment, missing design decisions to product or UI design, and missing slices or evidence to planning. Implementation may start only at `READY_FOR_IMPLEMENT_ONE`.

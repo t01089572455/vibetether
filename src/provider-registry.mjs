@@ -6,6 +6,7 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const registryPath = path.join(packageRoot, 'registry', 'bundles.json');
 const capabilityPath = path.join(packageRoot, 'registry', 'capabilities.json');
 const scenarioPath = path.join(packageRoot, 'registry', 'scenarios.json');
+const coreProviderPath = path.join(packageRoot, 'registry', 'providers', 'core.json');
 const registryRoot = path.dirname(registryPath);
 
 function catalogPath(relativePath) {
@@ -18,10 +19,11 @@ function catalogPath(relativePath) {
 }
 
 export async function loadProviderRegistry() {
-  const [registry, capabilities, scenarios] = await Promise.all([
+  const [registry, capabilities, scenarios, coreProviders] = await Promise.all([
     JSON.parse(await readFile(registryPath, 'utf8')),
     JSON.parse(await readFile(capabilityPath, 'utf8')),
     JSON.parse(await readFile(scenarioPath, 'utf8')),
+    JSON.parse(await readFile(coreProviderPath, 'utf8')),
   ]);
   const catalogSources = await Promise.all(
     (registry.catalogs ?? []).map(async (relativePath) => JSON.parse(await readFile(catalogPath(relativePath), 'utf8'))),
@@ -32,6 +34,7 @@ export async function loadProviderRegistry() {
     capability_catalog: capabilities.capabilities ?? [],
     scenario_catalog: scenarios.scenarios ?? [],
     readiness_gate: capabilities.readiness_gate,
+    built_in_providers: coreProviders.providers ?? [],
   };
 }
 
@@ -200,8 +203,13 @@ export function buildRoutingDocument(registry, profileName) {
     }
     primaryOwners.set(signature, route);
   }
+  const builtInProviders = new Set(
+    (registry.built_in_providers ?? [])
+      .filter((provider) => provider.kind === 'built-in')
+      .map((provider) => provider.id),
+  );
   for (const route of routes) {
-    if (!installed.has(route.provider)) {
+    if (!installed.has(route.provider) && !builtInProviders.has(route.provider)) {
       throw new Error(`Route ${route.id} recommends ${route.provider}, which is not installed by profile ${profileName}`);
     }
   }

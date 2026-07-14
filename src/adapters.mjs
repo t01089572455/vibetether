@@ -38,7 +38,7 @@ const preSuccessCaptureSharedRules = [
   'Make low-risk, reversible, goal-aligned technical choices autonomously and record material decisions.',
 ].join('\n');
 
-const sharedRules = [
+const preExperienceRecallSharedRules = [
   '## VibeTether drift control, capability routing, and success capture',
   '',
   'Automatically apply the `vibe-tether` Skill at task entry, before consequential actions, after compaction, resume, handoff, repeated failure, or a phase change, and before completion, the next slice, merge, release, or publication.',
@@ -52,10 +52,18 @@ const sharedRules = [
   'Record `captured`, `already-encoded`, or `not-reusable` in checkpoint `experience_feedback`, with a reason and artifact paths. Never persist credentials, private keys, one-time codes, private reasoning, or sensitive tool output. A completion-like state must pass `vibetether doctor` with no pending disposition.',
 ].join('\n');
 
+const sharedRules = [
+  preExperienceRecallSharedRules,
+  'Query applicable experience at task entry from `.vibetether/experience-index.yaml`, at phase changes, resume, and before repeatable build, environment, CI, deployment, publication, migration, authentication, external-service, recovery, or release actions.',
+  'Read the returned artifacts before inventing a new operational path; record selected experience paths or the material reason a candidate was stale or inapplicable in the checkpoint.',
+  'Treat provisional or changed-environment paths as requiring fresh revalidation, then update the natural artifact and metadata index after verified success.',
+].join('\n');
+
 export const LEGACY_MANAGED_BODIES = new Set([
   legacySharedRules,
   preReadinessSharedRules,
   preSuccessCaptureSharedRules,
+  preExperienceRecallSharedRules,
 ]);
 
 export const ADAPTERS = {

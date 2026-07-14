@@ -4,6 +4,7 @@ import { CliError } from './errors.mjs';
 import { isSafeProjectRelativeArtifactPath, isSensitiveArtifactPath } from './artifact-safety.mjs';
 import { matchExperience, parseExperienceIndex } from './experience-index.mjs';
 import { parseManifest } from './manifest.mjs';
+import { loadProviderRegistry } from './provider-registry.mjs';
 import {
   assertCapabilityBoard,
   resolveCapabilityRoute,
@@ -55,7 +56,14 @@ async function readSafeProjectFile(root, relativePath, label, { authorityRoute =
 
 export async function refreshBoardAvailability(board, root) {
   const refreshed = structuredClone(board);
+  const registry = await loadProviderRegistry();
+  const builtInProviderIds = new Set(
+    (registry.built_in_providers ?? [])
+      .filter((provider) => provider.kind === 'built-in')
+      .map((provider) => provider.id),
+  );
   for (const route of refreshed.routes ?? []) {
+    if (builtInProviderIds.has(route.recommendation?.skill)) continue;
     const available = [];
     for (const [harness, relativePath] of Object.entries(route.recommendation?.installations ?? {})) {
       const target = inside(root, relativePath, 'Provider installation');

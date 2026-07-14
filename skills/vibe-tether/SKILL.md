@@ -24,6 +24,12 @@ Do not replace the coding agent's implementation ability. Control direction, aut
 
 If no project manifest exists, run `vibetether init` or create one using [project-manifest.md](references/project-manifest.md) before long-running product work.
 
+## Project Bootstrap and Proven Path Recall
+
+When project direction is unresolved, route to `project-bootstrap`; do not start product implementation from a directory name, package metadata, or agent preference. In an interactive terminal, use guided `vibetether init` or `vibetether bootstrap`. In automation, require explicit goal and success evidence or leave the lifecycle at `DISCOVER`.
+
+Before repeatable operational work, resolve `proven-path-recall` with current task and environment signals. Read only returned artifacts, not the entire index corpus. A `provisional` result or `requires_revalidation: true` guides investigation but is not known-good until fresh evidence passes. If a matching proven path is not used, record the material applicability reason.
+
 ## Automatic Work-Readiness Gate
 
 At task entry, phase changes, consequential actions, resume, and compaction recovery, assess readiness before implementation. Keep this proportional: a clear low-risk task may pass in one compact line, while a vague or conflicting task must not advance on guesses.

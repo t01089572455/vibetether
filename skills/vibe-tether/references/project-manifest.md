@@ -14,6 +14,7 @@ goal_source: docs/product-direction.md
 intent_contract: docs/intent-contract.md
 capability_board: .vibetether/capabilities.yaml
 provider_lock: .vibetether/providers.lock.yaml
+experience_index: .vibetether/experience-index.yaml
 
 sources:
   always:
@@ -72,6 +73,12 @@ conflicts:
 
 Never rewrite or consolidate existing project documents during initialization.
 
+## Bootstrap and Experience Index
+
+Use `project-bootstrap` whenever a directory is greenfield or project direction is unresolved. Inspect repository facts first, then confirm user-owned goal and success evidence; do not infer either from the directory name or package metadata. The manifest's `experience_index` field identifies the metadata-only index used for reusable operational paths. Keep it project-relative and route natural artifacts such as runbooks, tests, ADRs, or scripts through the existing source groups.
+
+When an experience entry is created or updated, preserve its stable entry ID and its artifact paths so duplicate capture can be detected by the pair of entry ID plus artifact path. The index points to artifacts; it does not replace them or become a transcript ledger.
+
 ## Managed Instruction Block
 
 Adapters may write only a bounded block:
@@ -80,7 +87,7 @@ Adapters may write only a bounded block:
 <!-- vibetether:start -->
 ## VibeTether
 
-Automatically apply VibeTether at task entry, consequential actions, phase transitions, resume, compaction recovery, and completion boundaries. Consult `.vibetether/capabilities.yaml`, treat optional provider routes as recommendations, and record the selected path. Perform a full re-anchor through `.vibetether/project.yaml` when a trigger fires. After every verified user-level or engineering-level success, capture a first, recovered, or changed Proven Path; deduplicate unchanged repeats; record `experience_feedback`; and pass `vibetether doctor` before completion. Never persist credentials, private keys, one-time codes, private reasoning, or sensitive tool output. Do not bypass unresolved direction, authority conflicts, or project gates.
+Automatically apply VibeTether at task entry, consequential actions, phase transitions, resume, compaction recovery, and completion boundaries. Consult `.vibetether/capabilities.yaml`, treat optional provider routes as recommendations, and record the selected path. Query `.vibetether/experience-index.yaml` before repeatable operational work; read returned artifacts before inventing a path and record the selected path or material inapplicability reason. Perform a full re-anchor through `.vibetether/project.yaml` when a trigger fires. After every verified user-level or engineering-level success, capture a first, recovered, or changed Proven Path; deduplicate unchanged repeats; record `experience_feedback`; and pass `vibetether doctor` before completion. Never persist credentials, private keys, one-time codes, private reasoning, or sensitive tool output. Do not bypass unresolved direction, authority conflicts, or project gates.
 <!-- vibetether:end -->
 ```
 

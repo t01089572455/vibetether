@@ -21,6 +21,8 @@ The IDs below are contract-linked to `registry/scenarios.json`. The generated `.
 | `production-migration` | A migration or deprecation is proposed | Route to `deprecation-and-migration` and retain destructive-data confirmation gates. |
 | `first-proven-path` | A reusable workflow succeeds for the first verified time | Capture a sanitized durable Proven Path immediately; do not wait for a future failure. |
 | `completion` | A completion claim is imminent | Route to `verification-before-completion` and require fresh evidence. |
+| `greenfield-bootstrap` | A new directory has no confirmed project direction | Route `project-bootstrap` to `grilling`; obtain user-owned intent and success evidence before implementation. |
+| `known-proven-path` | Repeatable work has current publication or environment signals | Resolve `proven-path-recall` through `vibetether-built-in-recall`, read returned artifacts, and revalidate when required. |
 
 ## How to choose
 
@@ -31,5 +33,7 @@ The IDs below are contract-linked to `registry/scenarios.json`. The generated `.
 5. If there is no automatic provider, use the declared VibeTether fallback. A catalog-only Skill is discoverable, not silently invokable.
 6. Preserve every high-risk confirmation gate regardless of provider choice.
 7. Require the route's outputs and exit evidence before changing phases.
+
+For `proven-path-recall`, the result carries only matching metadata and artifact paths. Do not read the whole index corpus or treat a path as current when `requires_revalidation` is true.
 
 The resolver returns `primary`, `overlays`, `alternatives`, `detected_signals`, `rationale`, `fallback`, `required_outputs`, and `exit_evidence`. Compatibility fields such as `recommendation`, `selection`, and `expected_outputs` remain available for existing integrations.
