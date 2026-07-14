@@ -64,6 +64,7 @@ export async function scanProject(root, enabledAdapters, profile) {
     ['docs/release-checklist.md', 'docs/release.md', 'RELEASE.md'],
     'release checklist',
   );
+  const operations = await record('docs/operations', 'operational proven paths');
 
   try {
     const packageJson = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
@@ -123,6 +124,7 @@ export async function scanProject(root, enabledAdapters, profile) {
         ui: [...uiSpecs, designSystem].filter(Boolean),
         testing,
         release,
+        operations: operations ? [operations] : [],
       },
     },
     discovery,

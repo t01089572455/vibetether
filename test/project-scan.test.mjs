@@ -99,6 +99,34 @@ test('project scan emits Production signals without enabling a bundle by itself'
   assert.equal(manifest.bundles, undefined);
 });
 
+test('project scan routes existing operational proven paths without inventing truth sources', async () => {
+  const root = await project('operations');
+  await mkdir(path.join(root, 'docs', 'operations'), { recursive: true });
+  await writeFile(path.join(root, 'docs', 'operations', 'github-publishing.md'), '# GitHub publishing\n', 'utf8');
+
+  const manifest = await scanProject(root, ['codex'], 'core');
+
+  assert.deepEqual(manifest.sources.conditional.operations, ['docs/operations/']);
+  assert.deepEqual(manifest.discovery['docs/operations/'], {
+    role: 'operational proven paths',
+    confidence: 'high',
+    kind: 'directory',
+  });
+});
+
+test('project scan never invents context, ADR, or operations sources for an empty project', async () => {
+  const root = await project('no-invented-truth');
+
+  const manifest = await scanProject(root, ['codex'], 'core');
+
+  assert.equal(manifest.sources.always.includes('CONTEXT.md'), false);
+  assert.deepEqual(manifest.sources.conditional.architecture, []);
+  assert.deepEqual(manifest.sources.conditional.operations, []);
+  assert.equal(manifest.discovery['CONTEXT.md'], undefined);
+  assert.equal(manifest.discovery['docs/adr/'], undefined);
+  assert.equal(manifest.discovery['docs/operations/'], undefined);
+});
+
 test('project scan marks only empty or git-only roots as greenfield', async () => {
   const empty = await project('empty');
   const gitOnly = await project('git-only');

@@ -9,6 +9,12 @@ import {
 } from './bootstrap-authority.mjs';
 import { CliError } from './errors.mjs';
 import {
+  EMPTY_EXPERIENCE_INDEX,
+  parseExperienceIndex,
+  serializeExperienceIndex,
+  validateExperienceIndex,
+} from './experience-index.mjs';
+import {
   applyManagedBlock,
   backupOnce,
   inspectManagedBlock,
@@ -23,6 +29,7 @@ import {
   createInitialExperienceFeedback,
   DEFAULT_INTENT,
   enableHarnesses,
+  EXPERIENCE_INDEX_PATH,
   parseManifest,
   serializeManifest,
 } from './manifest.mjs';
@@ -270,7 +277,12 @@ export async function initialize(options, dependencies = {}) {
     content: applyManagedBlock(ignoreOriginal ?? '', GITIGNORE_BODY),
   });
 
-  for (const relativePath of ['.vibetether/project.yaml', '.vibetether/intent.md', '.vibetether/state/current.yaml']) {
+  for (const relativePath of [
+    '.vibetether/project.yaml',
+    '.vibetether/intent.md',
+    '.vibetether/state/current.yaml',
+    EXPERIENCE_INDEX_PATH,
+  ]) {
     await rejectSymlinkPath(root, relativePath);
   }
   for (const adapter of adapters) {
@@ -299,6 +311,12 @@ export async function initialize(options, dependencies = {}) {
       throw new CliError(`Manifest conflict in .vibetether/project.yaml: ${error.message}`, 3);
     }
   }
+  if (manifest.experience_index !== undefined && manifest.experience_index !== EXPERIENCE_INDEX_PATH) {
+    throw new CliError(
+      `Manifest conflict in .vibetether/project.yaml: experience_index must route to ${EXPERIENCE_INDEX_PATH}.`,
+      3,
+    );
+  }
   const selectedBundles = new Set(options.bundles ?? []);
   if (!options.bootstrapOnly && options.autoBundles !== false && options.profile !== 'core') {
     for (const signal of scanned.bundle_signals ?? []) {
@@ -311,6 +329,7 @@ export async function initialize(options, dependencies = {}) {
     bundle_signals: scanned.bundle_signals ?? [],
     capability_board: '.vibetether/capabilities.yaml',
     provider_lock: '.vibetether/providers.lock.yaml',
+    experience_index: EXPERIENCE_INDEX_PATH,
   };
   const routingSignals = (scanned.bundle_signals ?? []).map((signal) => signal.signal);
   providers = resolveExposurePlan(registry, options.profile, {
@@ -324,6 +343,22 @@ export async function initialize(options, dependencies = {}) {
     target: manifestTarget,
     original: manifestOriginal,
     content: serializeManifest(manifest),
+  });
+
+  const experienceTarget = resolveInside(root, EXPERIENCE_INDEX_PATH);
+  const experienceOriginal = await readTextIfPresent(experienceTarget);
+  if (experienceOriginal !== null) {
+    try {
+      await validateExperienceIndex(parseExperienceIndex(experienceOriginal), root);
+    } catch (error) {
+      throw new CliError(`Experience index conflict in ${EXPERIENCE_INDEX_PATH}: ${error.message}`, 3);
+    }
+  }
+  textPlans.push({
+    relativePath: EXPERIENCE_INDEX_PATH,
+    target: experienceTarget,
+    original: experienceOriginal,
+    content: experienceOriginal ?? serializeExperienceIndex(EMPTY_EXPERIENCE_INDEX),
   });
 
   const intentTarget = resolveInside(root, '.vibetether/intent.md');

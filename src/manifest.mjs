@@ -1,6 +1,8 @@
 import YAML from 'yaml';
 import { unresolvedIntent } from './bootstrap-model.mjs';
 
+export const EXPERIENCE_INDEX_PATH = '.vibetether/experience-index.yaml';
+
 export function serializeManifest(manifest) {
   return YAML.stringify(manifest, { lineWidth: 0 });
 }

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -82,6 +82,13 @@ test('init installs Codex and Claude project Skills and preserves user instructi
     assert.match(instructions, /first-proven-path/i);
     assert.match(instructions, /credentials|private keys|one-time codes/i);
   }
+
+  const manifest = YAML.parse(await readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'));
+  assert.equal(manifest.experience_index, '.vibetether/experience-index.yaml');
+  assert.deepEqual(
+    YAML.parse(await readFile(path.join(target, '.vibetether', 'experience-index.yaml'), 'utf8')),
+    { schema_version: 1, entries: [] },
+  );
 });
 
 test('repeated init is byte-for-byte idempotent', async () => {
@@ -96,6 +103,7 @@ test('repeated init is byte-for-byte idempotent', async () => {
     readFile(path.join(target, '.gitignore'), 'utf8'),
     readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'),
     readFile(path.join(target, '.vibetether', 'state', 'current.yaml'), 'utf8'),
+    readFile(path.join(target, '.vibetether', 'experience-index.yaml'), 'utf8'),
   ]);
 
   const second = runCli(args);
@@ -106,10 +114,99 @@ test('repeated init is byte-for-byte idempotent', async () => {
     readFile(path.join(target, '.gitignore'), 'utf8'),
     readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'),
     readFile(path.join(target, '.vibetether', 'state', 'current.yaml'), 'utf8'),
+    readFile(path.join(target, '.vibetether', 'experience-index.yaml'), 'utf8'),
   ]);
 
   assert.deepEqual(after, before);
   assert.equal(YAML.parse(after[3]).project_state, 'greenfield');
+});
+
+test('repeated init byte-preserves a valid non-empty experience index and routes it from the manifest', async () => {
+  const target = await project('preserve-experience');
+  const args = ['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes'];
+  assert.equal(runCli(args).status, 0);
+  await mkdir(path.join(target, 'docs', 'operations'), { recursive: true });
+  await writeFile(path.join(target, 'docs', 'operations', 'publish.md'), '# Publish\n', 'utf8');
+  const indexPath = path.join(target, '.vibetether', 'experience-index.yaml');
+  const customized = [
+    'schema_version: 1',
+    'entries:',
+    '  - id: publish-path',
+    '    use_when: [publish]',
+    '    artifacts: [docs/operations/publish.md]',
+    '    verified_at: 2026-07-14',
+    '    revalidate_when: []',
+    '    status: proven',
+    '',
+  ].join('\n');
+  await writeFile(indexPath, customized, 'utf8');
+
+  const result = runCli(args);
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(await readFile(indexPath, 'utf8'), customized);
+  const manifest = YAML.parse(await readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'));
+  assert.equal(manifest.experience_index, '.vibetether/experience-index.yaml');
+});
+
+test('init rejects an invalid existing experience index before any partial writes', async () => {
+  const target = await project('invalid-experience');
+  const first = runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']);
+  assert.equal(first.status, 0, first.stderr || first.stdout);
+  const agentsPath = path.join(target, 'AGENTS.md');
+  const agentsBefore = await readFile(agentsPath, 'utf8');
+  const indexPath = path.join(target, '.vibetether', 'experience-index.yaml');
+  const invalid = 'schema_version: 1\nentries:\n  - id: escaped\n    use_when: [release]\n    artifacts: [../secret.md]\n    verified_at: 2026-07-14\n    revalidate_when: []\n    status: proven\n';
+  await writeFile(indexPath, invalid, 'utf8');
+
+  const result = runCli(['init', '--project', target, '--agent', 'both', '--profile', 'core', '--yes']);
+
+  assert.equal(result.status, 3, result.stderr || result.stdout);
+  assert.match(result.stderr, /experience index conflict|escapes the project|outside project/i);
+  assert.equal(await readFile(indexPath, 'utf8'), invalid);
+  assert.equal(await readFile(agentsPath, 'utf8'), agentsBefore);
+  assert.equal(await exists(path.join(target, 'CLAUDE.md')), false);
+});
+
+test('init rejects a conflicting preexisting experience-index route instead of silently rewriting it', async () => {
+  const target = await project('conflicting-experience-route');
+  const first = runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']);
+  assert.equal(first.status, 0, first.stderr || first.stdout);
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
+  manifest.experience_index = 'docs/custom-experience.yaml';
+  const customizedManifest = YAML.stringify(manifest, { lineWidth: 0 });
+  await writeFile(manifestPath, customizedManifest, 'utf8');
+
+  const result = runCli(['init', '--project', target, '--agent', 'both', '--profile', 'core', '--yes']);
+
+  assert.equal(result.status, 3, result.stderr || result.stdout);
+  assert.match(result.stderr, /manifest conflict.*experience_index|experience.index route/i);
+  assert.equal(await readFile(manifestPath, 'utf8'), customizedManifest);
+  assert.equal(await exists(path.join(target, 'CLAUDE.md')), false);
+});
+
+test('init rejects a symbolic-link experience index before writing project files', async (context) => {
+  const target = await project('experience-symlink');
+  const external = path.join(await project('experience-symlink-external'), 'index.yaml');
+  await writeFile(external, 'schema_version: 1\nentries: []\n', 'utf8');
+  await mkdir(path.join(target, '.vibetether'), { recursive: true });
+  try {
+    await symlink(external, path.join(target, '.vibetether', 'experience-index.yaml'), 'file');
+  } catch (error) {
+    if (process.platform === 'win32' && ['EACCES', 'EPERM'].includes(error.code)) {
+      context.skip(`Windows denied symlink creation: ${error.code}`);
+      return;
+    }
+    throw error;
+  }
+
+  const result = runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']);
+
+  assert.equal(result.status, 3, result.stderr || result.stdout);
+  assert.match(result.stderr, /symbolic-link target.*experience-index\.yaml/i);
+  assert.equal(await exists(path.join(target, 'AGENTS.md')), false);
+  assert.equal(await readFile(external, 'utf8'), 'schema_version: 1\nentries: []\n');
 });
 
 test('repeated init refreshes persisted project state from the live scan', async () => {
