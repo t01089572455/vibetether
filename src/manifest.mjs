@@ -1,4 +1,5 @@
 import YAML from 'yaml';
+import { unresolvedIntent } from './bootstrap-model.mjs';
 
 export function serializeManifest(manifest) {
   return YAML.stringify(manifest, { lineWidth: 0 });
@@ -62,32 +63,4 @@ export function createInitialCheckpoint(goalSource, recommendedProvider = 'vibe-
   );
 }
 
-export const DEFAULT_INTENT = `# VibeTether Intent Contract
-
-This contract is the durable statement of direction for long-running agent work. Resolve product ambiguity with the user before changing consequential behavior.
-
-## Goal
-
-No project goal has been recorded yet.
-
-## Success evidence
-
-No acceptance evidence has been recorded yet.
-
-## Scope boundaries
-
-No additional boundaries have been recorded yet.
-
-## Non-negotiable constraints
-
-- Preserve existing project instructions and higher-authority decisions.
-- Confirm destructive actions and releases before execution.
-
-## Visual direction
-
-No visual direction has been recorded yet.
-
-## Open direction decisions
-
-- Confirm the goal and success evidence before consequential product work.
-`;
+export const DEFAULT_INTENT = unresolvedIntent();
