@@ -13,24 +13,32 @@ const SCOPE_RECOMMENDATION = 'Preserve existing instructions; confirm destructiv
 
 const QUESTION_DEFINITIONS = {
   goal: {
-    key: 'goal',
-    prompt: 'What outcome should this project achieve?',
+    id: 'goal',
+    prompt: 'Who should this project help, and what outcome should they achieve?',
+    required: true,
     recommended: null,
+    answered: false,
   },
   success_evidence: {
-    key: 'success_evidence',
-    prompt: 'What evidence will prove the outcome is complete?',
+    id: 'success_evidence',
+    prompt: 'What fresh evidence would make the first milestone successful?',
+    required: true,
     recommended: null,
+    answered: false,
   },
   scope_boundaries: {
-    key: 'scope_boundaries',
-    prompt: 'What should remain in scope, and what should stay out of scope?',
+    id: 'scope_boundaries',
+    prompt: 'What is explicitly out of scope or must not be weakened?',
+    required: false,
     recommended: SCOPE_RECOMMENDATION,
+    answered: false,
   },
   visual_direction: {
-    key: 'visual_direction',
-    prompt: 'What visual direction should user-facing work preserve?',
+    id: 'visual_direction',
+    prompt: 'What existing brand, reference, or visual direction governs the interface?',
+    required: false,
     recommended: null,
+    answered: false,
   },
 };
 

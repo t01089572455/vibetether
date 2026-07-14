@@ -29,16 +29,39 @@ test('greenfield bootstrap asks only directional questions in canonical order', 
 
   assert.equal(model.greenfield, true);
   assert.equal(model.ready, false);
-  assert.deepEqual(model.questions.map((question) => question.key), [
+  assert.deepEqual(model.questions.map((question) => question.id), [
     'goal',
     'success_evidence',
     'scope_boundaries',
   ]);
   assert.equal(
-    model.questions.find((question) => question.key === 'scope_boundaries').recommended,
+    model.questions.find((question) => question.id === 'scope_boundaries').recommended,
     'Preserve existing instructions; confirm destructive actions and releases.',
   );
-  assert.equal(model.questions.some((question) => question.key === 'architecture'), false);
+  assert.deepEqual(
+    model.questions.map(({ id, prompt, required, answered }) => ({ id, prompt, required, answered })),
+    [
+      {
+        id: 'goal',
+        prompt: 'Who should this project help, and what outcome should they achieve?',
+        required: true,
+        answered: false,
+      },
+      {
+        id: 'success_evidence',
+        prompt: 'What fresh evidence would make the first milestone successful?',
+        required: true,
+        answered: false,
+      },
+      {
+        id: 'scope_boundaries',
+        prompt: 'What is explicitly out of scope or must not be weakened?',
+        required: false,
+        answered: false,
+      },
+    ],
+  );
+  assert.equal(model.questions.some((question) => question.id === 'architecture'), false);
   assert.equal(model.questions.some((question) => /architecture|framework|database/i.test(question.prompt)), false);
   assert.deepEqual(model.answers.constraints, SAFE_CONSTRAINTS);
 });
@@ -59,12 +82,27 @@ test('high-confidence Web evidence adds the visual direction question', () => {
   });
 
   assert.equal(model.greenfield, false);
-  assert.deepEqual(model.questions.map((question) => question.key), [
+  assert.deepEqual(model.questions.map((question) => question.id), [
     'goal',
     'success_evidence',
     'scope_boundaries',
     'visual_direction',
   ]);
+  const visual = model.questions.at(-1);
+  assert.deepEqual(
+    {
+      id: visual.id,
+      prompt: visual.prompt,
+      required: visual.required,
+      answered: visual.answered,
+    },
+    {
+      id: 'visual_direction',
+      prompt: 'What existing brand, reference, or visual direction governs the interface?',
+      required: false,
+      answered: false,
+    },
+  );
 });
 
 test('a discovered user-interface specification adds visual direction without architecture questions', () => {
@@ -85,8 +123,8 @@ test('a discovered user-interface specification adds visual direction without ar
     }),
   });
 
-  assert.equal(model.questions.at(-1).key, 'visual_direction');
-  assert.equal(model.questions.some((question) => question.key === 'architecture'), false);
+  assert.equal(model.questions.at(-1).id, 'visual_direction');
+  assert.equal(model.questions.some((question) => question.id === 'architecture'), false);
   assert.equal(model.questions.some((question) => /architecture|framework|database/i.test(question.prompt)), false);
 });
 
