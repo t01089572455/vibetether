@@ -51,7 +51,7 @@ function assertCapability(capability) {
     'provider_options',
     'catalog_alternatives',
   ]) {
-    assertOptionalStringArray(capability[field], `capability ${capability.id}.${field}`);
+    assertOptionalStringArray(capability[field], `capabilities[].${field}`);
   }
 }
 
@@ -60,9 +60,9 @@ function assertProvider(provider) {
     throw new Error('Capability board providers must contain identified mappings');
   }
   for (const field of ['capabilities', 'available_in', 'routed_by', 'use_when', 'auto_covered_by']) {
-    assertOptionalStringArray(provider[field], `provider ${provider.skill}.${field}`);
+    assertOptionalStringArray(provider[field], `providers[].${field}`);
   }
-  assertInstallations(provider.installations, `provider ${provider.skill}.installations`);
+  assertInstallations(provider.installations, 'providers[].installations');
 }
 
 function assertRoute(route) {
@@ -72,18 +72,18 @@ function assertRoute(route) {
       || typeof route.capability !== 'string' || route.capability.length === 0) {
     throw new Error('Capability board routes must contain identified phase and capability mappings');
   }
-  assertOptionalRecord(route.signals, `route ${route.id}.signals`);
+  assertOptionalRecord(route.signals, 'routes[].signals');
   for (const field of ['all', 'any']) {
-    assertOptionalStringArray(route.signals?.[field], `route ${route.id}.signals.${field}`);
+    assertOptionalStringArray(route.signals?.[field], `routes[].signals.${field}`);
   }
   if (!isRecord(route.recommendation)
       || typeof route.recommendation.skill !== 'string' || route.recommendation.skill.length === 0) {
-    throw new Error(`Capability board route ${route.id} requires a recommendation mapping`);
+    throw new Error('Capability board routes require a recommendation mapping');
   }
-  assertOptionalStringArray(route.recommendation.available_in, `route ${route.id}.recommendation.available_in`);
-  assertInstallations(route.recommendation.installations, `route ${route.id}.recommendation.installations`);
-  assertOptionalStringArray(route.expected_outputs, `route ${route.id}.expected_outputs`);
-  assertOptionalStringArray(route.exit_evidence, `route ${route.id}.exit_evidence`);
+  assertOptionalStringArray(route.recommendation.available_in, 'routes[].recommendation.available_in');
+  assertInstallations(route.recommendation.installations, 'routes[].recommendation.installations');
+  assertOptionalStringArray(route.expected_outputs, 'routes[].expected_outputs');
+  assertOptionalStringArray(route.exit_evidence, 'routes[].exit_evidence');
 }
 
 export function assertCapabilityBoard(board) {

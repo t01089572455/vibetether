@@ -16,7 +16,7 @@ function inside(root, relativePath, label) {
   const target = path.resolve(root, relativePath);
   const relative = path.relative(root, target);
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw new CliError(`${label} path escapes the project: ${relativePath}`, 3);
+    throw new CliError(`${label} path is unsafe. Run vibetether doctor for details.`, 3);
   }
   return target;
 }
@@ -63,7 +63,9 @@ export async function refreshBoardAvailability(board, root) {
         await access(target);
         available.push(harness);
       } catch (error) {
-        if (error.code !== 'ENOENT') throw error;
+        if (error.code !== 'ENOENT') {
+          throw new CliError('Provider installation path cannot be inspected. Run vibetether doctor for details.', 3);
+        }
       }
     }
     if (route.recommendation?.installations) route.recommendation.available_in = available;
@@ -76,7 +78,9 @@ export async function refreshBoardAvailability(board, root) {
         await access(target);
         available.push(harness);
       } catch (error) {
-        if (error.code !== 'ENOENT') throw error;
+        if (error.code !== 'ENOENT') {
+          throw new CliError('Provider installation path cannot be inspected. Run vibetether doctor for details.', 3);
+        }
       }
     }
     provider.available_in = available;

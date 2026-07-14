@@ -135,7 +135,10 @@ async function readYamlArtifact(root, relativePath, label, issues) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('document must be a mapping');
     return value;
   } catch (error) {
-    issues.push(issue(`invalid-${label}`, `Invalid ${label} YAML: ${error.message}`));
+    const message = label === 'capability-board'
+      ? 'Invalid capability-board YAML. Fix the document and rerun vibetether doctor.'
+      : `Invalid ${label} YAML: ${error.message}`;
+    issues.push(issue(`invalid-${label}`, message));
     return null;
   }
 }

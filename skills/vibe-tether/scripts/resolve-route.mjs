@@ -66,13 +66,15 @@ async function refreshAvailability(board, root) {
       const target = path.resolve(root, relativePath);
       const relative = path.relative(root, target);
       if (relative.startsWith('..') || path.isAbsolute(relative)) {
-        throw new Error(`Provider installation escapes the project: ${relativePath}`);
+        throw new Error('Provider installation path is unsafe. Run vibetether doctor for details.');
       }
       try {
         await access(target);
         current.push(harness);
       } catch (error) {
-        if (error.code !== 'ENOENT') throw error;
+        if (error.code !== 'ENOENT') {
+          throw new Error('Provider installation path cannot be inspected. Run vibetether doctor for details.');
+        }
       }
     }
     if (route.recommendation?.installations) route.recommendation.available_in = current;

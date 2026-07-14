@@ -61,6 +61,60 @@ test('doctor reports malformed capability-board route structures', async () => {
   assert.match(JSON.stringify(report.issues), /recommendation mapping/i);
 });
 
+test('doctor reports malformed capability boards without echoing untrusted identifiers', async () => {
+  const target = await project('doctor-invalid-board-identifiers');
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
+  const boardPath = path.join(target, '.vibetether', 'capabilities.yaml');
+  const baseBoard = JSON.parse(await readFile(boardPath, 'utf8'));
+  const secret = `github_pat_${'Z'.repeat(30)}`;
+  const cases = [
+    ['route identifier', (board) => {
+      board.routes = [{
+        id: secret,
+        phase: 'PLAN',
+        capability: 'requirements-clarification',
+        signals: { all: [], any: [] },
+      }];
+    }],
+    ['capability identifier', (board) => {
+      board.capabilities = [{ id: secret, provider_options: {} }];
+    }],
+    ['provider skill', (board) => {
+      board.providers = [{ skill: secret, capabilities: {} }];
+    }],
+  ];
+
+  for (const [label, mutate] of cases) {
+    const board = structuredClone(baseBoard);
+    mutate(board);
+    await writeFile(boardPath, `${JSON.stringify(board, null, 2)}\n`, 'utf8');
+
+    const result = runCli(['doctor', '--project', target, '--json']);
+
+    assert.equal(result.status, 4, `${label}: ${result.stderr || result.stdout}`);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.issues.some((issue) => issue.code === 'invalid-capability-board'), true, label);
+    assert.doesNotMatch(result.stdout, new RegExp(secret), label);
+    assert.match(JSON.stringify(report.issues), /capability board/i, label);
+  }
+});
+
+test('doctor reports invalid capability-board syntax without echoing its contents', async () => {
+  const target = await project('doctor-invalid-board-syntax');
+  assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
+  const boardPath = path.join(target, '.vibetether', 'capabilities.yaml');
+  const secret = `github_pat_${'X'.repeat(30)}`;
+  await writeFile(boardPath, `schema_version: 1\nmode: advisory-router\ncapabilities: [${secret}\n`, 'utf8');
+
+  const result = runCli(['doctor', '--project', target, '--json']);
+
+  assert.equal(result.status, 4, result.stderr || result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.issues.some((issue) => issue.code === 'invalid-capability-board'), true);
+  assert.match(JSON.stringify(report.issues), /invalid capability-board yaml/i);
+  assert.doesNotMatch(result.stdout, new RegExp(secret));
+});
+
 test('doctor exits 4 when a declared truth source is missing', async () => {
   const target = await project('doctor-fail');
   await mkdir(path.join(target, 'docs'), { recursive: true });

@@ -717,6 +717,30 @@ test('capability-board structural failures are neutral project-authority failure
   }
 });
 
+test('resolvers do not echo unsafe provider installation paths from a valid capability board', async () => {
+  const state = await fixture('board-provider-installation-redaction');
+  const secret = `github_pat_${'Y'.repeat(30)}`;
+  const board = routingBoard([route('shipping-and-launch', {
+    recommendation: {
+      skill: 'shipping-and-launch',
+      available_in: ['codex'],
+      installations: { codex: `../${secret}` },
+      reason: 'Release path.',
+    },
+  })]);
+  await writeFile(state.boardPath, `${JSON.stringify(board, null, 2)}\n`, 'utf8');
+
+  const packageError = await packageResolve(state, ['publish']).catch((error) => error);
+  assert.equal(packageError.exitCode, 3, packageError.message);
+  assert.match(packageError.message, /provider installation path is unsafe[\s\S]*vibetether doctor/i);
+  assert.doesNotMatch(packageError.message, new RegExp(secret));
+
+  const installed = installedResolve(state, ['publish']);
+  assert.equal(installed.status, 3, installed.stderr || installed.stdout);
+  assert.match(installed.stderr, /provider installation path is unsafe[\s\S]*vibetether doctor/i);
+  assert.doesNotMatch(installed.stderr, new RegExp(secret));
+});
+
 test('installed resolver validates the complete canonical manifest before extracting routes', async () => {
   const state = await fixture('canonical-manifest');
   const base = YAML.parse(await readFile(state.manifestPath, 'utf8'));
