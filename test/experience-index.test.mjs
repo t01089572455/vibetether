@@ -48,16 +48,17 @@ function index(entries = [entry()]) {
 }
 
 function phraseVariants(phrase) {
-  const capitalizedTail = phrase.slice(1).map((word) => `${word[0].toUpperCase()}${word.slice(1)}`);
-  const pluralTail = `${phrase.at(-1)}s`;
-  return [...new Set([
-    phrase.join('-'),
-    phrase.join('_'),
-    phrase.join(' '),
-    [phrase[0], ...capitalizedTail].join(''),
-    phrase.join(''),
-    [...phrase.slice(0, -1), pluralTail].join(''),
-  ])];
+  const plural = [...phrase.slice(0, -1), `${phrase.at(-1)}s`];
+  return [phrase, plural].flatMap((words) => {
+    const capitalizedTail = words.slice(1).map((word) => `${word[0].toUpperCase()}${word.slice(1)}`);
+    return [
+      words.join('-'),
+      words.join(' '),
+      words.join('_'),
+      [words[0], ...capitalizedTail].join(''),
+      words.join(''),
+    ];
+  });
 }
 
 test('empty experience index is deeply immutable and has stable canonical serialization', () => {
@@ -342,10 +343,12 @@ test('policy: ambiguous non-runbook credential structures fail closed and strong
   }
 });
 
-test('every credential phrase matches separated, camel, underscore, collapsed, and controlled plural forms without substring false positives', async () => {
+test('every credential phrase matches singular and terminal-plural hyphen, space, underscore, camel, and collapsed forms without substring false positives', async () => {
   const root = await fixture();
   for (const [phrasePosition, phrase] of SENSITIVE_CREDENTIAL_PHRASES.entries()) {
-    for (const [variantPosition, variant] of phraseVariants(phrase).entries()) {
+    const variants = phraseVariants(phrase);
+    assert.equal(variants.length, 10, phrase.join(' '));
+    for (const [variantPosition, variant] of variants.entries()) {
       const artifact = `docs/operations/${variant}.json`;
       const candidate = index([entry({
         id: `compound-${phrasePosition}-${variantPosition}`,

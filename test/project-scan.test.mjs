@@ -64,14 +64,17 @@ async function managedProject(name) {
 }
 
 function phraseVariants(phrase) {
-  const capitalizedTail = phrase.slice(1).map((word) => `${word[0].toUpperCase()}${word.slice(1)}`);
-  return [...new Set([
-    phrase.join('-'),
-    phrase.join('_'),
-    [phrase[0], ...capitalizedTail].join(''),
-    phrase.join(''),
-    [...phrase.slice(0, -1), `${phrase.at(-1)}s`].join(''),
-  ])];
+  const plural = [...phrase.slice(0, -1), `${phrase.at(-1)}s`];
+  return [phrase, plural].flatMap((words) => {
+    const capitalizedTail = words.slice(1).map((word) => `${word[0].toUpperCase()}${word.slice(1)}`);
+    return [
+      words.join('-'),
+      words.join(' '),
+      words.join('_'),
+      [words[0], ...capitalizedTail].join(''),
+      words.join(''),
+    ];
+  });
 }
 
 test('project scan emits high-confidence Web bundle signals from package evidence', async () => {
@@ -316,9 +319,11 @@ test('project scan denies credential config and cloud credential roots despite a
   }
 });
 
-test('project scan applies every credential phrase form without matching innocent word fragments', async () => {
+test('project scan applies every singular and terminal-plural credential phrase form without matching innocent word fragments', async () => {
   for (const [phrasePosition, phrase] of SENSITIVE_CREDENTIAL_PHRASES.entries()) {
-    for (const [variantPosition, variant] of phraseVariants(phrase).entries()) {
+    const variants = phraseVariants(phrase);
+    assert.equal(variants.length, 10, phrase.join(' '));
+    for (const [variantPosition, variant] of variants.entries()) {
       const root = await project(`compound-${phrasePosition}-${variantPosition}`);
       await mkdir(path.join(root, 'docs', 'operations'), { recursive: true });
       await writeFile(path.join(root, 'docs', 'operations', 'safe.md'), '# Safe runbook\n', 'utf8');

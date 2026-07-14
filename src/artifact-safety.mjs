@@ -182,7 +182,11 @@ function hasSensitiveSemantics(artifact) {
   if (pathWords.some((word) => SENSITIVE_SINGLE_TERMS.has(word))) return true;
   if (pathWords.some((word) => COLLAPSED_SENSITIVE_PHRASES.has(word))) return true;
   return SENSITIVE_CREDENTIAL_PHRASES.some((phrase) => pathWords.some((_, index) => (
-    phrase.every((word, offset) => pathWords[index + offset] === word)
+    phrase.every((word, offset) => {
+      const candidate = pathWords[index + offset];
+      return candidate === word
+        || (offset === phrase.length - 1 && candidate === `${word}s`);
+    })
   )));
 }
 
