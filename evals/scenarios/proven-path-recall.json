@@ -1,0 +1,11 @@
+{
+  "id": "proven-path-recall",
+  "request": "Publish the current branch to GitHub from Windows",
+  "signals": ["publish", "github", "windows"],
+  "expected": {
+    "phase": "SHIP",
+    "capability": "proven-path-recall",
+    "artifact": "docs/operations/github-publishing.md",
+    "must_precede": "invent-new-publication-command"
+  }
+}

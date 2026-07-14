@@ -214,6 +214,9 @@ test('the documented personal acceptance tour runs without network access', () =
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /acceptance tour passed/i);
+  assert.match(result.stdout, /guided bootstrap/i);
+  assert.match(result.stdout, /applicable experience/i);
+  assert.match(result.stdout, /doctor healthy/i);
 });
 
 test('CI verifies the release on Windows and Ubuntu with supported Node versions', async () => {

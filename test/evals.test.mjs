@@ -23,9 +23,11 @@ test('preview scenarios cover the approved drift-pressure classes with complete 
     'document-conflict',
     'duplicate-primary-route',
     'first-proven-path',
+    'greenfield-bootstrap',
     'huge-effort',
     'production-migration',
     'prototype-choice',
+    'proven-path-recall',
     'safe-preparation',
     'structural-decision',
     'ui-propagation',
@@ -33,7 +35,8 @@ test('preview scenarios cover the approved drift-pressure classes with complete 
     'web-routing',
   ]);
 
-  for (const scenario of values) {
+  const previewScenarios = values.filter((scenario) => scenario.input_state);
+  for (const scenario of previewScenarios) {
     assert.equal(typeof scenario.input_state, 'object');
     assert.equal(typeof scenario.pressure, 'string');
     assert.ok(scenario.applicable_sources.length > 0);
@@ -53,6 +56,31 @@ test('preview scenarios cover the approved drift-pressure classes with complete 
   for (const evidence of ['verified-success', 'first-path-classification', 'durable-artifact', 'redaction-check']) {
     assert.equal(firstProven.required_evidence.includes(evidence), true, `first-proven-path is missing ${evidence}`);
   }
+
+  const greenfield = values.find((scenario) => scenario.id === 'greenfield-bootstrap');
+  assert.deepEqual(greenfield, {
+    id: 'greenfield-bootstrap',
+    request: 'Build me a project',
+    project_state: 'empty-directory',
+    expected: {
+      phase: 'DISCOVER',
+      capability: 'project-bootstrap',
+      provider: 'grilling',
+      must_not: ['write-product-code', 'guess-goal', 'guess-success-evidence'],
+    },
+  });
+  const recall = values.find((scenario) => scenario.id === 'proven-path-recall');
+  assert.deepEqual(recall, {
+    id: 'proven-path-recall',
+    request: 'Publish the current branch to GitHub from Windows',
+    signals: ['publish', 'github', 'windows'],
+    expected: {
+      phase: 'SHIP',
+      capability: 'proven-path-recall',
+      artifact: 'docs/operations/github-publishing.md',
+      must_precede: 'invent-new-publication-command',
+    },
+  });
 });
 
 test('static runner validates every scenario and states the preview honesty boundary', () => {
@@ -62,15 +90,25 @@ test('static runner validates every scenario and states the preview honesty boun
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /14\/14 static scenario contracts passed/);
+  assert.match(result.stdout, /16\/16 static scenario contracts passed/);
+  assert.match(result.stdout, /greenfield-bootstrap: PASS/);
+  assert.match(result.stdout, /proven-path-recall: PASS/);
   assert.match(result.stdout, /not independent agent forward tests/i);
   assert.match(result.stdout, /cannot justify a 1\.0\.0 claim/i);
 });
 
 test('scenario expected gates match deterministic control-kernel routing', async () => {
   const { evaluateScenario } = await import('../evals/run-static-evals.mjs');
-  for (const scenario of await scenarios()) {
+  for (const scenario of (await scenarios()).filter((scenario) => scenario.input_state)) {
     const verdict = evaluateScenario(scenario);
+    assert.equal(verdict.ok, true, `${scenario.id}: ${verdict.errors.join('; ')}`);
+  }
+});
+
+test('behavioral evaluations validate bootstrap and proven-path registry contracts', async () => {
+  const { evaluateBehavioralScenario } = await import('../evals/run-static-evals.mjs');
+  for (const scenario of (await scenarios()).filter((scenario) => scenario.expected && !scenario.input_state)) {
+    const verdict = await evaluateBehavioralScenario(scenario);
     assert.equal(verdict.ok, true, `${scenario.id}: ${verdict.errors.join('; ')}`);
   }
 });

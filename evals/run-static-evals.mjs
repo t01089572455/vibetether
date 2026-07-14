@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const evalRoot = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(evalRoot, '..');
 
 const ROUTES = {
   'context-compaction': { preflight: 'full-reanchor', gate: 're-anchor-required' },
@@ -65,12 +66,101 @@ export function evaluateScenario(scenario) {
   return { id: scenario.id, ok: errors.length === 0, errors };
 }
 
+async function loadControlRegistry() {
+  const [capabilitySource, scenarioSource] = await Promise.all([
+    readFile(path.join(projectRoot, 'registry', 'capabilities.json'), 'utf8'),
+    readFile(path.join(projectRoot, 'registry', 'scenarios.json'), 'utf8'),
+  ]);
+  return {
+    capabilities: JSON.parse(capabilitySource).capabilities,
+    scenarios: JSON.parse(scenarioSource).scenarios,
+  };
+}
+
+function findCapability(registry, id, phase) {
+  const capability = registry.capabilities.find((candidate) => candidate.id === id);
+  if (!capability) return null;
+  return capability.phases.includes(phase) ? capability : null;
+}
+
+function requiresExactValues(actual, expected, label, errors) {
+  if (!Array.isArray(actual) || actual.length !== expected.length
+      || expected.some((value) => !actual.includes(value))) {
+    errors.push(`${label} does not match the deterministic fixture contract`);
+  }
+}
+
+export async function evaluateBehavioralScenario(scenario, registry = null) {
+  if (!registry) registry = await loadControlRegistry();
+  const errors = [];
+  const expected = scenario.expected;
+  if (!expected || typeof expected !== 'object') {
+    return { id: scenario.id, ok: false, errors: ['missing expected behavior contract'] };
+  }
+
+  if (scenario.id === 'greenfield-bootstrap') {
+    if (scenario.request !== 'Build me a project') errors.push('request is not the greenfield bootstrap fixture');
+    if (scenario.project_state !== 'empty-directory') errors.push('project_state must be empty-directory');
+    if (expected.phase !== 'DISCOVER' || expected.capability !== 'project-bootstrap') {
+      errors.push('expected discovery bootstrap route is invalid');
+    }
+    if (expected.provider !== 'grilling') errors.push('expected bootstrap provider must be grilling');
+    requiresExactValues(
+      expected.must_not,
+      ['write-product-code', 'guess-goal', 'guess-success-evidence'],
+      'bootstrap must_not',
+      errors,
+    );
+    const capability = findCapability(registry, expected.capability, expected.phase);
+    if (!capability) errors.push('project-bootstrap capability is not registered for DISCOVER');
+    const route = registry.scenarios.find((candidate) => candidate.id === 'greenfield-bootstrap');
+    if (!route || route.phase !== expected.phase || route.capability !== expected.capability
+        || !/\bgrilling\b/i.test(route.expected_path ?? '')) {
+      errors.push('greenfield bootstrap scenario does not route to grilling through project-bootstrap');
+    }
+  } else if (scenario.id === 'proven-path-recall') {
+    if (scenario.request !== 'Publish the current branch to GitHub from Windows') {
+      errors.push('request is not the proven-path recall fixture');
+    }
+    requiresExactValues(scenario.signals, ['publish', 'github', 'windows'], 'recall signals', errors);
+    if (expected.phase !== 'SHIP' || expected.capability !== 'proven-path-recall') {
+      errors.push('expected ship recall route is invalid');
+    }
+    if (expected.artifact !== 'docs/operations/github-publishing.md') {
+      errors.push('expected recall artifact is invalid');
+    }
+    if (expected.must_precede !== 'invent-new-publication-command') {
+      errors.push('recall ordering gate is invalid');
+    }
+    const capability = findCapability(registry, expected.capability, expected.phase);
+    if (!capability || !capability.invoke_when?.includes('publish')) {
+      errors.push('proven-path-recall capability is not registered for SHIP publication');
+    }
+    const route = registry.scenarios.find((candidate) => candidate.id === 'known-proven-path');
+    if (!route || route.phase !== expected.phase || route.capability !== expected.capability
+        || !['publish', 'windows'].every((signal) => route.signals?.includes(signal))
+        || !/before/i.test(route.expected_path ?? '')) {
+      errors.push('known-proven-path scenario does not preserve recall-before-reuse routing');
+    }
+    try {
+      await readFile(path.join(projectRoot, expected.artifact), 'utf8');
+    } catch {
+      errors.push('expected proven-path artifact is not present');
+    }
+  } else {
+    errors.push('unknown behavioral evaluation scenario');
+  }
+  return { id: scenario.id, ok: errors.length === 0, errors };
+}
+
 export async function runStaticEvals(directory = path.join(evalRoot, 'scenarios')) {
   const files = (await readdir(directory)).filter((file) => file.endsWith('.json')).sort();
   const verdicts = [];
   for (const file of files) {
     const scenario = JSON.parse(await readFile(path.join(directory, file), 'utf8'));
-    verdicts.push(evaluateScenario(scenario));
+    verdicts.push(scenario.input_state
+      ? evaluateScenario(scenario)
+      : await evaluateBehavioralScenario(scenario));
   }
   return verdicts;
 }
@@ -79,7 +169,8 @@ async function main() {
   const verdicts = await runStaticEvals();
   for (const verdict of verdicts) {
     const symbol = verdict.ok ? 'PASS' : 'FAIL';
-    console.log(`${symbol} ${verdict.id}${verdict.errors.length ? ` — ${verdict.errors.join('; ')}` : ''}`);
+    const detail = verdict.errors.length ? ` - ${verdict.errors.join('; ')}` : '';
+    console.log(`${verdict.id}: ${symbol}${detail}`);
   }
   const passed = verdicts.filter((verdict) => verdict.ok).length;
   console.log(`\n${passed}/${verdicts.length} static scenario contracts passed.`);

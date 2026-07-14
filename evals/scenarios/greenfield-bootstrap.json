@@ -1,0 +1,11 @@
+{
+  "id": "greenfield-bootstrap",
+  "request": "Build me a project",
+  "project_state": "empty-directory",
+  "expected": {
+    "phase": "DISCOVER",
+    "capability": "project-bootstrap",
+    "provider": "grilling",
+    "must_not": ["write-product-code", "guess-goal", "guess-success-evidence"]
+  }
+}
