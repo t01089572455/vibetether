@@ -1,28 +1,33 @@
 import { lstat, readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { isSensitiveArtifactPath } from './artifact-safety.mjs';
 import { CliError } from './errors.mjs';
 import { rejectSymlinkPath, resolveInside } from './files.mjs';
 import { detectProjectState } from './managed-project-state.mjs';
 
 const DOCUMENTATION_EXTENSIONS = new Set(['.adoc', '.markdown', '.md', '.mdx', '.rst', '.txt']);
+const OPERATIONS_IO = Object.freeze({ lstat, readdir, rejectSymlinkPath });
 
-async function hasOperationsDocumentation(root) {
+async function hasOperationsDocumentation(root, overrides = {}) {
   const operations = 'docs/operations';
+  const io = { ...OPERATIONS_IO, ...overrides };
   try {
-    await rejectSymlinkPath(root, operations);
+    await io.rejectSymlinkPath(root, operations);
     const base = resolveInside(root, operations);
-    const baseEntry = await lstat(base);
+    const baseEntry = await io.lstat(base);
     if (!baseEntry.isDirectory() || baseEntry.isSymbolicLink()) return false;
     const pending = [operations];
+    let foundDocumentation = false;
     while (pending.length > 0) {
       const relativeDirectory = pending.pop();
-      const entries = await readdir(resolveInside(root, relativeDirectory), { withFileTypes: true });
+      const entries = await io.readdir(resolveInside(root, relativeDirectory), { withFileTypes: true });
       for (const entry of entries) {
-        if (entry.isSymbolicLink()) continue;
+        if (entry.isSymbolicLink()) return false;
         const relativePath = `${relativeDirectory}/${entry.name}`;
-        await rejectSymlinkPath(root, relativePath);
-        const metadata = await lstat(resolveInside(root, relativePath));
-        if (metadata.isSymbolicLink()) continue;
+        if (isSensitiveArtifactPath(relativePath)) return false;
+        await io.rejectSymlinkPath(root, relativePath);
+        const metadata = await io.lstat(resolveInside(root, relativePath));
+        if (metadata.isSymbolicLink()) return false;
         if (metadata.isDirectory()) {
           pending.push(relativePath);
           continue;
@@ -31,12 +36,14 @@ async function hasOperationsDocumentation(root) {
           metadata.isFile()
           && metadata.size > 0
           && DOCUMENTATION_EXTENSIONS.has(path.posix.extname(entry.name.toLowerCase()))
-        ) return true;
+        ) foundDocumentation = true;
       }
     }
-    return false;
-  } catch {
-    return false;
+    return foundDocumentation;
+  } catch (error) {
+    if (error.code === 'ENOENT' || error instanceof CliError) return false;
+    const code = typeof error.code === 'string' ? error.code : 'UNKNOWN';
+    throw new CliError(`Cannot inspect docs/operations safely: ${code}.`, 3);
   }
 }
 
@@ -50,7 +57,7 @@ async function kind(root, relativePath) {
   }
 }
 
-export async function scanProject(root, enabledAdapters, profile) {
+export async function scanProject(root, enabledAdapters, profile, dependencies = {}) {
   const topLevelEntries = await readdir(root, { withFileTypes: true });
   const projectState = await detectProjectState(root, topLevelEntries);
   const discovery = {};
@@ -101,7 +108,7 @@ export async function scanProject(root, enabledAdapters, profile) {
     ['docs/release-checklist.md', 'docs/release.md', 'RELEASE.md'],
     'release checklist',
   );
-  const operations = await hasOperationsDocumentation(root) ? 'docs/operations/' : false;
+  const operations = await hasOperationsDocumentation(root, dependencies.operationsIo) ? 'docs/operations/' : false;
   if (operations) {
     discovery[operations] = {
       role: 'operational proven paths',

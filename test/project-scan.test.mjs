@@ -143,6 +143,66 @@ test('project scan omits a linked operations directory even when the target cont
   assert.equal(manifest.discovery['docs/operations/'], undefined);
 });
 
+test('project scan omits the whole operations route when a safe document has a nested linked sibling', async (context) => {
+  const root = await project('mixed-linked-operations');
+  const outside = await project('mixed-linked-operations-outside');
+  await mkdir(path.join(root, 'docs', 'operations'), { recursive: true });
+  await writeFile(path.join(root, 'docs', 'operations', 'safe.md'), '# Safe local runbook\n', 'utf8');
+  await writeFile(path.join(outside, 'outside.md'), '# Outside\n', 'utf8');
+  const skipReason = await linkDirectory(outside, path.join(root, 'docs', 'operations', 'linked'));
+  if (skipReason) {
+    context.skip(skipReason);
+    return;
+  }
+
+  const manifest = await scanProject(root, ['codex'], 'core');
+
+  assert.deepEqual(manifest.sources.conditional.operations, []);
+  assert.equal(manifest.discovery['docs/operations/'], undefined);
+});
+
+test('project scan omits the whole operations route when credential material has a safe document sibling', async () => {
+  const root = await project('sensitive-operations');
+  await mkdir(path.join(root, 'docs', 'operations'), { recursive: true });
+  await writeFile(path.join(root, 'docs', 'operations', 'safe.md'), '# Safe local runbook\n', 'utf8');
+  await writeFile(path.join(root, 'docs', 'operations', '.npmrc'), 'fixture\n', 'utf8');
+
+  const manifest = await scanProject(root, ['codex'], 'core');
+
+  assert.deepEqual(manifest.sources.conditional.operations, []);
+  assert.equal(manifest.discovery['docs/operations/'], undefined);
+});
+
+test('project scan preserves discovery of a nested regular documentation file', async () => {
+  const root = await project('nested-operations');
+  await mkdir(path.join(root, 'docs', 'operations', 'github'), { recursive: true });
+  await writeFile(path.join(root, 'docs', 'operations', 'github', 'publishing.md'), '# Publishing\n', 'utf8');
+
+  const manifest = await scanProject(root, ['codex'], 'core');
+
+  assert.deepEqual(manifest.sources.conditional.operations, ['docs/operations/']);
+});
+
+test('project scan surfaces unexpected operations filesystem errors without leaking their message', async () => {
+  const root = await project('operations-io-error');
+  await mkdir(path.join(root, 'docs', 'operations'), { recursive: true });
+  const denied = Object.assign(new Error('sensitive operating-system detail'), { code: 'EACCES' });
+
+  await assert.rejects(
+    scanProject(root, ['codex'], 'core', {
+      operationsIo: {
+        readdir: async () => { throw denied; },
+      },
+    }),
+    (error) => {
+      assert.equal(error.exitCode, 3);
+      assert.match(error.message, /cannot inspect docs\/operations safely.*EACCES/i);
+      assert.doesNotMatch(error.message, /sensitive operating-system detail/i);
+      return true;
+    },
+  );
+});
+
 test('project scan never invents context, ADR, or operations sources for an empty project', async () => {
   const root = await project('no-invented-truth');
 

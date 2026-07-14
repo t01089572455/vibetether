@@ -134,42 +134,22 @@ test('schema rejects escaping, missing, and secret-bearing artifact metadata', a
   );
 });
 
-test('validation rejects credential path segments and modern token values without blocking benign authentication docs', async () => {
+test('path-aware safety allows runbook titles and rejects credential artifacts across validate, serialize, and match', async () => {
   const root = await fixture();
-  await writeArtifact(root, 'docs/operations/authentication.md', '# Authentication workflow\n');
-  const safe = index([entry({
-    id: 'authentication-workflow',
-    use_when: ['authentication'],
-    systems: [],
-    artifacts: ['docs/operations/authentication.md'],
-  })]);
-  assert.deepEqual(await validateExperienceIndex(safe, root), safe);
-
-  const sensitivePaths = [
-    '.npmrc',
-    '.netrc',
-    '.env',
-    '.env.local',
-    '.envrc',
-    'config/secrets.yaml',
-    'config/secrets-production/runbook.md',
-    'config/secretsStore.yaml',
-    'config/tokens.json',
-    'config/tokensBackup.json',
-    'config/credentials-prod.json',
-    'config/credentialsVault.json',
-    'keys/id_ed25519',
-    'certs/client.key',
-    'certs/client.pem',
-    'certs/client.p12',
-    'certs/client.pfx',
-    'certs/client.crt',
+  const allowedPaths = [
+    'docs/operations/credentials-rotation.md',
+    'docs/operations/secrets-management.md',
+    'docs/operations/tokens-in-parser.md',
+    'docs/operations/authentication.md',
   ];
-  for (const artifact of sensitivePaths) {
-    await writeArtifact(root, artifact);
-    await assert.rejects(
-      validateExperienceIndex(index([entry({ artifacts: [artifact] })]), root),
-      /secret-bearing|credential/i,
+  for (const [position, artifact] of allowedPaths.entries()) {
+    await writeArtifact(root, artifact, `# Allowed runbook ${position}\n`);
+    const allowed = index([entry({ id: `allowed-runbook-${position}`, artifacts: [artifact] })]);
+    assert.deepEqual(await validateExperienceIndex(allowed, root), allowed, artifact);
+    assert.doesNotThrow(() => serializeExperienceIndex(allowed), artifact);
+    assert.deepEqual(
+      (await matchExperience(allowed, { root, signals: ['publish'] })).map(({ id }) => id),
+      [`allowed-runbook-${position}`],
       artifact,
     );
   }
@@ -178,14 +158,45 @@ test('validation rejects credential path segments and modern token values withou
     ['github', 'pat', 'A'.repeat(30)].join('_'),
     ['xoxb', '123456789012', 'a'.repeat(24)].join('-'),
     `glpat-${'b'.repeat(24)}`,
+    `npm_${'c'.repeat(36)}`,
   ];
-  for (const token of tokenValues) {
-    const artifact = `docs/operations/${token}.md`;
-    await writeArtifact(root, artifact);
+  const deniedPaths = [
+    '.npmrc',
+    '.netrc',
+    '.pypirc',
+    '.git-credentials',
+    '.env',
+    '.env.local',
+    '.ssh/id_ed25519',
+    '.docker/config.json',
+    'config/secrets/runbook.md',
+    'config/tokens/runbook.md',
+    'config/credentials/runbook.md',
+    'docs/operations/secret.md',
+    'docs/operations/secrets.md',
+    'docs/operations/token.md',
+    'docs/operations/tokens.md',
+    'docs/operations/credentials.md',
+    'docs/operations/private-key.md',
+    'docs/operations/service-account.json',
+    'keys/id_ed25519',
+    'certs/client.key',
+    'certs/client.pem',
+    'certs/client.p12',
+    'certs/client.pfx',
+    'certs/client.crt',
+    'docs/operations/runbook:ads.md',
+    ...tokenValues.map((token) => `docs/operations/${token}.md`),
+  ];
+  for (const [position, artifact] of deniedPaths.entries()) {
+    const denied = index([entry({ id: `denied-artifact-${position}`, artifacts: [artifact] })]);
     await assert.rejects(
-      validateExperienceIndex(index([entry({ artifacts: [artifact] })]), root),
-      /secret-bearing/i,
+      validateExperienceIndex(denied, root),
+      /secret-bearing|credential|unsafe|colon|relative/i,
+      artifact,
     );
+    assert.throws(() => serializeExperienceIndex(denied), /secret-bearing|credential|unsafe|colon|relative/i, artifact);
+    assert.deepEqual(await matchExperience(denied, { root, signals: ['publish'] }), [], artifact);
   }
 });
 
