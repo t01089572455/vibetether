@@ -310,14 +310,16 @@ function validateMetadataAnswers(value) {
 
 function parseMetadata(source) {
   const normalized = String(source ?? '').replaceAll('\r\n', '\n');
-  const prefixMatches = normalized.match(/<!-- vibetether:intent:/g) ?? [];
-  if (prefixMatches.length === 0) return null;
-  const markerMatches = [...normalized.matchAll(/<!-- vibetether:intent:v1 ([A-Za-z0-9_-]+) -->/g)];
-  if (prefixMatches.length !== 1 || markerMatches.length !== 1) {
+  const header = normalized.match(
+    /^# VibeTether Intent Contract\n\nStatus: (?:confirmed|unresolved)\n([^\n]*)\n\n/,
+  );
+  if (!header || !header[1].startsWith('<!-- vibetether:intent:')) return null;
+  const marker = header[1].match(/^<!-- vibetether:intent:v1 ([A-Za-z0-9_-]+) -->$/);
+  if (!marker) {
     invalidMetadata('expected exactly one well-formed v1 marker');
   }
 
-  const payload = markerMatches[0][1];
+  const payload = marker[1];
   let decoded;
   try {
     const bytes = Buffer.from(payload, 'base64url');

@@ -250,6 +250,34 @@ test('intent metadata round-trips canonical answers despite hostile Markdown and
   assert.match(parsed.goal, /^Keep the true goal/);
 });
 
+test('marker-like intent text in answers remains ordinary content with or without metadata', () => {
+  const input = {
+    goal: 'Show the literal prefix <!-- vibetether:intent: in project guidance.',
+    successEvidence: 'Fresh regression tests pass.',
+    scopeBoundaries: ['Do not reinterpret answer content as control metadata.'],
+    constraints: ['Keep metadata recognition isolated to the canonical header.'],
+    visualDirection: 'Preserve <!-- vibetether:intent:v1 ZGVjb3k --> as ordinary user text.',
+  };
+  const answers = buildBootstrapModel({ discovery: discovery(), input }).answers;
+  const expected = {
+    goal: input.goal,
+    successEvidence: input.successEvidence,
+    scopeBoundaries: input.scopeBoundaries,
+    constraints: [input.constraints[0], ...SAFE_CONSTRAINTS],
+    visualDirection: input.visualDirection,
+  };
+  const rendered = renderIntentContract(answers);
+
+  assert.deepEqual(parseIntentContract(rendered), expected);
+  assert.equal(renderIntentContract(parseIntentContract(rendered)), rendered);
+
+  const legacy = rendered.replace(
+    /Status: confirmed\n<!-- vibetether:intent:v1 [A-Za-z0-9_-]+ -->\n\n/,
+    'Status: confirmed\n\n',
+  );
+  assert.deepEqual(parseIntentContract(legacy), expected);
+});
+
 test('malformed VibeTether intent metadata fails closed instead of parsing headings', () => {
   const rendered = renderIntentContract({
     goal: 'True goal',
@@ -262,7 +290,7 @@ test('malformed VibeTether intent metadata fails closed instead of parsing headi
 
   assert.throws(
     () => parseIntentContract(malformed),
-    /invalid VibeTether intent metadata/i,
+    /Invalid VibeTether intent metadata: expected exactly one well-formed v1 marker/,
   );
 });
 
