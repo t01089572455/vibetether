@@ -68,7 +68,7 @@ function diffLines(prefix, content) {
     .join('\n');
 }
 
-function formatDryRun(root, textPlans, skillPlans) {
+function formatDryRun(root, textPlans, skillPlans, action = 'initialize') {
   const sections = [];
   for (const plan of textPlans) {
     if (plan.original === plan.content) continue;
@@ -119,7 +119,7 @@ function formatDryRun(root, textPlans, skillPlans) {
     }
   }
   const details = sections.length > 0 ? `\n${sections.join('\n\n')}\n` : '\nNo changes required.\n';
-  return `DRY RUN - VibeTether would initialize ${root}:${details}`;
+  return `DRY RUN - VibeTether would ${action} ${root}:${details}`;
 }
 
 export async function applyInitialization(root, textPlans, skillPlans, installSkillOperation = installSkill) {
@@ -275,6 +275,9 @@ export async function initialize(options, dependencies = {}) {
 
   const manifestTarget = resolveInside(root, '.vibetether/project.yaml');
   const manifestOriginal = await readTextIfPresent(manifestTarget);
+  if (options.bootstrapOnly && manifestOriginal === null) {
+    throw new CliError('VibeTether bootstrap requires an initialized project. Run `vibetether init` first.');
+  }
   const scanned = await scanProject(root, adapters, options.profile);
   let manifest;
   if (manifestOriginal === null) {
@@ -319,7 +322,14 @@ export async function initialize(options, dependencies = {}) {
 
   const intentTarget = resolveInside(root, '.vibetether/intent.md');
   const intentOriginal = await readTextIfPresent(intentTarget);
-  if (intentOriginal === null) {
+  if (options.intentContent !== undefined) {
+    textPlans.push({
+      relativePath: '.vibetether/intent.md',
+      target: intentTarget,
+      original: intentOriginal,
+      content: options.intentContent,
+    });
+  } else if (intentOriginal === null) {
     textPlans.push({
       relativePath: '.vibetether/intent.md',
       target: intentTarget,
@@ -397,6 +407,36 @@ export async function initialize(options, dependencies = {}) {
     } catch (error) {
       throw new CliError(`Provider lock conflict in .vibetether/providers.lock.yaml: ${error.message}`, 3);
     }
+  }
+
+  if (options.bootstrapOnly) {
+    if (existingLock === null) {
+      throw new CliError('VibeTether bootstrap requires an initialized project with a valid provider lock. Run `vibetether init` first.');
+    }
+    if (existingLock.profile !== options.profile) {
+      throw new CliError(`Provider lock profile ${existingLock.profile ?? '<missing>'} does not match requested bootstrap profile ${options.profile}. Run \`vibetether init\` to change provider configuration.`, 3);
+    }
+    const lockedBundles = [...(existingLock.bundles ?? [])].sort();
+    if (JSON.stringify(lockedBundles) !== JSON.stringify(manifest.bundles)) {
+      throw new CliError('Provider lock bundles do not match the bootstrap manifest plan. Run `vibetether init` to change provider configuration.', 3);
+    }
+    const board = createCapabilityBoard(registry, options.profile, existingLock, adapters);
+    const boardTarget = resolveInside(root, '.vibetether/capabilities.yaml');
+    textPlans.push({
+      relativePath: '.vibetether/capabilities.yaml',
+      target: boardTarget,
+      original: await readTextIfPresent(boardTarget),
+      content: `${JSON.stringify(board, null, 2)}\n`,
+    });
+    if (options.dryRun) return formatDryRun(root, textPlans, [], 'bootstrap');
+    if (!options.yes) {
+      throw new CliError('Refusing to change project truth without confirmation. Use --dry-run or --yes.');
+    }
+    const cleanupFailures = await applyInitialization(root, textPlans, []);
+    if (cleanupFailures.length > 0) {
+      throw new CliError(`Bootstrap completed with unexpected cleanup failures (${cleanupFailures.join('; ')}).`, 3);
+    }
+    return `VibeTether bootstrapped project truth in ${root} without changing provider installations.\n`;
   }
 
   if (options.dryRun) {
