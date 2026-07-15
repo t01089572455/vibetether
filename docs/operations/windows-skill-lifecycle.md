@@ -13,6 +13,12 @@ pending copy before changing the installed target. A transaction manifest names
 every exact source, destination, expected fingerprint, and state. Recovery never
 chooses an arbitrary directory by timestamp.
 
+A first install uses activation-last publication. VibeTether writes every other
+Skill resource into its final directory before it writes `SKILL.md` last as the
+activation marker. Codex or Claude therefore cannot discover a temporary Skill
+tree and lock it before a directory rename; the discoverable Skill appears only
+after its complete resources are in place.
+
 ## Normal update
 
 Preview and then apply the same initialization profile already used by the project:

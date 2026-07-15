@@ -152,29 +152,46 @@ export async function assertSkillInstallable(target, relativePath) {
   return plan.needsInstall;
 }
 
-export async function installDirectory(source, target) {
-  await mkdir(path.dirname(target), { recursive: true });
-  const temporary = path.join(path.dirname(target), `.vibe-tether.${randomUUID()}.tmp`);
+export async function installDirectory(source, target, operations = {}) {
+  const run = { cp, mkdir, rename, rm, ...operations };
+  const skillsDirectory = path.dirname(target);
+  await run.mkdir(skillsDirectory, { recursive: true });
   const previous = `${target}.${randomUUID()}.previous`;
   let movedPrevious = false;
   try {
-    await cp(source, temporary, { recursive: true, errorOnExist: true, force: false });
     try {
-      await rename(target, previous);
+      await run.rename(target, previous);
       movedPrevious = true;
     } catch (error) {
       if (error.code !== 'ENOENT') throw error;
     }
-    await rename(temporary, target);
+    const activationSource = path.resolve(source, 'SKILL.md');
+    try {
+      await run.cp(source, target, {
+        recursive: true,
+        errorOnExist: true,
+        force: false,
+        filter(candidate) {
+          return path.resolve(candidate) !== activationSource;
+        },
+      });
+      await run.cp(activationSource, path.join(target, 'SKILL.md'), {
+        errorOnExist: true,
+        force: false,
+      });
+    } catch (error) {
+      await run.rm(target, { recursive: true, force: true }).catch(() => {});
+      throw error;
+    }
     if (movedPrevious) {
-      await rm(previous, { recursive: true, force: true });
+      await run.rm(previous, { recursive: true, force: true });
       movedPrevious = false;
     }
   } catch (error) {
     if (movedPrevious) {
-      await rm(target, { recursive: true, force: true }).catch(() => {});
+      await run.rm(target, { recursive: true, force: true }).catch(() => {});
       try {
-        await rename(previous, target);
+        await run.rename(previous, target);
         movedPrevious = false;
       } catch (restoreError) {
         throw new CliError(
@@ -184,8 +201,6 @@ export async function installDirectory(source, target) {
       }
     }
     throw error;
-  } finally {
-    await rm(temporary, { recursive: true, force: true }).catch(() => {});
   }
 }
 

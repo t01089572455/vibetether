@@ -150,6 +150,7 @@ test('Windows recovery guide describes deferred replacement and deterministic re
   assert.match(runbook, /peer harness/i);
   assert.match(runbook, /cannot replace.*active Skill|host.*active Skill.*replace/is);
   assert.match(runbook, /transaction manifest/i);
+  assert.match(runbook, /SKILL\.md.*(?:last|activation)|activation marker.*last/is);
   assert.match(runbook, /unknown|customized/i);
   assert.doesNotMatch(runbook, /Remove-Item.*-Recurse|rm\s+-rf/i);
 });
@@ -161,6 +162,7 @@ test('troubleshooting distinguishes package acquisition, provider TLS, and host 
   assert.match(guide, /TLS.*retry|retry.*TLS/is);
   assert.match(guide, /verified.*catalog.*without.*network|cached.*catalog/is);
   assert.match(guide, /EPERM|EACCES/);
+  assert.match(guide, /first install.*SKILL\.md.*last|SKILL\.md.*last.*first install/is);
   assert.match(guide, /vibetether doctor/);
 });
 

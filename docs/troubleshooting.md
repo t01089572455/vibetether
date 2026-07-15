@@ -46,6 +46,12 @@ npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/r
 
 ## Windows reports EPERM or EACCES
 
+On a first install, the current release copies complete resources into the final
+directory and writes `SKILL.md` last. This activation-last path avoids renaming a
+temporary discoverable Skill after Codex or Claude has already opened it. An
+error that names `.vibe-tether.<id>.tmp` inside an agent directory indicates an
+older installer path; rerun with the current Codeload release.
+
 Codex, Claude Code, an editor, antivirus, or another process may hold the active
 Skill without delete sharing. A host cannot replace the Skill it has locked.
 VibeTether records a pending verified replacement instead of deleting blindly.

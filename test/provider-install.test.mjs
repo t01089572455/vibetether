@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -51,13 +51,35 @@ async function convertTreeToLf(root) {
   }
 }
 
-test('generic installer copies the complete provider directory atomically', async () => {
+test('generic installer publishes the complete provider directory', async () => {
   const value = await fixture();
   const plan = await inspectDirectoryInstall(value.source, value.target, '.agents/skills/demo');
   assert.deepEqual(plan, { needsInstall: true, ownership: 'vibetether' });
 
   await installDirectory(value.source, value.target);
   assert.equal(await readFile(path.join(value.target, 'reference.md'), 'utf8'), '# Complete dependency\n');
+  assert.equal(await skillFingerprint(value.target), await skillFingerprint(value.source));
+});
+
+test('first install writes the Skill activation marker last without a canonical rename', async () => {
+  const value = await fixture();
+  const copies = [];
+  const canonicalRenames = [];
+
+  await installDirectory(value.source, value.target, {
+    async cp(from, to, options) {
+      copies.push({ from, to });
+      return cp(from, to, options);
+    },
+    async rename(from, to) {
+      if (to === value.target) canonicalRenames.push({ from, to });
+      return rename(from, to);
+    },
+  });
+
+  assert.deepEqual(canonicalRenames, []);
+  assert.equal(path.basename(copies.at(-1).from), 'SKILL.md');
+  assert.equal(copies.at(-1).to, path.join(value.target, 'SKILL.md'));
   assert.equal(await skillFingerprint(value.target), await skillFingerprint(value.source));
 });
 
