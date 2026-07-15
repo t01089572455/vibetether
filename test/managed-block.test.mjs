@@ -52,3 +52,11 @@ test('managed instructions re-enter the stateful router at every long-task bound
   assert.match(body, /routes\.local\.yaml/);
   assert.match(body, /cannot weaken.*authority.*readiness.*evidence.*high-risk.*destructive.*permission.*release/s);
 });
+
+test('managed instructions keep direct and delegated work inside one smallest verifiable slice', () => {
+  for (const adapter of Object.values(ADAPTERS)) {
+    assert.match(adapter.managedBody, /smallest verifiable outcome/i);
+    assert.match(adapter.managedBody, /including delegated work/i);
+    assert.doesNotMatch(adapter.managedBody, /maximum subagents|subagent cap|delegation budget/i);
+  }
+});

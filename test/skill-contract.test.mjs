@@ -71,6 +71,10 @@ test('the public Skill exposes the VibeTether drift-control contract', async () 
   assert.match(skill, /captured[\s\S]*already-encoded[\s\S]*not-reusable/i);
   assert.match(skill, /vibetether doctor[\s\S]*pending/i);
   assert.match(skill, /DISCOVER[\s\S]*ALIGN[\s\S]*DESIGN[\s\S]*PLAN[\s\S]*EXECUTE_ONE/);
+  assert.match(skill, /smallest verifiable outcome/i);
+  assert.match(skill, /including delegated work/i);
+  assert.match(skill, /meaningfully advances the approved user goal/i);
+  assert.doesNotMatch(skill, /maximum subagents|subagent cap|delegation budget/i);
   assert.match(skill, /do not expose.*chain-of-thought|never expose.*chain-of-thought/i);
   assert.doesNotMatch(skill, /[\u3400-\u9fff]/);
   assert.doesNotMatch(skill, /(?:^|\s)[A-Za-z]:[\\/]/m);

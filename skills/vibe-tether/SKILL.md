@@ -76,6 +76,7 @@ Classify each dimension as `known`, `discoverable`, `user-decision`, `conflicted
 - unresolved document or authority conflicts;
 - product, workflow, architecture, data, and visual decisions;
 - the current bounded slice and its dependencies;
+- the smallest verifiable outcome that meaningfully advances the approved user goal, including the boundary inherited by delegated work;
 - verification path;
 - authorization, reversibility, and risk.
 
@@ -89,6 +90,8 @@ Use exactly one readiness verdict:
 - `BLOCKED_BY_CONFLICT_OR_AUTHORIZATION`: authority, permission, or risk prevents safe progress.
 
 Until `READY_FOR_IMPLEMENT_ONE`, allow read-only discovery and reversible direction-neutral preparation only. Do not write product behavior, propagate UI, choose architecture, or broaden scope. Ordinary provider selection remains advisory; the readiness assessment itself is automatic.
+
+Before implementation or the next slice, define the smallest verifiable outcome that meaningfully advances the approved user goal. Keep the current slice, including delegated work, inside that boundary. A clear low-risk request may satisfy this in one compact line. A larger plan may retain future slices, but only the current smallest verifiable slice enters `EXECUTE_ONE`.
 
 ## Lifecycle
 
@@ -109,7 +112,7 @@ Do not advance because a document, test, or implementation exists. Advance only 
 | `ALIGN` | Sources exist or may conflict | Applicable authority and conflicts resolved |
 | `DESIGN` | Direction is known; solution is not | User approves product, architecture, or UI direction |
 | `PLAN` | Design is approved | Small, testable slices with evidence and stop conditions |
-| `EXECUTE_ONE` | One slice is ready | Only that slice changed; fresh local evidence exists |
+| `EXECUTE_ONE` | The smallest verifiable slice is ready | Only that slice changed; its stated fresh evidence exists |
 | `VERIFY` | Implementation claims readiness | Required functional, visual, safety, and scope evidence exists |
 | `REVIEW` | Evidence is complete | Review uses request, sources, diff, and raw evidence |
 | `SHIP` | All applicable gates pass | Explicit release authorization and reproducible release evidence |
