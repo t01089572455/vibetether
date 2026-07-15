@@ -1,4 +1,4 @@
-import { lstat, readFile } from 'node:fs/promises';
+import { lstat, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import YAML from 'yaml';
 import { CliError } from './errors.mjs';
@@ -226,6 +226,30 @@ export async function discoverProjectSkill(root, skill, harnesses) {
     if (entry) installations[harness] = relativePath;
   }
   return installations;
+}
+
+export async function listInstalledProjectSkills(root, harnesses) {
+  const candidates = new Set();
+  for (const harness of harnesses) {
+    const skillRoot = HARNESS_SKILL_ROOTS[harness];
+    if (!skillRoot) continue;
+    let entries;
+    try {
+      entries = await readdir(path.resolve(root, skillRoot), { withFileTypes: true });
+    } catch (error) {
+      if (error.code === 'ENOENT') continue;
+      throw new CliError(`Project Skill root for ${harness} cannot be inspected safely.`, 3);
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory() && SAFE_NAME.test(entry.name)) candidates.add(entry.name);
+    }
+  }
+  const installed = [];
+  for (const skill of [...candidates].sort()) {
+    const installations = await discoverProjectSkill(root, skill, harnesses);
+    if (Object.keys(installations).length > 0) installed.push({ skill, installations });
+  }
+  return installed;
 }
 
 function union(left = [], right = []) {

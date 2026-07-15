@@ -6,6 +6,7 @@ import { CliError } from './errors.mjs';
 import { inspectProject } from './doctor.mjs';
 import { uninstall } from './uninstall.mjs';
 import { showCapabilities } from './capabilities.mjs';
+import { runCustomize } from './customize.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -16,6 +17,7 @@ Usage:
   vibetether bootstrap [options]
   vibetether doctor [options]
   vibetether capabilities [options]
+  vibetether customize [options]
   vibetether uninstall [options]
   vibetether --help
   vibetether --version
@@ -45,6 +47,10 @@ Capabilities options:
   --signal SIGNAL                   Add a routing signal (repeatable)
   --agent codex|claude              Check availability for one harness
   --json                            Print the dashboard or resolution as JSON
+
+Customize options:
+  --project PATH                    Project directory (default: current directory)
+  --dry-run                         Preview the project route without writing
 
 Uninstall options:
   --project PATH                    Project directory (default: current directory)
@@ -174,6 +180,18 @@ function parseCapabilities(args) {
   return options;
 }
 
+function parseCustomize(args) {
+  const options = { project: process.cwd(), dryRun: false };
+  for (let index = 0; index < args.length; index += 1) {
+    const flag = args[index];
+    if (flag === '--project') options.project = valueAfter(args, index++, flag);
+    else if (flag === '--dry-run') options.dryRun = true;
+    else if (flag === '--help' || flag === '-h') return { help: true };
+    else throw new CliError(`Unknown option for customize: ${flag}`);
+  }
+  return options;
+}
+
 async function version() {
   const data = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
   return `${data.version}\n`;
@@ -201,6 +219,11 @@ export async function main(args = process.argv.slice(2), runtime = {}) {
     const options = parseCapabilities(args.slice(1));
     if (options.help) return HELP;
     return showCapabilities(options);
+  }
+  if (args[0] === 'customize') {
+    const options = parseCustomize(args.slice(1));
+    if (options.help) return HELP;
+    return runCustomize(options, runtime);
   }
   if (args[0] === 'uninstall') {
     const options = parseSimple(args.slice(1), 'uninstall');

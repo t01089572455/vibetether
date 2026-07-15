@@ -62,6 +62,11 @@ import {
   skillFingerprint,
   sourceSkill,
 } from './skill-install.mjs';
+import {
+  parseProjectRoutes,
+  PROJECT_ROUTES_PATH,
+  validateProjectRoutes,
+} from './project-routes.mjs';
 
 function instructionBody(adapter) {
   return ADAPTERS[adapter].managedBody;
@@ -286,6 +291,7 @@ export async function initialize(options, dependencies = {}) {
     '.vibetether/intent.md',
     '.vibetether/state/current.yaml',
     EXPERIENCE_INDEX_PATH,
+    PROJECT_ROUTES_PATH,
   ]) {
     await rejectSymlinkPath(root, relativePath);
   }
@@ -331,6 +337,32 @@ export async function initialize(options, dependencies = {}) {
       `Manifest conflict in .vibetether/project.yaml: experience_index must route to ${EXPERIENCE_INDEX_PATH}.`,
       3,
     );
+  }
+  const projectRoutesTarget = resolveInside(root, PROJECT_ROUTES_PATH);
+  const projectRoutesOriginal = await readTextIfPresent(projectRoutesTarget);
+  if (persistedManifest?.project_routes !== undefined
+      && persistedManifest.project_routes !== PROJECT_ROUTES_PATH) {
+    throw new CliError(
+      `Manifest conflict in .vibetether/project.yaml: project_routes must use ${PROJECT_ROUTES_PATH}.`,
+      3,
+    );
+  }
+  if (persistedManifest?.project_routes === PROJECT_ROUTES_PATH && projectRoutesOriginal === null) {
+    throw new CliError(
+      `Manifest conflict in .vibetether/project.yaml: declared project routes are missing at ${PROJECT_ROUTES_PATH}.`,
+      3,
+    );
+  }
+  let projectRoutesDocument = null;
+  if (projectRoutesOriginal !== null) {
+    try {
+      projectRoutesDocument = parseProjectRoutes(projectRoutesOriginal);
+      manifest.project_routes = PROJECT_ROUTES_PATH;
+    } catch (error) {
+      throw new CliError(`Project routes conflict in ${PROJECT_ROUTES_PATH}: ${error.message}`, 3);
+    }
+  } else {
+    delete manifest.project_routes;
   }
   const selectedBundles = new Set(options.bundles ?? []);
   if (!options.bootstrapOnly && options.autoBundles !== false && options.profile !== 'core') {
@@ -502,6 +534,7 @@ export async function initialize(options, dependencies = {}) {
 
   if (options.bootstrapOnly) {
     const board = createCapabilityBoard(registry, options.profile, existingLock, adapters);
+    if (projectRoutesDocument) validateProjectRoutes(projectRoutesDocument, board);
     const boardTarget = resolveInside(root, '.vibetether/capabilities.yaml');
     textPlans.push({
       relativePath: '.vibetether/capabilities.yaml',
@@ -640,6 +673,7 @@ export async function initialize(options, dependencies = {}) {
       existingLock,
     });
     const board = createCapabilityBoard(registry, options.profile, lock, adapters);
+    if (projectRoutesDocument) validateProjectRoutes(projectRoutesDocument, board);
     const boardTarget = resolveInside(root, '.vibetether/capabilities.yaml');
     textPlans.push({
       relativePath: '.vibetether/capabilities.yaml',
@@ -774,6 +808,7 @@ export async function initialize(options, dependencies = {}) {
       existingLock,
     });
     const board = createCapabilityBoard(registry, options.profile, lock, adapters);
+    if (projectRoutesDocument) validateProjectRoutes(projectRoutesDocument, board);
     const boardTarget = resolveInside(root, '.vibetether/capabilities.yaml');
     textPlans.push({
       relativePath: '.vibetether/capabilities.yaml',
