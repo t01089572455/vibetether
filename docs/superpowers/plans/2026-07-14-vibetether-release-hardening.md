@@ -568,7 +568,7 @@ function selectedChoice(question, answer) {
 ```text
 1) Apply these changes
 2) Cancel (Default)
-> 
+>
 ```
 
 and accepts `1`, `y`, or `yes` as apply; all blank, `2`, `n`, and `no` answers cancel; invalid input re-prompts.

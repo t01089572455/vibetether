@@ -18,7 +18,7 @@ function resolveSourcePath(root, relativePath, label) {
   return target;
 }
 
-const TRANSIENT_FETCH_FAILURE = /(?:TLS connect error|unexpected eof|SSL_read|connection reset|recv failure|failed to connect|timed out|could not resolve host|remote end hung up unexpectedly|early EOF|requested URL returned error:\s*(?:502|503|504))/i;
+const TRANSIENT_FETCH_FAILURE = /(?:TLS connect error|unexpected eof|SSL_read|connection (?:was )?reset|recv failure|failed to connect|timed out|could not resolve host|remote end hung up unexpectedly|early EOF|requested URL returned error:\s*(?:502|503|504))/i;
 const SCHANNEL_FAILURE = /schannel:[\s\S]*(?:AcquireCredentialsHandle|SEC_E_NO_CREDENTIALS|failed to receive handshake|SSL\/TLS connection failed)/i;
 const RETRY_DELAYS = [200, 600];
 

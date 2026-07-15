@@ -318,6 +318,27 @@ test('bounds transient provider fetch retries and explains that project files we
   assert.equal(calls, 3);
 });
 
+test('retries a common OpenSSL connection-reset transport failure', () => {
+  let calls = 0;
+  const execute = () => {
+    calls += 1;
+    if (calls === 1) {
+      return {
+        status: 128,
+        stdout: '',
+        stderr: 'fatal: OpenSSL SSL_connect: Connection was reset in connection to github.com:443',
+      };
+    }
+    return { status: 0, stdout: 'ok\n', stderr: '' };
+  };
+
+  assert.equal(
+    runProviderGit('fixture', 'disabled-hooks', ['fetch', 'origin', 'abc'], execute, { sleep: () => {} }),
+    'ok',
+  );
+  assert.equal(calls, 2);
+});
+
 test('does not retry non-transient or non-fetch Git failures', () => {
   for (const [args, detail] of [
     [['fetch', 'origin', 'abc'], 'fatal: repository not found'],
