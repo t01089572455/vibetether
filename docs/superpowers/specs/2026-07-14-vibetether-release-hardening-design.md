@@ -1,7 +1,7 @@
 # VibeTether 0.2.3 Release Compatibility and Capability Hardening Design
 
-Status: approved direction, pending implementation plan  
-Date: 2026-07-14  
+Status: approved for implementation
+Date: 2026-07-14
 Scope: public VibeTether repository and its project-local Codex/Claude installation lifecycle
 
 ## 1. Goal
@@ -137,7 +137,38 @@ This release will not add a speculative classifier, mandatory hook system, secon
 
 Any capability issue discovered during implementation may be fixed only when it has a failing contract test, does not change approved product direction, and stays within the release budget. Broader host-hook or classifier work requires a separate approved design.
 
-## 8. Documentation
+## 8. Beginner-Guided Initialization Choices
+
+Interactive initialization should minimize unexplained free-text questions without fabricating project direction.
+
+- Agent harness and control profile use numbered choices with labels, short consequences, and one clearly marked recommendation.
+- Optional scope and visual-direction questions offer safe recommended, custom-answer, and no-additional-constraint choices. Selecting custom opens one focused text prompt.
+- Goal and success evidence remain required user-owned text because generic fixed answers would create false direction. Each prompt explains what is needed, shows one concise example, and repeats on a blank answer instead of failing later.
+- Invalid numbered choices are explained and re-prompted without writing project files.
+- Final confirmation presents explicit Apply and Cancel choices; cancellation remains the safe default.
+- Non-interactive flags and `--yes` behavior remain stable. Automation must not fabricate goal or success evidence.
+
+The choice adapter is a reusable terminal concern. Bootstrap question definitions declare labels, descriptions, examples, and custom follow-up prompts; they do not embed terminal formatting.
+
+## 9. Provider Network Reliability
+
+The reported `TLS connect error ... unexpected eof while reading` exposes two independent reliability defects:
+
+1. provider Git fetch retries only the Windows Schannel-to-OpenSSL transition, so a transient failure after OpenSSL is active fails immediately;
+2. normal repeated initialization stages every selected provider source even when the lock, catalog copies, exposed copies, fingerprints, commit pins, and license evidence already prove that no provider content changed.
+
+The repaired provider path must follow these rules:
+
+- A fully verified local catalog is an exact content-addressed cache. Repeated initialization and a core VibeTether upgrade with an unchanged provider plan reuse it without provider-network access.
+- Cache reuse requires the desired registry source, commit, skill fingerprint, canonical catalog path, provider lock, and license evidence to agree. Missing, changed, malformed, or unverifiable evidence falls back to the pinned upstream fetch or stops on a protected local modification.
+- A fetch retries only errors classified as transient transport failures. The retry count is finite, later attempts use short bounded backoff, and a Schannel failure switches subsequent attempts to OpenSSL.
+- Authentication errors, repository-not-found errors, invalid commits, fingerprint mismatches, license mismatches, and Git setup errors are not disguised as transient transport failures and are not repeatedly retried.
+- Exhausted retries produce one actionable error that distinguishes provider transport failure from VibeTether core compatibility. No retry may select a mirror, branch head, archive, or unpinned substitute.
+- A partially cached plan may reuse verified sources and fetch only the missing or changed pinned sources. Remote content still passes the existing commit, raw fingerprint, path-containment, and license checks before any project write.
+
+Regression tests must prove the exact OpenSSL EOF report recovers on a later attempt, non-network failures do not retry, retries are bounded, unchanged repeated apply performs zero provider staging calls, and a missing or changed cache still invokes the verified upstream path.
+
+## 10. Documentation
 
 Update the README and Windows lifecycle runbook to explain:
 
@@ -150,7 +181,7 @@ Update the README and Windows lifecycle runbook to explain:
 
 The quick-start command stays first. Advanced recovery remains later in the document.
 
-## 9. Versioning and Publication
+## 11. Versioning and Publication
 
 - Bump the package version to `0.2.3`.
 - Keep the public repository and one-command GitHub installation format unchanged.
@@ -158,7 +189,7 @@ The quick-start command stays first. Advanced recovery remains later in the docu
 - Push the release branch or approved main integration to GitHub.
 - Verify the remote commit and GitHub CI before claiming verified delivery.
 
-## 10. Acceptance Evidence
+## 12. Acceptance Evidence
 
 Minimum release evidence:
 
@@ -170,10 +201,12 @@ Minimum release evidence:
 6. source and published-Skill leakage scan;
 7. local clean-project installation and repeated-init proof;
 8. exact prior-version dry-run, apply, doctor, bootstrap, uninstall, and modification-refusal proof;
-9. the user's extended Codex + Claude command succeeding against the repaired release, subject to explicit provider-network evidence;
+9. the user's extended Codex + Claude command succeeding against the repaired release, including recovery from transient TLS EOF and network-free reuse on the unchanged second apply;
 10. remote GitHub commit and CI success.
 
-## 11. Non-Goals
+The interactive acceptance tour must also prove numbered harness/profile choices, guided goal/success prompts, custom optional answers, invalid-choice recovery, and safe cancellation.
+
+## 13. Non-Goals
 
 - weakening customization protection;
 - automatically deleting or renaming unknown installed Skills;
