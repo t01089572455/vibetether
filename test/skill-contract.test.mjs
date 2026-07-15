@@ -128,12 +128,20 @@ test('the compatibility registry includes the exact public 0.2.1 Skill', () => {
     LEGACY_VIBETETHER_FINGERPRINTS.has('2488d70f4a07bd5df8267c0baa15439f9463868778fd837d2d11134c2209f3df'),
     true,
   );
-  assert.equal(skillInstall.VIBETETHER_RELEASE_COMPATIBILITY?.current?.version, '0.4.0');
+  assert.equal(skillInstall.VIBETETHER_RELEASE_COMPATIBILITY?.current?.version, '0.5.0');
   assert.equal(
     skillInstall.VIBETETHER_RELEASE_COMPATIBILITY.history.some((entry) => (
       entry.version === '0.2.3'
       && entry.commit === '56ea83e8e0feb7a086eff8e792225b418b41137b'
       && entry.fingerprint === '047f54c493f2ff17443f0c891f7b2f88e2bae67466a021bf30df321c5a7db5a2'
+    )),
+    true,
+  );
+  assert.equal(
+    skillInstall.VIBETETHER_RELEASE_COMPATIBILITY.history.some((entry) => (
+      entry.version === '0.4.0'
+      && entry.commit === '7fe763f8af4dc9c45a118293dbc292961f6df9ef'
+      && entry.fingerprint === '7378a1a9b9847495dd40767734208325a0bdc2fd293162b2e718df8ee40237c0'
     )),
     true,
   );

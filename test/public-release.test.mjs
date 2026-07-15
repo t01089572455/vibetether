@@ -216,7 +216,7 @@ test('package metadata points to the public repository', async () => {
   assert.equal(pkg.repository.url, 'git+https://github.com/t01089572455/vibetether.git');
   assert.equal(pkg.homepage, 'https://github.com/t01089572455/vibetether#readme');
   assert.equal(pkg.bugs.url, 'https://github.com/t01089572455/vibetether/issues');
-  assert.equal(pkg.version, '0.4.0');
+  assert.equal(pkg.version, '0.5.0');
   for (const entry of [
     'docs/operations',
     'docs/installation.md',
@@ -310,5 +310,5 @@ test('release history reproduces every registered canonical fingerprint', () => 
     encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /release compatibility: valid \(7 historical identities\)/i);
+  assert.match(result.stdout, /release compatibility: valid \(8 historical identities\)/i);
 });
