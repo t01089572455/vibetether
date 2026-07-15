@@ -15,7 +15,7 @@ async function text(relativePath) {
 
 test('README opens with the user problem and puts the reliable install before explanation', async () => {
   const readme = (await text('README.md')).replace(/\r\n/g, '\n');
-  assert.ok(readme.startsWith(`# VibeTether\n\n> Strong agents can build fast. Long tasks still drift.\n\nVibeTether is a beginner-friendly entry Skill for long-running Codex and\nClaude projects.\n`));
+  assert.ok(readme.startsWith(`# VibeTether\n\n> Even strong agents can drift during long-running work.\n\nVibeTether is a beginner-friendly control Skill for long-running Codex and Claude\nprojects. It is designed for increasingly capable models—including GPT‑5.6 Sol,\nClaude Fable 5, and the models that come next—helping coding agents stay aligned\n`));
   const install = `${codeload} init --project . --agent both --profile extended --bundle web --bundle production --yes`;
   assert.match(readme, new RegExp(install.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.ok(readme.indexOf(install) < readme.indexOf('## Why I built this'));
