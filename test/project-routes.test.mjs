@@ -257,6 +257,8 @@ test('local alternatives remain selectable metadata and overlays remain additive
   assert.deepEqual(
     result.alternatives.find(({ skill }) => skill === 'request-refactor-plan'),
     {
+      id: 'project-local:local-alternative:PLAN',
+      route_id: 'local-alternative',
       skill: 'request-refactor-plan',
       available: true,
       reason: 'A reviewed PRD needs actionable issues.',

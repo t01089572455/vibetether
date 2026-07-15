@@ -10,6 +10,9 @@ import { isSafeProjectRelativeArtifactPath, isSensitiveArtifactPath } from './ar
 import { inspectVibeTetherIdentity, skillFingerprint } from './skill-install.mjs';
 import { assertCapabilityBoard } from '../skills/vibe-tether/scripts/capability-routing.mjs';
 import { parseCanonicalManifest } from '../skills/vibe-tether/scripts/manifest.mjs';
+import { refreshBoardAvailability, resolveBoardRoute } from './capabilities.mjs';
+import { loadEffectiveProjectRoutes } from './project-routes.mjs';
+import { ROUTE_HANDSHAKE_PATH } from './route-handshake.mjs';
 
 const COMPLETION_PHASES = new Set(['REVIEW', 'SHIP']);
 const CAPTURE_TRIGGERS = new Set(['first-proven-path', 'recovered-path', 'changed-proven-path']);
@@ -246,6 +249,136 @@ async function readYamlArtifact(root, relativePath, label, issues) {
   }
 }
 
+async function readRouteHandshake(root, issues) {
+  const entry = await projectEntryStatus(root, ROUTE_HANDSHAKE_PATH);
+  if (entry.status === 'missing') return null;
+  if (entry.status !== 'ok') {
+    issues.push(issue('invalid-route-handshake', unsafeAuthorityMessage('Route handshake')));
+    return null;
+  }
+  try {
+    const value = YAML.parse(await readFile(entry.target, 'utf8'));
+    const valid = value
+      && typeof value === 'object'
+      && !Array.isArray(value)
+      && value.schema_version === 1
+      && ['codex', 'claude'].includes(value.agent)
+      && typeof value.phase === 'string'
+      && typeof value.capability === 'string'
+      && Array.isArray(value.signals)
+      && typeof value.selected_skill === 'string'
+      && ['active', 'satisfied', 'abandoned'].includes(value.status);
+    if (!valid) throw new Error('invalid handshake');
+    return value;
+  } catch {
+    issues.push(issue('invalid-route-handshake', 'Route handshake is structurally invalid; rerun the current phase route.'));
+    return null;
+  }
+}
+
+function routeCandidates(result) {
+  return [result.recommendation, ...(result.alternatives ?? [])].filter(Boolean);
+}
+
+async function validateRouteControlState({ root, manifest, baseBoard, checkpoint, issues, warnings }) {
+  let board;
+  try {
+    board = (await loadEffectiveProjectRoutes(root, manifest, baseBoard)).board;
+    board = await refreshBoardAvailability(board, root);
+  } catch (error) {
+    const ambiguous = /equally matching primary|duplicate project route id/i.test(error.message);
+    issues.push(issue(
+      ambiguous ? 'ambiguous-local-route' : 'invalid-project-routes',
+      ambiguous
+        ? 'Project routes contain an ambiguous local primary; make phase, capability, and signals deterministic.'
+        : 'Project routes are missing, unsafe, or invalid; fix routes.local.yaml and rerun doctor.',
+    ));
+    return;
+  }
+
+  const handshake = await readRouteHandshake(root, issues);
+  const completionLike = COMPLETION_PHASES.has(String(checkpoint?.phase ?? '').toUpperCase());
+  if (!handshake) {
+    if (completionLike) {
+      issues.push(issue(
+        'missing-route-handshake',
+        'Completion-like checkpoint requires a current satisfied phase route handshake.',
+      ));
+    } else if (checkpoint) {
+      warnings.push(warning(
+        'route-handshake-not-established',
+        'Establish a route handshake before the next consequential phase transition.',
+      ));
+    }
+    return;
+  }
+
+  const checkpointPhase = String(checkpoint?.phase ?? '').toUpperCase();
+  if (checkpointPhase && checkpointPhase !== handshake.phase) {
+    issues.push(issue(
+      handshake.status === 'active' ? 'pending-route-exit' : 'stale-route-handshake',
+      handshake.status === 'active'
+        ? 'The active route must be completed or abandoned before the checkpoint advances phases.'
+        : 'The route handshake phase does not match the current checkpoint phase.',
+    ));
+  } else if (completionLike && handshake.status === 'active') {
+    issues.push(issue(
+      'pending-route-exit',
+      'Completion-like checkpoint requires the active route to be completed or abandoned.',
+    ));
+  }
+
+  let result;
+  try {
+    result = resolveBoardRoute(board, {
+      phase: handshake.phase,
+      capability: handshake.capability,
+      signals: handshake.signals,
+      harness: handshake.agent,
+    });
+  } catch {
+    issues.push(issue(
+      'route-selection-mismatch',
+      'The saved route no longer resolves against the effective capability board.',
+    ));
+    return;
+  }
+
+  const candidates = routeCandidates(result);
+  const selectedCandidate = candidates.find((candidate) => candidate.skill === handshake.selected_skill);
+  const effectiveSelection = result.selection?.skill;
+  const localRoute = (board.project_routes ?? []).find((route) => route.id === handshake.route_id);
+  if (handshake.selection_source === 'project-local' && !localRoute) {
+    issues.push(issue(
+      'route-source-missing',
+      'The selected project-local route no longer exists; rerun the current phase route.',
+    ));
+  }
+  if (localRoute && !(localRoute.available_in ?? []).includes(handshake.agent)) {
+    issues.push(issue(
+      'selected-skill-unavailable',
+      'The selected project-local Skill is no longer available in the recorded agent harness.',
+    ));
+  } else if (selectedCandidate && selectedCandidate.available === false) {
+    issues.push(issue(
+      'selected-skill-unavailable',
+      'The selected Skill is no longer available in the recorded agent harness.',
+    ));
+  }
+
+  const justifiedAlternative = Boolean(
+    handshake.alternative_reason
+      && selectedCandidate
+      && selectedCandidate.available === true,
+  );
+  if (handshake.selected_skill !== effectiveSelection && !justifiedAlternative) {
+    issues.push(issue(
+      'route-selection-mismatch',
+      'The selected Skill no longer matches the effective route and has no valid alternative reason.',
+    ));
+  }
+}
+
 export async function inspectProject(options) {
   let root;
   try {
@@ -274,6 +407,7 @@ export async function inspectProject(options) {
   }
 
   if (manifest) {
+    let checkpointState = null;
     if (!manifest.intent_contract) {
       issues.push(issue('missing-intent-contract', 'Manifest intent_contract is required'));
     }
@@ -556,11 +690,22 @@ export async function inspectProject(options) {
               issues.push(issue('stale-checkpoint', `Runtime checkpoint is older than ${checkpoint.max_age_hours ?? 168} hours`));
             }
             await validateExperienceFeedback(root, state, manifest, experienceIndex, issues);
+            checkpointState = state;
           }
         } catch {
           issues.push(issue('invalid-checkpoint', 'Cannot parse runtime checkpoint'));
         }
       }
+    }
+    if (board) {
+      await validateRouteControlState({
+        root,
+        manifest,
+        baseBoard: board,
+        checkpoint: checkpointState,
+        issues,
+        warnings,
+      });
     }
   }
 

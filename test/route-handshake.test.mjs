@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import YAML from 'yaml';
 import { main } from '../src/cli.mjs';
+import { inspectProject } from '../src/doctor.mjs';
 import { ROUTE_HANDSHAKE_PATH } from '../src/route-handshake.mjs';
 
 async function exists(target) {
@@ -44,6 +45,22 @@ async function readHandshake(root) {
   return YAML.parse(await readFile(path.join(root, ...ROUTE_HANDSHAKE_PATH.split('/')), 'utf8'));
 }
 
+async function doctorReport(root) {
+  try {
+    return JSON.parse(await inspectProject({ project: root, json: true }));
+  } catch (error) {
+    if (typeof error.output === 'string') return JSON.parse(error.output);
+    throw error;
+  }
+}
+
+async function updateCheckpoint(root, update) {
+  const target = path.join(root, '.vibetether', 'state', 'current.yaml');
+  const checkpoint = YAML.parse(await readFile(target, 'utf8'));
+  Object.assign(checkpoint, update);
+  await writeFile(target, YAML.stringify(checkpoint), 'utf8');
+}
+
 test('route starts a bounded active handshake with live experience metadata', async () => {
   const root = await initializedProject('start');
 
@@ -62,6 +79,7 @@ test('route starts a bounded active handshake with live experience metadata', as
   assert.equal(state.status, 'active');
   assert.equal(state.phase, 'PLAN');
   assert.equal(state.capability, 'planning');
+  assert.equal(state.agent, 'codex');
   for (const forbidden of ['reasoning', 'chain_of_thought', 'private_reasoning', 'raw_output']) {
     assert.equal(Object.hasOwn(state, forbidden), false);
   }
@@ -228,4 +246,88 @@ test('route CLI help and flag validation fail closed before state writes', async
   ]), /invalid.*agent/i);
   await assert.rejects(main(['route', 'complete', '--project', root, '--unknown']), /unknown option.*route complete/i);
   assert.equal(await exists(path.join(root, ...ROUTE_HANDSHAKE_PATH.split('/'))), false);
+});
+
+test('doctor requires a current satisfied route at completion-like checkpoints', async () => {
+  const root = await initializedProject('doctor-completion');
+  await updateCheckpoint(root, { phase: 'REVIEW' });
+  let report = await doctorReport(root);
+  assert.ok(report.issues.some(({ code }) => code === 'missing-route-handshake'));
+
+  await startRoute(root, {
+    phase: 'REVIEW',
+    capability: 'code-review',
+    signals: ['implementation-complete'],
+  });
+  report = await doctorReport(root);
+  assert.ok(report.issues.some(({ code }) => code === 'pending-route-exit'));
+
+  await main([
+    'route', 'complete', '--project', root,
+    '--evidence', 'Review contract exited 0', '--json',
+  ]);
+  report = await doctorReport(root);
+  assert.equal(report.issues.some(({ code }) => code.includes('route')), false);
+});
+
+test('doctor distinguishes an active phase transition from a stale satisfied route', async () => {
+  const activeRoot = await initializedProject('doctor-active-stale');
+  await startRoute(activeRoot);
+  await updateCheckpoint(activeRoot, { phase: 'EXECUTE_ONE' });
+  let report = await doctorReport(activeRoot);
+  assert.ok(report.issues.some(({ code }) => code === 'pending-route-exit'));
+
+  const satisfiedRoot = await initializedProject('doctor-satisfied-stale');
+  await startRoute(satisfiedRoot);
+  await main(['route', 'complete', '--project', satisfiedRoot, '--evidence', 'Planning passed']);
+  await updateCheckpoint(satisfiedRoot, { phase: 'EXECUTE_ONE' });
+  report = await doctorReport(satisfiedRoot);
+  assert.ok(report.issues.some(({ code }) => code === 'stale-route-handshake'));
+});
+
+test('doctor reports removed local route sources and unavailable selected Skills', async () => {
+  const missingSkillRoot = await initializedProject('doctor-skill-missing');
+  await writeAlternativeRoutes(missingSkillRoot);
+  await startRoute(missingSkillRoot, { signals: ['prd-approved'] });
+  await rm(path.join(missingSkillRoot, '.agents', 'skills', 'to-issues'), { recursive: true, force: true });
+  let report = await doctorReport(missingSkillRoot);
+  assert.ok(report.issues.some(({ code }) => code === 'selected-skill-unavailable'));
+
+  const missingRouteRoot = await initializedProject('doctor-route-missing');
+  await writeAlternativeRoutes(missingRouteRoot);
+  await startRoute(missingRouteRoot, { signals: ['prd-approved'] });
+  await rm(path.join(missingRouteRoot, '.vibetether', 'routes.local.yaml'));
+  report = await doctorReport(missingRouteRoot);
+  assert.ok(report.issues.some(({ code }) => code === 'route-source-missing'));
+});
+
+test('doctor reports ambiguous local routes and unexplained selection mismatches', async () => {
+  const ambiguousRoot = await initializedProject('doctor-ambiguous');
+  await installSkill(ambiguousRoot, 'to-issues');
+  await installSkill(ambiguousRoot, 'second-planner');
+  await writeFile(path.join(ambiguousRoot, '.vibetether', 'routes.local.yaml'), YAML.stringify({
+    schema_version: 1,
+    routes: [
+      {
+        id: 'one', phases: ['PLAN'], capability: 'planning', when_any: ['prd-approved'],
+        skill: 'to-issues', role: 'primary', use_when: ['First planner.'],
+      },
+      {
+        id: 'two', phases: ['PLAN'], capability: 'planning', when_any: ['prd-approved'],
+        skill: 'second-planner', role: 'primary', use_when: ['Second planner.'],
+      },
+    ],
+  }), 'utf8');
+  let report = await doctorReport(ambiguousRoot);
+  assert.ok(report.issues.some(({ code }) => code === 'ambiguous-local-route'));
+
+  const mismatchRoot = await initializedProject('doctor-mismatch');
+  await startRoute(mismatchRoot);
+  const target = path.join(mismatchRoot, ...ROUTE_HANDSHAKE_PATH.split('/'));
+  const handshake = await readHandshake(mismatchRoot);
+  handshake.selected_skill = 'invented-planner';
+  handshake.alternative_reason = null;
+  await writeFile(target, YAML.stringify(handshake), 'utf8');
+  report = await doctorReport(mismatchRoot);
+  assert.ok(report.issues.some(({ code }) => code === 'route-selection-mismatch'));
 });

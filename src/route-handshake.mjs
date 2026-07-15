@@ -138,6 +138,7 @@ export async function startRoute(options) {
   const now = new Date().toISOString();
   const state = {
     schema_version: 1,
+    agent: options.agent,
     phase: resolved.result.phase,
     capability: resolved.result.capability,
     signals: [...(resolved.result.detected_signals ?? resolved.result.signals ?? [])],

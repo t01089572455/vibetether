@@ -283,7 +283,6 @@ test('doctor rejects first-proven capture without a durable artifact', async () 
     artifacts: [],
   };
   await writeFile(checkpointPath, YAML.stringify(checkpoint), 'utf8');
-
   const result = runCli(['doctor', '--project', target, '--json']);
 
   assert.equal(result.status, 4, result.stderr || result.stdout);
@@ -328,6 +327,16 @@ test('doctor accepts a captured first-proven path with a manifest-routed durable
     artifacts: ['docs/operations/publication.md'],
   };
   await writeFile(checkpointPath, YAML.stringify(checkpoint), 'utf8');
+  const routed = runCli([
+    'route', '--project', target, '--phase', 'REVIEW', '--capability', 'code-review',
+    '--signal', 'implementation-complete', '--agent', 'codex', '--json',
+  ]);
+  assert.equal(routed.status, 0, routed.stderr || routed.stdout);
+  const completedRoute = runCli([
+    'route', 'complete', '--project', target,
+    '--evidence', 'Review contract exited 0', '--json',
+  ]);
+  assert.equal(completedRoute.status, 0, completedRoute.stderr || completedRoute.stdout);
 
   const result = runCli(['doctor', '--project', target, '--json']);
 
