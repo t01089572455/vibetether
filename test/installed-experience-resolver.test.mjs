@@ -50,6 +50,7 @@ async function fixture(name) {
     manifestPath: path.join(root, '.vibetether', 'project.yaml'),
     indexPath: path.join(root, '.vibetether', 'experience-index.yaml'),
     resolver: path.join(root, '.agents', 'skills', 'vibe-tether', 'scripts', 'resolve-route.mjs'),
+    validator: path.join(root, '.agents', 'skills', 'vibe-tether', 'scripts', 'validate-project.mjs'),
     parser: path.join(root, '.agents', 'skills', 'vibe-tether', 'scripts', 'experience-index.mjs'),
   };
 }
@@ -202,6 +203,82 @@ test('actual installed and package resolvers have full route semantic parity', a
     assert.equal(result.primary, null);
     assert.equal(result.selection.source, 'built-in-fallback');
   });
+});
+
+test('the installed resolver applies the live project-owned route overlay with package parity', async () => {
+  const state = await fixture('project-route-overlay');
+  const localSkill = path.join(state.root, '.agents', 'skills', 'to-issues');
+  await mkdir(localSkill, { recursive: true });
+  await writeFile(path.join(localSkill, 'SKILL.md'), '# to-issues\n', 'utf8');
+
+  const manifest = YAML.parse(await readFile(state.manifestPath, 'utf8'));
+  manifest.project_routes = '.vibetether/routes.local.yaml';
+  await writeFile(state.manifestPath, YAML.stringify(manifest, { lineWidth: 0 }), 'utf8');
+  await writeFile(path.join(state.root, '.vibetether', 'routes.local.yaml'), YAML.stringify({
+    schema_version: 1,
+    routes: [{
+      id: 'project-to-issues',
+      phases: ['PLAN'],
+      capability: 'planning',
+      when_any: ['prd-approved'],
+      skill: 'to-issues',
+      role: 'primary',
+      use_when: ['A reviewed PRD needs actionable issues.'],
+      expected_outputs: ['scoped-issues'],
+      exit_evidence: ['Every approved requirement is mapped to an issue.'],
+    }],
+  }, { lineWidth: 0 }), 'utf8');
+
+  const packageOutput = JSON.parse(await showCapabilities({
+    project: state.root,
+    phase: 'PLAN',
+    capability: 'planning',
+    signals: ['prd-approved'],
+    agent: 'codex',
+    json: true,
+  }));
+  const installed = spawnSync(process.execPath, [
+    state.resolver,
+    '--project', state.root,
+    '--phase', 'PLAN',
+    '--capability', 'planning',
+    '--signal', 'prd-approved',
+    '--agent', 'codex',
+  ], { cwd: state.root, encoding: 'utf8' });
+
+  assert.equal(installed.status, 0, installed.stderr || installed.stdout);
+  const installedOutput = JSON.parse(installed.stdout);
+  assert.deepEqual(installedOutput, packageOutput);
+  assert.equal(installedOutput.selection.skill, 'to-issues');
+  assert.equal(installedOutput.selection.source, 'project-local');
+  assert.equal(installedOutput.primary.route_id, 'project-to-issues');
+  assert.ok(installedOutput.required_outputs.includes('scoped-issues'));
+});
+
+test('the installed validator rejects an invalid declared project route overlay', async () => {
+  const state = await fixture('invalid-project-route-overlay');
+  const manifest = YAML.parse(await readFile(state.manifestPath, 'utf8'));
+  manifest.project_routes = '.vibetether/routes.local.yaml';
+  await writeFile(state.manifestPath, YAML.stringify(manifest, { lineWidth: 0 }), 'utf8');
+  await writeFile(path.join(state.root, '.vibetether', 'routes.local.yaml'), YAML.stringify({
+    schema_version: 1,
+    routes: [{
+      id: 'unsafe-primary',
+      phases: ['PLAN'],
+      capability: 'planning',
+      when_any: [],
+      skill: 'to-issues',
+      role: 'primary',
+      use_when: ['Use local issue planning.'],
+    }],
+  }, { lineWidth: 0 }), 'utf8');
+
+  const result = spawnSync(process.execPath, [state.validator, '--project', state.root], {
+    cwd: state.root,
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  assert.match(result.stderr, /project route.*primary.*signal/i);
 });
 
 test('the actually installed resolver matches package experience semantics across the contract matrix', async (context) => {

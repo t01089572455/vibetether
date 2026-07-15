@@ -16,6 +16,33 @@ Recommendations are advisory. Select the recommended Skill when it fits, otherwi
 
 The resolver separates `primary`, compatible `overlays`, and ordered `alternatives`. It also returns `detected_signals`, `rationale`, `fallback`, `required_outputs`, and `exit_evidence`, so the choice remains inspectable without exposing private reasoning. A policy overlay such as `karpathy-guidelines` may shape an implementation path but never owns the lifecycle phase.
 
+## Project-Owned Routes
+
+`.vibetether/routes.local.yaml` is the user-owned live overlay. Initialization, upgrade, bootstrap, and uninstall do not overwrite, normalize, or delete it. Use `vibetether customize --project .` for guided setup, or edit the strict schema directly.
+
+- `primary`: preferred only when at least one declared observable signal matches;
+- `alternative`: selectable without displacing the curated primary;
+- `overlay`: an additive policy or domain method that does not own the phase.
+
+The resolver discovers only already-installed Skills under the enabled project-local `.agents/skills` and `.claude/skills` roots. It never downloads a Skill at task runtime. Local routes may add required outputs and exit evidence, but they cannot subtract or weaken base authority, readiness, evidence, high-risk, destructive-data, permission, or release gates.
+
+## Stateful Phase Handshake
+
+At task entry and every phase transition, reload the manifest, live overlay, applicable truth, checkpoint, and applicable experience. Start one observable phase/capability route:
+
+```bash
+vibetether route --project . --phase EXECUTE_ONE --capability tdd --signal new-behavior --agent codex
+```
+
+Invoke the selected installed Skill or declared fallback. Before entering another phase, record exactly one disposition:
+
+```bash
+vibetether route complete --project . --evidence "Observed RED, then focused GREEN."
+vibetether route abandon --project . --reason "Provider unavailable; used the declared fallback."
+```
+
+The handshake records selection, route source, expected outputs, exit evidence, and bounded disposition evidence. It does not prove semantic correctness. `doctor` detects missing, pending, stale, unavailable, source-missing, ambiguous, and mismatched route state. Automatic phase re-entry therefore depends on a cooperating host Agent following the managed project instructions.
+
 ## Proven Path Recall
 
 The manifest's `experience_index` field normally points to `.vibetether/experience-index.yaml`. For repeatable build, environment, CI, deployment, publication, migration, authentication, external-service, recovery, or release work, resolve `proven-path-recall` with current task and environment signals:

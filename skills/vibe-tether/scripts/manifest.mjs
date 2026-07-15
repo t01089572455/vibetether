@@ -66,9 +66,50 @@ function parseScalar(source, { key = false } = {}) {
   return source;
 }
 
-function parseInlineValue(source) {
+function splitFlowSequence(source) {
+  const values = [];
+  let start = 0;
+  let quote = null;
+  let escaped = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (quote === '"') {
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === '"') quote = null;
+      continue;
+    }
+    if (quote === "'") {
+      if (character !== "'") continue;
+      if (source[index + 1] === "'") index += 1;
+      else quote = null;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === ',') {
+      values.push(source.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  if (quote) unsupported('Project routes contain an invalid flow sequence');
+  values.push(source.slice(start).trim());
+  return values;
+}
+
+function parseInlineValue(source, { allowFlowSequences = false } = {}) {
   if (source === '[]') return [];
   if (source === '{}') return {};
+  if (allowFlowSequences && source.startsWith('[') && source.endsWith(']')) {
+    const body = source.slice(1, -1).trim();
+    if (!body) return [];
+    return splitFlowSequence(body).map((entry) => {
+      if (!entry || /[\[\]{}]/.test(entry)) unsupported('Project routes contain unsupported flow syntax');
+      return parseScalar(entry);
+    });
+  }
   return parseScalar(source);
 }
 
@@ -94,7 +135,7 @@ function tokenize(source) {
   return lines;
 }
 
-function parseCanonicalTree(lines) {
+function parseCanonicalTree(lines, options = {}) {
   function parseField(content, fieldIndent, nextIndex) {
     const separator = mappingSeparator(content);
     if (separator <= 0) unsupported('Manifest mapping entry is malformed');
@@ -111,7 +152,7 @@ function parseCanonicalTree(lines) {
     if (!remainder.startsWith(' ') || remainder.startsWith('  ')) {
       unsupported('Manifest mapping scalar spacing is invalid');
     }
-    return { key, value: parseInlineValue(remainder.slice(1)), next: nextIndex };
+    return { key, value: parseInlineValue(remainder.slice(1), options), next: nextIndex };
   }
 
   function addField(target, field) {
@@ -175,12 +216,16 @@ function parseCanonicalTree(lines) {
 }
 
 export function parseCanonicalManifest(source) {
-  const manifest = parseCanonicalTree(tokenize(source));
+  const manifest = parseCanonicalYaml(source);
   if (manifest === null || typeof manifest !== 'object' || Array.isArray(manifest)) {
     unsupported('Manifest must be a mapping');
   }
   if (manifest.schema_version !== 1) unsupported('Manifest schema_version must be 1');
   return manifest;
+}
+
+export function parseCanonicalYaml(source, options = {}) {
+  return parseCanonicalTree(tokenize(source), options);
 }
 
 export function authorityRoutesFromManifest(source) {
@@ -196,5 +241,6 @@ export function authorityRoutesFromManifest(source) {
     manifest,
     capabilityBoard: manifest.capability_board,
     experienceIndex: manifest.experience_index ?? DEFAULT_EXPERIENCE_INDEX,
+    projectRoutes: manifest.project_routes,
   };
 }

@@ -13,14 +13,25 @@ Do not replace the coding agent's implementation ability. Control direction, aut
 
 ## Start Here
 
-1. Read the nearest project instruction file and `.vibetether/project.yaml` when present.
-2. Read `.vibetether/capabilities.yaml` and identify the phase, capability, observed signals, available providers, fallback, expected outputs, and exit evidence. Use the offline resolver for live availability before invoking a provider.
-3. Identify the approved goal, current lifecycle state, active task slice, and last checkpoint.
-4. Run the automatic work-readiness gate and decide whether the next action needs a lightweight preflight or full re-anchor.
-5. Resolve applicable project sources and conflicts before choosing an implementation action.
-6. Classify uncertainty as directional, local technical, or structural technical.
-7. Treat the route as advice: invoke the recommended installed Skill when it fits, choose a better installed alternative when justified, or use the declared built-in fallback.
-8. Record the selected path and material reason in `provider_selection`; then act within the approved slice, collect evidence, and checkpoint the result.
+1. Read the nearest project instruction file, `.vibetether/project.yaml`, the live `.vibetether/routes.local.yaml` overlay when present, applicable truth, the current checkpoint, and applicable experience.
+2. Identify the approved goal, current lifecycle state, active task slice, observable signals, and evidence gap.
+3. Run the automatic work-readiness gate. Resolve discoverable facts and project-source conflicts before choosing an implementation action.
+4. At task entry and every phase transition or re-entry boundary, start a stateful route:
+
+   ```bash
+   vibetether route --project . --phase PLAN --capability planning --signal multi-step-change --agent codex
+   ```
+
+5. Treat the route as advice: invoke the selected installed Skill, choose an available alternative only with a material reason, or use the declared built-in fallback.
+6. Before advancing, record the disposition with bounded evidence:
+
+   ```bash
+   vibetether route complete --project . --evidence "The approved plan maps every slice to a fresh check."
+   # Or, when the route cannot be used:
+   vibetether route abandon --project . --reason "The selected provider is incompatible with this project."
+   ```
+
+7. Record the selected path and material reason in `provider_selection`; then checkpoint the result and run the applicable evidence gate.
 
 If no project manifest exists, run `vibetether init` or create one using [project-manifest.md](references/project-manifest.md) before long-running product work.
 
@@ -156,13 +167,17 @@ Keep VibeTether as the stable information router and use replaceable specialist 
 - Record `recommended`, `selected`, `selection_reason`, and `invocation_status` without exposing private reasoning.
 - Stop when a required safety, migration, UI-validation, or release capability is unavailable.
 
+The generated `.vibetether/capabilities.yaml` board is the curated base. The optional project-owned `.vibetether/routes.local.yaml` overlay is evaluated live and is never regenerated. A `primary` route may win only when its observable signal matches; an `alternative` remains selectable without displacing the curated primary; an `overlay` adds a non-overlapping policy or domain method. Local routes may add outputs or evidence but cannot weaken authority, readiness, evidence, high-risk, destructive-data, permission, or release gates.
+
 For a deterministic local recommendation, run:
 
 ```bash
 node .agents/skills/vibe-tether/scripts/resolve-route.mjs --project . --phase PLAN --capability planning --signal multi-step-change --agent codex
 ```
 
-Use `.claude/skills/vibe-tether/scripts/resolve-route.mjs` for Claude projects. The script is offline and reads only the project capability board. `vibetether capabilities --project .` provides the human dashboard; add `--phase`, `--capability`, repeatable `--signal`, `--agent`, and `--json` for a query.
+Use `.claude/skills/vibe-tether/scripts/resolve-route.mjs` for Claude projects. The offline script reads the project capability board, live project route overlay, installed project Skills, and experience metadata. `vibetether capabilities --project .` provides the human dashboard; add `--phase`, `--capability`, repeatable `--signal`, `--agent`, and `--json` for a read-only query. Use the stateful `vibetether route` command at phase boundaries so selection and disposition remain machine-inspectable.
+
+VibeTether cannot force a host Agent to reread a Skill after context loss. The managed project instructions make re-entry explicit, and `doctor` detects missing, pending, stale, unavailable, or mismatched route state; reliable behavior still depends on host cooperation.
 
 Read [capability-routing.md](references/capability-routing.md) before selecting or changing a provider.
 Read [scenario-routing.md](references/scenario-routing.md) when translating a plain-language situation into phase, capability, signals, primary provider, overlays, alternatives, and fallback.

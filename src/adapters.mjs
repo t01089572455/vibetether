@@ -52,11 +52,19 @@ const preExperienceRecallSharedRules = [
   'Record `captured`, `already-encoded`, or `not-reusable` in checkpoint `experience_feedback`, with a reason and artifact paths. Never persist credentials, private keys, one-time codes, private reasoning, or sensitive tool output. A completion-like state must pass `vibetether doctor` with no pending disposition.',
 ].join('\n');
 
-const sharedRules = [
+const prePhaseHandshakeSharedRules = [
   preExperienceRecallSharedRules,
   'Query applicable experience at task entry from `.vibetether/experience-index.yaml`, at phase changes, resume, and before repeatable build, environment, CI, deployment, publication, migration, authentication, external-service, recovery, or release actions.',
   'Read the returned artifacts before inventing a new operational path; record selected experience paths or the material reason a candidate was stale or inapplicable in the checkpoint.',
   'Treat provisional or changed-environment paths as requiring fresh revalidation, then update the natural artifact and metadata index after verified success.',
+].join('\n');
+
+const sharedRules = [
+  prePhaseHandshakeSharedRules,
+  'At task entry and every phase transition, consequential action, compaction, resume, handoff, repeated failure, direction change, next slice, completion, merge, release, or publication, reload `.vibetether/project.yaml`, the live `.vibetether/routes.local.yaml` overlay when present, applicable truth, the checkpoint, and applicable experience.',
+  'Before advancing a phase, run `vibetether route --project . --phase <PHASE> --capability <CAPABILITY>` with observable signals, invoke the selected installed Skill or declared fallback, then run `vibetether route complete --project . --evidence <EVIDENCE>` with bounded evidence or `vibetether route abandon --project . --reason <REASON>` with a material reason.',
+  'Project routes are advisory and additive. They cannot weaken authority, readiness, evidence, high-risk, destructive-data, permission, or release gates.',
+  'A route record proves selection and disposition, not semantic correctness; the host Agent must cooperate by re-entering this contract at the declared boundaries.',
 ].join('\n');
 
 export const LEGACY_MANAGED_BODIES = new Set([
@@ -64,6 +72,7 @@ export const LEGACY_MANAGED_BODIES = new Set([
   preReadinessSharedRules,
   preSuccessCaptureSharedRules,
   preExperienceRecallSharedRules,
+  prePhaseHandshakeSharedRules,
 ]);
 
 export const ADAPTERS = {

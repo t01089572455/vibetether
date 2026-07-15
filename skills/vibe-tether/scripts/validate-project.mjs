@@ -5,13 +5,15 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { isSafeProjectRelativeArtifactPath, isSensitiveArtifactPath } from './artifact-safety.mjs';
+import { assertCapabilityBoard, validateProjectRouteDocument } from './capability-routing.mjs';
 import { parseExperienceIndex } from './experience-index.mjs';
-import { parseCanonicalManifest } from './manifest.mjs';
+import { parseCanonicalManifest, parseCanonicalYaml } from './manifest.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const skillDir = path.resolve(scriptDir, '..');
 const managedStart = '<!-- vibetether:start -->';
 const managedEnd = '<!-- vibetether:end -->';
+const projectRoutesPath = '.vibetether/routes.local.yaml';
 
 async function exists(target) {
   try {
@@ -171,14 +173,32 @@ async function validateProject(projectRoot) {
       try {
         const boardPath = path.resolve(projectRoot, manifest.capability_board);
         const board = JSON.parse(await readFile(boardPath, 'utf8'));
-        if (board.schema_version !== 1 || board.mode !== 'advisory-router') {
-          errors.push('Capability board must use schema_version 1 and advisory-router mode');
-        }
+        assertCapabilityBoard(board);
         if (board.selection_policy?.provider_selection !== 'advisory') {
           errors.push('Capability board provider selection must be advisory');
         }
-        if (!Array.isArray(board.capabilities) || !Array.isArray(board.providers) || !Array.isArray(board.routes)) {
-          errors.push('Capability board must declare capabilities, providers, and routes arrays');
+        const routeDeclared = Object.hasOwn(manifest, 'project_routes');
+        if (routeDeclared && manifest.project_routes !== projectRoutesPath) {
+          errors.push(`Manifest project_routes must use ${projectRoutesPath}`);
+        } else {
+          const routeStatus = await projectEntryStatus(projectRoot, projectRoutesPath);
+          if (routeStatus === 'missing' && routeDeclared) {
+            errors.push(`Missing project routes: ${projectRoutesPath}`);
+          } else if (!['missing', 'ok'].includes(routeStatus)) {
+            errors.push('Project routes must be a regular non-linked file');
+          } else if (routeStatus === 'ok') {
+            try {
+              const document = parseCanonicalYaml(
+                await readFile(path.resolve(projectRoot, projectRoutesPath), 'utf8'),
+                { allowFlowSequences: true },
+              );
+              validateProjectRouteDocument(document, board);
+            } catch (error) {
+              errors.push(error.message.startsWith('Project route')
+                ? error.message
+                : 'Invalid project routes');
+            }
+          }
         }
       } catch {
         errors.push('Invalid capability board');

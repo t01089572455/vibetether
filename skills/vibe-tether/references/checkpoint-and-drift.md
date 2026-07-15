@@ -56,12 +56,15 @@ Exclude prompts, credentials, sensitive tool output, raw reasoning, full provide
 3. Compare checkpoint paths and scope with the working tree.
 4. Reload sources applicable to the next action.
 5. Resolve stale decisions or conflicts.
-6. Consult the capability board and resolve the advisory route for the current phase and signals.
+6. Consult the capability board and live project route overlay, then start `vibetether route` for the current phase, capability, and observable signals.
 7. Read applicable Proven Paths before inventing a new operational route.
 8. Restate goal, phase, protected capabilities, provider selection, experience disposition, evidence gap, and next action.
 9. Write a fresh checkpoint before acting.
+10. Before a phase transition, run `vibetether route complete` with bounded evidence or `vibetether route abandon` with a material reason.
 
 Never resume directly from a compacted conversational summary.
+
+The route handshake is machine-owned runtime state, not durable project truth. It proves that a cooperating host selected and disposed a route; it does not prove that outputs are correct. Use current tests, reviews, captures, or other declared evidence for semantic claims.
 
 ## Drift Levels
 

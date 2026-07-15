@@ -60,6 +60,11 @@ test('the public Skill exposes the VibeTether drift-control contract', async () 
   assert.match(skill, /one primary workflow provider/i);
   assert.match(skill, /capabilities\.yaml/);
   assert.match(skill, /resolve-route\.mjs/);
+  assert.match(skill, /routes\.local\.yaml/);
+  assert.match(skill, /vibetether route --project \. --phase/i);
+  assert.match(skill, /route complete/i);
+  assert.match(skill, /route abandon/i);
+  assert.match(skill, /phase transition/i);
   assert.match(skill, /do not force an optional provider/i);
   assert.match(skill, /first-proven-path/i);
   assert.match(skill, /first verified reusable (workflow|path)[\s\S]*captur/i);
@@ -93,6 +98,18 @@ test('managed instructions require bootstrap and proven-path recall before opera
   assert.match(skill, /project-bootstrap/);
   assert.match(skill, /proven-path-recall/);
   assert.match(skill, /requires_revalidation/);
+});
+
+test('the public Skill documents user-owned route roles and phase disposition', async () => {
+  const skill = await readFile(skillPath, 'utf8');
+  const routing = await readFile(path.join(skillDir, 'references', 'capability-routing.md'), 'utf8');
+  const checkpoint = await readFile(path.join(skillDir, 'references', 'checkpoint-and-drift.md'), 'utf8');
+
+  assert.match(`${skill}\n${routing}`, /primary[\s\S]*alternative[\s\S]*overlay/i);
+  assert.match(routing, /project-owned[\s\S]*routes\.local\.yaml/i);
+  assert.match(routing, /observable signal/i);
+  assert.match(`${routing}\n${checkpoint}`, /route complete[\s\S]*route abandon/i);
+  assert.match(`${routing}\n${checkpoint}`, /host.*cooperat|cooperat.*host/i);
 });
 
 test('the public 0.1.0 Skill fingerprint remains an explicit upgrade allowlist entry', () => {

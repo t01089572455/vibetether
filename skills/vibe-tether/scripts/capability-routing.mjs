@@ -103,6 +103,206 @@ export function assertCapabilityBoard(board) {
   return board;
 }
 
+const PROJECT_ROUTE_ROLES = new Set(['primary', 'alternative', 'overlay']);
+const PROJECT_ROUTE_SAFE_NAME = /^[a-z0-9][a-z0-9._-]*$/;
+const PROJECT_ROUTE_DOCUMENT_KEYS = new Set(['schema_version', 'routes']);
+const PROJECT_ROUTE_KEYS = new Set([
+  'id',
+  'phases',
+  'capability',
+  'when_any',
+  'skill',
+  'role',
+  'use_when',
+  'expected_outputs',
+  'exit_evidence',
+]);
+const PROJECT_ROUTE_REQUIRED_KEYS = ['id', 'phases', 'capability', 'skill', 'role', 'use_when'];
+
+function projectRouteError(message) {
+  const error = new Error(message);
+  error.exitCode = 3;
+  return error;
+}
+
+function rejectProjectRouteUnknownKeys(value, allowed, label) {
+  const unknown = Object.keys(value).find((key) => !allowed.has(key));
+  if (unknown) throw projectRouteError(`${label} contains unknown field: ${unknown}`);
+}
+
+function projectRouteString(value, label) {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw projectRouteError(`${label} must be a non-empty string.`);
+  }
+  return value.trim();
+}
+
+function projectRouteStringArray(value, label, { required = false } = {}) {
+  if (value === undefined && !required) return [];
+  if (!Array.isArray(value)) throw projectRouteError(`${label} must be an array of non-empty strings.`);
+  const normalized = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string' || !entry.trim()) {
+      throw projectRouteError(`${label} must contain only non-empty strings.`);
+    }
+    const item = entry.trim();
+    if (!normalized.includes(item)) normalized.push(item);
+  }
+  return normalized;
+}
+
+function projectRouteCapabilityIndex(board) {
+  if (!isRecord(board) || !Array.isArray(board.capabilities)) {
+    throw projectRouteError('Capability board must declare a capabilities array.');
+  }
+  const capabilities = new Map();
+  for (const capability of board.capabilities) {
+    if (!isRecord(capability) || typeof capability.id !== 'string' || !Array.isArray(capability.phases)) {
+      throw projectRouteError('Capability board contains an invalid capability contract.');
+    }
+    capabilities.set(capability.id, capability);
+  }
+  return capabilities;
+}
+
+function projectRouteSafeName(value, label) {
+  if (!PROJECT_ROUTE_SAFE_NAME.test(value)) {
+    throw projectRouteError(`${label} must be a safe single directory name.`);
+  }
+}
+
+function normalizeProjectRoute(value, index, capabilities) {
+  const label = `Project route ${index + 1}`;
+  if (!isRecord(value)) throw projectRouteError(`${label} must be a mapping.`);
+  rejectProjectRouteUnknownKeys(value, PROJECT_ROUTE_KEYS, label);
+  for (const key of PROJECT_ROUTE_REQUIRED_KEYS) {
+    if (!Object.hasOwn(value, key)) throw projectRouteError(`${label} is missing required field: ${key}`);
+  }
+
+  const id = projectRouteString(value.id, `${label} id`);
+  projectRouteSafeName(id, `${label} route id`);
+  const skill = projectRouteString(value.skill, `${label} skill`);
+  projectRouteSafeName(skill, `${label} Skill name`);
+  const capability = projectRouteString(value.capability, `${label} capability`);
+  const contract = capabilities.get(capability);
+  if (!contract) throw projectRouteError(`${label} references unknown capability: ${capability}`);
+
+  const phases = projectRouteStringArray(value.phases, `${label} phases`, { required: true });
+  if (phases.length === 0) throw projectRouteError(`${label} phases must contain at least one non-empty string.`);
+  for (const phase of phases) {
+    if (!contract.phases.includes(phase)) {
+      throw projectRouteError(`${label} references unknown phase ${phase} for capability ${capability}.`);
+    }
+  }
+
+  const role = projectRouteString(value.role, `${label} role`);
+  if (!PROJECT_ROUTE_ROLES.has(role)) {
+    throw projectRouteError(`${label} role must be primary, alternative, or overlay.`);
+  }
+  const whenAny = projectRouteStringArray(value.when_any, `${label} when_any`);
+  if (role === 'primary' && whenAny.length === 0) {
+    throw projectRouteError(`${label} primary requires at least one observable signal in when_any.`);
+  }
+  const useWhen = projectRouteStringArray(value.use_when, `${label} use_when`, { required: true });
+  if (useWhen.length === 0) throw projectRouteError(`${label} use_when must contain at least one non-empty string.`);
+
+  return {
+    id,
+    phases,
+    capability,
+    when_any: whenAny,
+    skill,
+    role,
+    use_when: useWhen,
+    expected_outputs: projectRouteStringArray(value.expected_outputs, `${label} expected_outputs`),
+    exit_evidence: projectRouteStringArray(value.exit_evidence, `${label} exit_evidence`),
+  };
+}
+
+function assertUniqueProjectRoutes(routes) {
+  const ids = new Set();
+  const primaryMatches = new Set();
+  for (const route of routes) {
+    if (ids.has(route.id)) throw projectRouteError(`Duplicate project route id: ${route.id}`);
+    ids.add(route.id);
+    if (route.role !== 'primary') continue;
+    const signals = [...route.when_any].sort().join('\u0000');
+    for (const phase of route.phases) {
+      const key = `${phase}\u0000${route.capability}\u0000${signals}`;
+      if (primaryMatches.has(key)) {
+        throw projectRouteError(
+          `Project routes contain equally matching primary routes for ${phase} / ${route.capability}.`,
+        );
+      }
+      primaryMatches.add(key);
+    }
+  }
+}
+
+export function validateProjectRouteDocument(document, board) {
+  if (!isRecord(document) || document.schema_version !== 1 || !Array.isArray(document.routes)) {
+    throw projectRouteError('Project routes require schema_version 1 and a routes array.');
+  }
+  rejectProjectRouteUnknownKeys(document, PROJECT_ROUTE_DOCUMENT_KEYS, 'Project routes document');
+  const capabilities = projectRouteCapabilityIndex(board);
+  const routes = document.routes.map((route, index) => normalizeProjectRoute(route, index, capabilities));
+  assertUniqueProjectRoutes(routes);
+  return { schema_version: 1, routes };
+}
+
+function unionProjectRouteValues(left = [], right = []) {
+  return [...new Set([...left, ...right])];
+}
+
+function baseProjectRoute(board, phase, capability) {
+  return (board.routes ?? [])
+    .filter((route) => route.phase === phase && route.capability === capability)
+    .sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0))[0] ?? null;
+}
+
+function effectiveProjectRoute(board, route, phase, installations) {
+  const capability = board.capabilities.find((entry) => entry.id === route.capability);
+  const baseRoute = baseProjectRoute(board, phase, route.capability);
+  const primary = route.role === 'primary';
+  const overlay = route.role === 'overlay';
+  return {
+    id: `project-local:${route.id}:${phase}`,
+    project_route_id: route.id,
+    project_role: route.role,
+    source: 'project-local',
+    phase,
+    capability: route.capability,
+    priority: primary ? 1_000_000 : overlay ? 900_000 : -1,
+    signals: { all: [], any: route.when_any },
+    recommendation: {
+      skill: route.skill,
+      available_in: Object.keys(installations),
+      installations,
+      reason: route.use_when.join(' '),
+    },
+    fallback: baseRoute?.fallback ?? capability.fallback,
+    selection: overlay ? 'recommend-overlay' : 'recommend',
+    workflow_role: overlay ? 'policy' : route.role,
+    expected_outputs: unionProjectRouteValues(capability.expected_outputs, route.expected_outputs),
+    exit_evidence: unionProjectRouteValues(capability.exit_evidence, route.exit_evidence),
+  };
+}
+
+export function mergeProjectRouteDocument(board, document, installationsBySkill = {}) {
+  const validated = validateProjectRouteDocument(document, board);
+  const effective = structuredClone(board);
+  const localRoutes = [];
+  for (const route of validated.routes) {
+    const installations = structuredClone(installationsBySkill[route.skill] ?? {});
+    localRoutes.push({ ...route, installations, available_in: Object.keys(installations) });
+    for (const phase of route.phases) {
+      effective.routes.push(effectiveProjectRoute(effective, route, phase, installations));
+    }
+  }
+  effective.project_routes = localRoutes;
+  return effective;
+}
+
 export function resolveCapabilityRoute(board, request) {
   assertCapabilityBoard(board);
   const phase = String(request.phase ?? '').toUpperCase();
