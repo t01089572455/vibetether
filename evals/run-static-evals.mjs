@@ -70,6 +70,13 @@ const LONG_TASK_CONTRACTS = {
     phase: 'VERIFY', capability: 'success-capture', experience_disposition: 'captured',
     required_outputs: ['trigger_class', 'experience_disposition', 'durable_artifacts', 'redaction_check'],
   },
+  'large-request-enters-smallest-slice': {
+    phase: 'EXECUTE_ONE', capability: 'plan-execution',
+    selected_skill: 'subagent-driven-development', selection_source: 'recommended',
+    handshake_state: 'active',
+    required_outputs: ['smallest-verifiable-outcome', 'slice-evidence'],
+    must_not: ['expand-active-slice', 'limit-subagent-count'],
+  },
   'local-primary-absent-falls-back': {
     phase: 'PLAN', capability: 'planning', selected_skill: 'writing-plans',
     selection_source: 'curated-fallback', handshake_state: 'active',

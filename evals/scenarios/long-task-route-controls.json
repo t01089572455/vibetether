@@ -33,6 +33,18 @@
       }
     },
     {
+      "id": "large-request-enters-smallest-slice",
+      "observed": {
+        "phase": "EXECUTE_ONE",
+        "capability": "plan-execution",
+        "selected_skill": "subagent-driven-development",
+        "selection_source": "recommended",
+        "handshake_state": "active",
+        "required_outputs": ["smallest-verifiable-outcome", "slice-evidence"],
+        "must_not": ["expand-active-slice", "limit-subagent-count"]
+      }
+    },
+    {
       "id": "local-primary-absent-falls-back",
       "observed": {
         "phase": "PLAN",

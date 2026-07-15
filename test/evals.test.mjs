@@ -89,6 +89,7 @@ test('preview scenarios cover the approved drift-pressure classes with complete 
     'active-plan-blocks-execute',
     'compaction-forces-reentry',
     'first-proven-deployment-captures',
+    'large-request-enters-smallest-slice',
     'local-primary-absent-falls-back',
     'missing-skill-peer-identity-recovers',
     'phase-plan-after-approved-design',
@@ -103,6 +104,16 @@ test('preview scenarios cover the approved drift-pressure classes with complete 
     assert.ok(Object.keys(entry.observed).length > 0, entry.id);
     assert.equal(Object.hasOwn(entry, 'reasoning'), false, entry.id);
   }
+  const smallest = controls.cases.find((entry) => entry.id === 'large-request-enters-smallest-slice');
+  assert.deepEqual(smallest.observed, {
+    phase: 'EXECUTE_ONE',
+    capability: 'plan-execution',
+    selected_skill: 'subagent-driven-development',
+    selection_source: 'recommended',
+    handshake_state: 'active',
+    required_outputs: ['smallest-verifiable-outcome', 'slice-evidence'],
+    must_not: ['expand-active-slice', 'limit-subagent-count'],
+  });
 });
 
 test('static runner validates every scenario and states the preview honesty boundary', () => {
