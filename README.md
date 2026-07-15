@@ -165,19 +165,55 @@ Edit project prose outside VibeTether's markers in `AGENTS.md` or `CLAUDE.md`.
 Rerun `vibetether init` to repair the CLI-maintained block. Do not hand-edit the
 generated capability board, canonical Intent metadata, or runtime route state.
 
-## Control project truth in ordinary language
+## Add project truth in 60 seconds
 
-You can edit `.vibetether/TRUTH.md` yourself, or just talk to the Agent:
+`.vibetether/TRUTH.md` is the entry list for documents that may govern the
+project. A new installation starts with an empty list. You can manage it without
+learning its format—just talk to the Agent.
 
-> Search this repository for candidate truth and specification documents. Explain
-> the role, scope, authority evidence, and conflicts, then ask me to activate them
-> one at a time.
+### 1. Ask the Agent to search
 
-> Add `docs/product/approved-prd.md` as a candidate product-direction source. Do
-> not use it for implementation until I confirm activation.
+Copy this into Codex or Claude:
 
-Or add the same non-authoritative candidate directly under `## Candidates
-awaiting confirmation` in `.vibetether/TRUTH.md`:
+```text
+Search this repository for candidate truth and specification documents, including
+instructions, product requirements, architecture, UI, testing, operations, and
+release documents. Inspect their contents. For each candidate, explain its role,
+scope, authority evidence, and conflicts. Add safe findings only as candidates.
+Do not activate any source until I confirm it one at a time.
+```
+
+The Agent may update the candidate list, but candidates remain non-authoritative
+and cannot govern implementation yet.
+
+### 2. Confirm one candidate
+
+After reviewing the Agent's explanation, confirm the document you trust:
+
+```text
+Yes. Activate `docs/product/approved-prd.md` as `product-direction` truth for
+scope `.`. Update `.vibetether/TRUTH.md`, show me the diff, and tell me when the
+Agent will reread this source.
+```
+
+Already know the file but want it reviewed first? Say:
+
+```text
+Add `docs/product/approved-prd.md` as a candidate product-direction source. Do
+not activate or use it for implementation until I confirm it.
+```
+
+### 3. Verify
+
+Ask the Agent to validate the result:
+
+```text
+Run `vibetether doctor --project . --json`. If the truth map is invalid or a
+confirmed source is missing, explain the exact problem and propose a safe fix.
+```
+
+Prefer manual editing? Add the candidate under `## Candidates awaiting
+confirmation` in `.vibetether/TRUTH.md`, then ask the Agent to review it:
 
 ```markdown
 - [ ] `docs/product/approved-prd.md`
@@ -185,15 +221,11 @@ awaiting confirmation` in `.vibetether/TRUTH.md`:
   - scope: `.`
 ```
 
-> The architecture decision moved. Find references, propose the truth-map move or
-> supersession, and ask before changing active authority.
-
-Documents generated during a planning conversation can become candidates too.
-Candidates are non-authoritative. Active additions, removals, role or scope
-changes, or any move, delete, or supersede action require user confirmation. If
-the host Agent detects a conflict between confirmed truth and a previously
-successful workflow, VibeTether's instructions require it to stop the affected
-action, recommend a resolution, and ask the user instead of choosing silently.
+Documents created during a planning conversation follow the same candidate-first
+flow. A move, delete, or supersede action on confirmed truth—and any role or
+scope change—requires user confirmation. If confirmed truth conflicts with a
+previously successful workflow, the Agent must show the conflict and ask instead
+of letting old experience override current direction.
 
 See [Project truth and document lifecycle](docs/project-truth.md).
 

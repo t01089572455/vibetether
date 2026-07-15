@@ -124,6 +124,21 @@ test('README teaches project truth control in ordinary language and links the vi
   assert.match(guide, /user confirmation/i);
 });
 
+test('README gives beginners a copy-paste project-truth quickstart', async () => {
+  const readme = (await text('README.md')).replace(/\r\n/g, '\n');
+  const start = readme.indexOf('## Add project truth in 60 seconds');
+  assert.notEqual(start, -1);
+  const tutorial = readme.slice(start, readme.indexOf('\n## ', start + 4));
+  assert.match(tutorial, /1\. Ask the Agent to search/i);
+  assert.match(tutorial, /2\. Confirm one candidate/i);
+  assert.match(tutorial, /3\. Verify/i);
+  assert.match(tutorial, /do not activate.*confirm/is);
+  assert.match(tutorial, /role.*scope.*conflict/is);
+  assert.match(tutorial, /show me the diff/i);
+  assert.match(tutorial, /vibetether doctor --project \. --json/);
+  assert.match(tutorial, /move|supersede|remove/i);
+});
+
 test('README exposes route customization and the stateful handshake', async () => {
   const readme = await text('README.md');
   assert.match(readme, /vibetether customize --project \./);
