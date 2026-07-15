@@ -45,9 +45,23 @@ function loadReleaseCompatibility() {
 }
 
 export const VIBETETHER_RELEASE_COMPATIBILITY = loadReleaseCompatibility();
-export const LEGACY_VIBETETHER_FINGERPRINTS = new Set(
+const LEGACY_VIBETETHER_IDENTITY_AUTHORITY = new Set(
   VIBETETHER_RELEASE_COMPATIBILITY.history.map((entry) => entry.fingerprint),
 );
+export const LEGACY_VIBETETHER_FINGERPRINTS = Object.freeze({
+  has(fingerprint) {
+    return LEGACY_VIBETETHER_IDENTITY_AUTHORITY.has(fingerprint);
+  },
+  get size() {
+    return LEGACY_VIBETETHER_IDENTITY_AUTHORITY.size;
+  },
+  values() {
+    return LEGACY_VIBETETHER_IDENTITY_AUTHORITY.values();
+  },
+  [Symbol.iterator]() {
+    return LEGACY_VIBETETHER_IDENTITY_AUTHORITY[Symbol.iterator]();
+  },
+});
 
 function portableFileBytes(bytes) {
   if (bytes.includes(0)) return bytes;
@@ -97,7 +111,7 @@ export async function inspectVibeTetherIdentity(target) {
   }
   const state = installed === canonical
     ? 'current'
-    : LEGACY_VIBETETHER_FINGERPRINTS.has(installed) ? 'legacy' : 'unknown';
+    : LEGACY_VIBETETHER_IDENTITY_AUTHORITY.has(installed) ? 'legacy' : 'unknown';
   return { state, canonical, installed };
 }
 

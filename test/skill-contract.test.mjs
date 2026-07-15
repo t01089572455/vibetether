@@ -110,6 +110,13 @@ test('the compatibility registry includes the exact public 0.2.1 Skill', () => {
   assert.equal(skillInstall.VIBETETHER_RELEASE_COMPATIBILITY?.current?.version, '0.2.3');
 });
 
+test('the exported compatibility view cannot grant new historical identities', () => {
+  assert.equal(Object.isFrozen(LEGACY_VIBETETHER_FINGERPRINTS), true);
+  assert.equal(LEGACY_VIBETETHER_FINGERPRINTS.add, undefined);
+  assert.equal(LEGACY_VIBETETHER_FINGERPRINTS.delete, undefined);
+  assert.equal(LEGACY_VIBETETHER_FINGERPRINTS.clear, undefined);
+});
+
 test('the current packaged Skill matches its portable release identity', async () => {
   assert.equal(typeof skillInstall.portableSkillFingerprint, 'function');
   assert.equal(

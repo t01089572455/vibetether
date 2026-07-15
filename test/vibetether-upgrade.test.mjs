@@ -31,6 +31,18 @@ async function materializeSkillAtCommit(commit, destination) {
   }
 }
 
+async function convertTreeToCrLf(root) {
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    const target = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      await convertTreeToCrLf(target);
+      continue;
+    }
+    const source = await readFile(target, 'utf8');
+    await writeFile(target, source.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'), 'utf8');
+  }
+}
+
 async function exists(target) {
   try {
     await stat(target);
@@ -55,7 +67,7 @@ async function snapshotProject(root) {
   return snapshot;
 }
 
-async function legacyProject(agent) {
+async function legacyProject(agent, { crlf = false } = {}) {
   const target = await mkdtemp(path.join(os.tmpdir(), 'vibetether-upgrade-021-'));
   await initialize({ project: target, agent, profile: 'core', dryRun: false, yes: true });
   const paths = agent === 'both'
@@ -65,6 +77,7 @@ async function legacyProject(agent) {
     const destination = path.join(target, ...relativePath.split('/'));
     await rm(destination, { recursive: true, force: true });
     await materializeSkillAtCommit(public021, destination);
+    if (crlf) await convertTreeToCrLf(destination);
     assert.equal((await inspectVibeTetherIdentity(destination)).state, 'legacy');
   }
   return target;
@@ -118,4 +131,61 @@ test('uninstall previews and removes an exact public 0.2.1 copy', async () => {
   assert.match(preview, /DRY RUN/);
   await uninstall({ project: target, dryRun: false, yes: true });
   assert.equal(await exists(path.join(target, '.agents', 'skills', 'vibe-tether')), false);
+});
+
+test('CRLF-only public 0.2.1 copies pass the full lifecycle matrix', async () => {
+  const authorityTarget = await legacyProject('codex', { crlf: true });
+  const report = JSON.parse(await inspectProject({ project: authorityTarget, json: true }));
+  assert.equal(report.issues.some((entry) => entry.code === 'changed-skill'), false);
+  assert.equal(report.warnings.some((entry) => entry.code === 'legacy-skill'), true);
+  await initialize({
+    project: authorityTarget,
+    agent: 'codex',
+    profile: 'core',
+    bootstrapOnly: true,
+    dryRun: true,
+    yes: false,
+  });
+
+  const upgradeTarget = await legacyProject('both', { crlf: true });
+  const upgradeBefore = await snapshotProject(upgradeTarget);
+  const upgradePreview = await initialize({
+    project: upgradeTarget,
+    agent: 'both',
+    profile: 'core',
+    dryRun: true,
+    yes: false,
+  });
+  assert.match(upgradePreview, /DRY RUN/);
+  assert.deepEqual(await snapshotProject(upgradeTarget), upgradeBefore);
+  await initialize({ project: upgradeTarget, agent: 'both', profile: 'core', dryRun: false, yes: true });
+  for (const relativePath of ['.agents/skills/vibe-tether', '.claude/skills/vibe-tether']) {
+    assert.equal((await inspectVibeTetherIdentity(path.join(upgradeTarget, ...relativePath.split('/')))).state, 'current');
+  }
+
+  const uninstallTarget = await legacyProject('codex', { crlf: true });
+  const uninstallBefore = await snapshotProject(uninstallTarget);
+  const uninstallPreview = await uninstall({ project: uninstallTarget, dryRun: true, yes: false });
+  assert.match(uninstallPreview, /DRY RUN/);
+  assert.deepEqual(await snapshotProject(uninstallTarget), uninstallBefore);
+  await uninstall({ project: uninstallTarget, dryRun: false, yes: true });
+  assert.equal(await exists(path.join(uninstallTarget, '.agents', 'skills', 'vibe-tether')), false);
+});
+
+test('changed public 0.2.1 copies are refused by destructive lifecycle commands without writes', async () => {
+  const target = await legacyProject('codex');
+  await writeFile(path.join(target, '.agents', 'skills', 'vibe-tether', 'changed.txt'), 'user change\n');
+  const changed = await snapshotProject(target);
+
+  await assert.rejects(
+    initialize({ project: target, agent: 'codex', profile: 'core', dryRun: false, yes: true }),
+    /modified|fingerprint|different/i,
+  );
+  assert.deepEqual(await snapshotProject(target), changed);
+
+  await assert.rejects(
+    uninstall({ project: target, dryRun: false, yes: true }),
+    /modified|fingerprint|different/i,
+  );
+  assert.deepEqual(await snapshotProject(target), changed);
 });

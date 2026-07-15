@@ -424,6 +424,93 @@ test('missing catalog content falls back to the pinned provider source', async (
   );
 });
 
+test('changed catalog content fetches the pinned source and refuses to overwrite the customization', async () => {
+  const source = await completeUpstream();
+  const target = await project('verified-cache-changed-catalog');
+  const value = completeRegistry(source);
+  let stageCalls = 0;
+  const dependencies = {
+    loadRegistry: async () => value,
+    stageProviders: async (sources) => {
+      stageCalls += 1;
+      return stageProviderSources(sources);
+    },
+  };
+  await initialize(options(target, { agent: 'codex' }), dependencies);
+  const changedPath = path.join(
+    target,
+    '.vibetether',
+    'providers',
+    'catalog',
+    'fixture-source',
+    'router',
+    'guide.md',
+  );
+  await writeFile(changedPath, '# Local customization\n', 'utf8');
+
+  await assert.rejects(
+    initialize(options(target, { agent: 'codex' }), dependencies),
+    /modified|different|fingerprint/i,
+  );
+
+  assert.equal(stageCalls, 2);
+  assert.equal(await readFile(changedPath, 'utf8'), '# Local customization\n');
+});
+
+test('changed lock license evidence fetches the pinned source and repairs from exact content', async () => {
+  const source = await completeUpstream();
+  const target = await project('verified-cache-changed-license-lock');
+  const value = completeRegistry(source);
+  let stageCalls = 0;
+  const dependencies = {
+    loadRegistry: async () => value,
+    stageProviders: async (sources) => {
+      stageCalls += 1;
+      return stageProviderSources(sources);
+    },
+  };
+  await initialize(options(target, { agent: 'codex' }), dependencies);
+  const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
+  const lock = YAML.parse(await readFile(lockPath, 'utf8'));
+  lock.sources[0].license_sha256 = '0'.repeat(64);
+  await writeFile(lockPath, YAML.stringify(lock), 'utf8');
+
+  await initialize(options(target, { agent: 'codex' }), dependencies);
+
+  const repaired = YAML.parse(await readFile(lockPath, 'utf8'));
+  assert.equal(stageCalls, 2);
+  assert.notEqual(repaired.sources[0].license_sha256, '0'.repeat(64));
+  assert.equal(
+    repaired.sources[0].license_sha256,
+    createHash('sha256').update('MIT fixture license\n').digest('hex'),
+  );
+});
+
+test('changed installed license evidence fetches the pinned source and refuses to overwrite it', async () => {
+  const source = await completeUpstream();
+  const target = await project('verified-cache-changed-license-file');
+  const value = completeRegistry(source);
+  let stageCalls = 0;
+  const dependencies = {
+    loadRegistry: async () => value,
+    stageProviders: async (sources) => {
+      stageCalls += 1;
+      return stageProviderSources(sources);
+    },
+  };
+  await initialize(options(target, { agent: 'codex' }), dependencies);
+  const licensePath = path.join(target, '.vibetether', 'licenses', 'fixture-source.LICENSE.txt');
+  await writeFile(licensePath, 'Locally changed license evidence\n', 'utf8');
+
+  await assert.rejects(
+    initialize(options(target, { agent: 'codex' }), dependencies),
+    /license conflict|refusing to overwrite/i,
+  );
+
+  assert.equal(stageCalls, 2);
+  assert.equal(await readFile(licensePath, 'utf8'), 'Locally changed license evidence\n');
+});
+
 test('a newly selected source fetches without refetching an already verified source', async () => {
   const first = await completeUpstream();
   const second = await completeUpstream();

@@ -199,6 +199,58 @@ test('terminal prompt adapter handles custom choices and explicit safe confirmat
   }
 });
 
+test('pseudo-terminal init recovers from invalid and blank answers, previews, cancels safely, then applies', async () => {
+  const target = await project('pseudo-terminal-init');
+
+  async function runResponses(responses) {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    input.isTTY = true;
+    output.isTTY = true;
+    let printed = '';
+    let sent = 0;
+    let promptsSeen = 0;
+    output.on('data', (chunk) => {
+      printed += chunk.toString('utf8');
+      const visiblePrompts = printed.match(/> /g)?.length ?? 0;
+      if (visiblePrompts <= promptsSeen || sent >= responses.length) return;
+      promptsSeen = visiblePrompts;
+      const response = responses[sent];
+      sent += 1;
+      setTimeout(() => input.write(`${response}\n`), 0);
+    });
+    const adapter = createTerminalPromptAdapter({ input, output });
+    let timeout;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeout = setTimeout(() => reject(new Error('pseudo-terminal response timeout')), 10000);
+    });
+    const result = await Promise.race([main(['init', '--project', target], runtime(adapter)), timeoutPromise])
+      .finally(() => clearTimeout(timeout));
+    assert.equal(sent, responses.length);
+    return { result, printed };
+  }
+
+  const before = await snapshot(target);
+  const cancelled = await runResponses([
+    '9', '2', '2', '', 'Help beginners control long coding tasks',
+    'A clean initialization completes', '2', 'Do not change public APIs', '2',
+  ]);
+  assert.match(cancelled.result, /cancelled/i);
+  assert.match(cancelled.printed, /Please choose 1, 2, or 3/i);
+  assert.match(cancelled.printed, /A response is required/i);
+  assert.match(cancelled.printed, /What is explicitly out of scope/i);
+  assert.match(cancelled.printed, /DRY RUN/);
+  assert.deepEqual(await snapshot(target), before);
+
+  const applied = await runResponses([
+    '2', '2', 'Help beginners control long coding tasks',
+    'A clean initialization completes', '1', '1',
+  ]);
+  assert.match(applied.result, /initialized/i);
+  assert.match(applied.printed, /1\) Apply these changes/);
+  assert.match(await readFile(path.join(target, '.vibetether', 'intent.md'), 'utf8'), /Status: confirmed/);
+});
+
 test('interactive prompt adapters may omit close and asynchronous cleanup is awaited', async (t) => {
   await t.test('optional close', async () => {
     const target = await project('prompt-no-close');
