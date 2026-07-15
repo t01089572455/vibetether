@@ -2,7 +2,12 @@
 
 > Even strong agents can drift during long-running work.
 
-VibeTether is a beginner-friendly control Skill for long-running Codex and Claude projects. It is designed for increasingly capable models—including GPT‑5.6 Sol, Fable 5, and the stronger agents that come next—helping them stay aligned during long, multi-stage work. At the moments that matter, it helps the Agent re-check the goal, reread project rules, assess whether the work is ready, choose the right installed Skill, and recall workflows that already worked.
+VibeTether is a beginner-friendly control Skill for long-running Codex and Claude 
+projects. It is designed for increasingly capable models—including GPT‑5.6 Sol, 
+Fable 5, and the stronger agents that come next—helping them stay aligned during 
+long, multi-stage work. At the moments that matter, it helps the Agent re-check 
+the goal, reread project rules, assess whether the work is ready, choose the right 
+installed Skill, and recall workflows that already worked.
 
 You do not need to memorize Skill names or manage a rigid workflow. VibeTether
 turns recurring lessons from experienced developers into a project-local
@@ -40,9 +45,11 @@ updates, and uninstall.
 
 ## Why I built this
 
-I did not build VibeTether because modern coding agents are weak. I built it
-because they are strong enough to move very quickly—and long enough tasks make
-it easy for that speed to leave the original request behind.
+I did not build VibeTether because modern coding agents are weak. I built it 
+because even highly capable agents can lose alignment during long-running, 
+multi-stage work. As context grows and phases change, they can lose sight of 
+the original request, project rules, approved decisions, the right Skill for 
+the moment, or workflows that have already succeeded.
 
 I kept seeing the same failures: a specification existed but stopped governing
 the work after compaction; an agent started from guesses because the brief was
