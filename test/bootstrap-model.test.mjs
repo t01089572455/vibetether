@@ -64,6 +64,9 @@ test('greenfield bootstrap asks only directional questions in canonical order', 
   );
   assert.equal(model.questions.some((question) => question.id === 'architecture'), false);
   assert.equal(model.questions.some((question) => /architecture|framework|database/i.test(question.prompt)), false);
+  assert.match(model.questions.find((question) => question.id === 'goal').help, /does not invent|one sentence/i);
+  assert.match(model.questions.find((question) => question.id === 'goal').example, /help/i);
+  assert.equal(model.questions.find((question) => question.id === 'scope_boundaries').choices.length, 3);
   assert.deepEqual(model.answers.constraints, SAFE_CONSTRAINTS);
 });
 
@@ -90,6 +93,7 @@ test('high-confidence Web evidence adds the visual direction question', () => {
     'visual_direction',
   ]);
   const visual = model.questions.at(-1);
+  assert.equal(visual.choices.length, 3);
   assert.deepEqual(
     {
       id: visual.id,

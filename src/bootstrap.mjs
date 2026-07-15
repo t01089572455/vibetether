@@ -22,6 +22,16 @@ import { createTerminalPromptAdapter } from './terminal-prompts.mjs';
 
 const AGENTS = new Set(['codex', 'claude', 'both']);
 const PROFILES = new Set(['core', 'standard', 'extended']);
+const AGENT_CHOICES = [
+  { value: 'both', label: 'Codex + Claude', description: 'Configure both harnesses and their project-local Skill directories.' },
+  { value: 'codex', label: 'Codex only', description: 'Configure AGENTS.md and .agents/skills.' },
+  { value: 'claude', label: 'Claude only', description: 'Configure CLAUDE.md and .claude/skills.' },
+];
+const PROFILE_CHOICES = [
+  { value: 'standard', label: 'Standard', description: 'Use core controls plus the focused default workflow set.' },
+  { value: 'core', label: 'Core', description: 'Use provider-free control, routing, checkpoints, and experience recall.' },
+  { value: 'extended', label: 'Extended', description: 'Add the curated specialist catalog and selected provider bundles.' },
+];
 const QUESTION_FIELDS = {
   goal: 'goal',
   success_evidence: 'successEvidence',
@@ -199,6 +209,7 @@ async function interactiveInit(options, promptAdapter, dependencies) {
       prompt: 'Which agent harness should VibeTether configure?',
       recommended: agentRecommendation,
       required: true,
+      choices: AGENT_CHOICES,
     })).trim();
     if (!AGENTS.has(agent)) throw new CliError(`Invalid agent choice: ${agent}`);
   }
@@ -208,6 +219,7 @@ async function interactiveInit(options, promptAdapter, dependencies) {
       prompt: 'Which VibeTether control profile should this project use?',
       recommended: profileRecommendation,
       required: true,
+      choices: PROFILE_CHOICES,
     })).trim();
     if (!PROFILES.has(profile)) throw new CliError(`Invalid profile choice: ${profile}`);
   }

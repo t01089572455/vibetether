@@ -10,6 +10,7 @@ const SAFE_CONSTRAINTS = [
 ];
 
 const SCOPE_RECOMMENDATION = 'Preserve existing instructions; confirm destructive actions and releases.';
+const VISUAL_RECOMMENDATION = 'Preserve existing brand assets and request approval before propagating a visual direction.';
 const CANONICAL_ANSWER_KEYS = [
   'goal',
   'success_evidence',
@@ -22,6 +23,8 @@ const QUESTION_DEFINITIONS = {
   goal: {
     id: 'goal',
     prompt: 'Who should this project help, and what outcome should they achieve?',
+    help: 'Write one sentence naming the user and the result. VibeTether does not invent this direction.',
+    example: 'Help a small operations team deploy its reporting service safely.',
     required: true,
     recommended: null,
     answered: false,
@@ -29,6 +32,8 @@ const QUESTION_DEFINITIONS = {
   success_evidence: {
     id: 'success_evidence',
     prompt: 'What fresh evidence would make the first milestone successful?',
+    help: 'Name something observable that can pass or fail.',
+    example: 'A new user completes setup and the focused acceptance tests pass.',
     required: true,
     recommended: null,
     answered: false,
@@ -39,13 +44,63 @@ const QUESTION_DEFINITIONS = {
     required: false,
     recommended: SCOPE_RECOMMENDATION,
     answered: false,
+    choices: [
+      {
+        value: SCOPE_RECOMMENDATION,
+        label: 'Use the safe default',
+        description: 'Preserve existing instructions and confirm destructive actions or releases.',
+      },
+      {
+        value: 'custom',
+        label: 'Enter a custom boundary',
+        description: 'Name one project-specific behavior, area, or contract that must not change.',
+        customPrompt: {
+          id: 'scope_boundaries_custom',
+          prompt: 'What is explicitly out of scope or must not be weakened?',
+          help: 'Name the protected boundary in one sentence.',
+          example: 'Do not change the public API or production database schema.',
+          required: true,
+          recommended: null,
+        },
+      },
+      {
+        value: '',
+        label: 'No additional boundary',
+        description: 'Use only VibeTether\'s built-in safety constraints.',
+      },
+    ],
   },
   visual_direction: {
     id: 'visual_direction',
     prompt: 'What existing brand, reference, or visual direction governs the interface?',
     required: false,
-    recommended: 'Preserve existing brand assets and request approval before propagating a visual direction.',
+    recommended: VISUAL_RECOMMENDATION,
     answered: false,
+    choices: [
+      {
+        value: VISUAL_RECOMMENDATION,
+        label: 'Preserve the existing direction',
+        description: 'Reuse current brand assets and confirm a new visual direction before propagation.',
+      },
+      {
+        value: 'custom',
+        label: 'Enter a custom visual direction',
+        description: 'Name a reference, brand, or concrete visual constraint.',
+        customPrompt: {
+          id: 'visual_direction_custom',
+          prompt: 'What existing brand, reference, or visual direction governs the interface?',
+          help: 'Prefer a concrete reference or a short visual constraint.',
+          example: 'Use the existing light enterprise workbench and current logo assets.',
+          required: true,
+          recommended: null,
+        },
+      },
+      {
+        value: '',
+        label: 'No additional visual constraint',
+        description: 'Do not add a visual direction beyond discovered project truth.',
+      },
+    ],
   },
 };
 
