@@ -8,6 +8,7 @@ import test from 'node:test';
 import YAML from 'yaml';
 import { main } from '../src/cli.mjs';
 import { initialize } from '../src/init.mjs';
+import { stageProviderSources } from '../src/provider-fetch.mjs';
 import { validateProviderLock } from '../src/managed-project-state.mjs';
 import { inspectProject } from '../src/doctor.mjs';
 import { skillFingerprint } from '../src/skill-install.mjs';
@@ -306,6 +307,14 @@ test('README-declaration sources record provenance without creating a fake licen
   assert.match(lock.sources[0].license_evidence.sha256, /^[a-f0-9]{64}$/);
   assert.equal(lock.sources[0].license_installation, undefined);
   assert.match(output, /complete license text is not present upstream/i);
+
+  const repeated = await initialize(options(target, { agent: 'codex' }), {
+    loadRegistry: async () => value,
+    stageProviders: async () => {
+      throw new Error('verified README-declaration cache must remain network-free');
+    },
+  });
+  assert.match(repeated, /complete license text is not present upstream/i);
 });
 
 test('doctor rejects an invalid catalog ownership record', async () => {
@@ -341,6 +350,114 @@ test('provider-aware init is byte-for-byte idempotent and retains managed owners
   assert.deepEqual(after, before);
   const lock = YAML.parse(after[3]);
   assert.equal(lock.skills[0].installations.codex.ownership, 'vibetether');
+});
+
+test('unchanged repeated init reuses the exact verified provider catalog without staging', async () => {
+  const source = await completeUpstream();
+  const target = await project('verified-cache-idempotent');
+  let stageCalls = 0;
+  const dependencies = {
+    loadRegistry: async () => completeRegistry(source),
+    stageProviders: async (sources) => {
+      stageCalls += 1;
+      return stageProviderSources(sources);
+    },
+  };
+
+  await initialize(options(target, { agent: 'codex' }), dependencies);
+  assert.equal(stageCalls, 1);
+  const before = await snapshot(target);
+
+  await initialize(options(target, { agent: 'codex' }), dependencies);
+
+  assert.equal(stageCalls, 1);
+  assert.deepEqual(await snapshot(target), before);
+});
+
+test('verified catalog repairs a missing exposure without provider staging', async () => {
+  const source = await completeUpstream();
+  const target = await project('verified-cache-repair-exposure');
+  const value = completeRegistry(source);
+  await initialize(options(target, { agent: 'codex' }), { loadRegistry: async () => value });
+  await rm(path.join(target, '.agents', 'skills', 'demo'), { recursive: true, force: true });
+  let stageCalls = 0;
+
+  await initialize(options(target, { agent: 'codex' }), {
+    loadRegistry: async () => value,
+    stageProviders: async () => {
+      stageCalls += 1;
+      throw new Error('verified catalog repair must remain network-free');
+    },
+  });
+
+  assert.equal(stageCalls, 0);
+  assert.equal(
+    await skillFingerprint(path.join(target, '.agents', 'skills', 'demo')),
+    source.fingerprints.demo,
+  );
+});
+
+test('missing catalog content falls back to the pinned provider source', async () => {
+  const source = await completeUpstream();
+  const target = await project('verified-cache-missing-catalog');
+  const value = completeRegistry(source);
+  let stageCalls = 0;
+  const dependencies = {
+    loadRegistry: async () => value,
+    stageProviders: async (sources) => {
+      stageCalls += 1;
+      return stageProviderSources(sources);
+    },
+  };
+  await initialize(options(target, { agent: 'codex' }), dependencies);
+  await rm(
+    path.join(target, '.vibetether', 'providers', 'catalog', 'fixture-source', 'router'),
+    { recursive: true, force: true },
+  );
+
+  await initialize(options(target, { agent: 'codex' }), dependencies);
+
+  assert.equal(stageCalls, 2);
+  assert.equal(
+    await skillFingerprint(path.join(target, '.vibetether', 'providers', 'catalog', 'fixture-source', 'router')),
+    source.fingerprints.router,
+  );
+});
+
+test('a newly selected source fetches without refetching an already verified source', async () => {
+  const first = await completeUpstream();
+  const second = await completeUpstream();
+  const initialRegistry = completeRegistry(first);
+  const expandedRegistry = structuredClone(initialRegistry);
+  const secondDefinition = completeRegistry(second).sources[0];
+  secondDefinition.id = 'fixture-source-two';
+  secondDefinition.skills = secondDefinition.skills.map((skill) => ({
+    ...skill,
+    id: `${skill.id}-two`,
+    install_name: `${skill.install_name}-two`,
+  }));
+  expandedRegistry.sources.push(secondDefinition);
+  expandedRegistry.profiles.standard.catalog_sources = ['fixture-source', 'fixture-source-two'];
+  const target = await project('verified-cache-partial');
+  const stagedSourceIds = [];
+  let activeRegistry = initialRegistry;
+  const dependencies = {
+    loadRegistry: async () => activeRegistry,
+    stageProviders: async (sources) => {
+      stagedSourceIds.push(sources.map((source) => source.id));
+      return stageProviderSources(sources);
+    },
+  };
+
+  await initialize(options(target, { agent: 'codex' }), dependencies);
+  activeRegistry = expandedRegistry;
+  await initialize(options(target, { agent: 'codex' }), dependencies);
+
+  assert.deepEqual(stagedSourceIds, [['fixture-source'], ['fixture-source-two']]);
+  assert.equal(
+    await skillFingerprint(path.join(target, '.vibetether', 'providers', 'catalog', 'fixture-source-two', 'demo-two')),
+    second.fingerprints.demo,
+  );
 });
 
 test('normal init dry-run and apply safely reconstruct invalid provider locks from exact installed copies', async (t) => {
