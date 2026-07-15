@@ -15,7 +15,7 @@ async function text(relativePath) {
 
 test('README opens with the user problem and puts the reliable install before explanation', async () => {
   const readme = (await text('README.md')).replace(/\r\n/g, '\n');
-  assert.ok(readme.startsWith(`# VibeTether\n\n> Long tasks drift. Skills get forgotten. Proven fixes disappear.\n\nVibeTether keeps coding agents anchored to project truth, routes each phase to\nthe right Skill, and recalls workflows that already worked.\n`));
+  assert.ok(readme.startsWith(`# VibeTether\n\n> Strong agents can build fast. Long tasks still drift.\n\nVibeTether is a beginner-friendly entry Skill for long-running Codex and\nClaude projects.\n`));
   const install = `${codeload} init --project . --agent both --profile extended --bundle web --bundle production --yes`;
   assert.match(readme, new RegExp(install.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.ok(readme.indexOf(install) < readme.indexOf('## Why I built this'));
@@ -29,6 +29,16 @@ test('README makes a strong but honest long-task claim', async () => {
   assert.match(readme, /designed[\s\S]*reduce[\s\S]*long-task drift and expensive rework/i);
   assert.match(readme, /design goal|cannot guarantee|host.*cooperat/i);
   assert.doesNotMatch(readme, /net Token savings|saves? Tokens|reduce(?:s|d)? Token usage|lower Token cost/i);
+});
+
+test('README presents smallest verifiable scope as a non-restrictive Subagent benefit', async () => {
+  const readme = await text('README.md');
+  assert.match(readme, /Smallest Verifiable Slice/);
+  assert.match(readme, /smallest verifiable (outcome|result)/i);
+  assert.match(readme, /including delegated work|direct or delegated work/i);
+  assert.match(readme, /does not limit.*Subagent|without limiting.*Subagent/is);
+  assert.match(readme, /host.*orchestrat|Codex.*Claude.*decide.*Subagent/is);
+  assert.doesNotMatch(readme, /makes Ultra cheap|guaranteed Token|guarantees? usage savings/i);
 });
 
 test('README gives beginners a 30-second phase-routing example', async () => {
@@ -66,6 +76,10 @@ test('README explains the beginner bootstrap and autonomous control loop', async
   assert.match(readme, /does not.*(?:scan|activate).*project documents|no.*automatic.*activation/is);
   assert.match(readme, /candidate.*user confirmation/is);
   assert.match(readme, /truth.*experience.*conflict.*ask/is);
+  assert.match(readme, /Manage VibeTether your way/i);
+  assert.match(readme, /safe to edit|edit directly/i);
+  assert.match(readme, /CLI-maintained|generated/i);
+  assert.match(readme, /vibetether doctor --project \. --json/);
 });
 
 test('README teaches project truth control in ordinary language and links the visual control loop', async () => {

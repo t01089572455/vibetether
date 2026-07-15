@@ -1,9 +1,17 @@
 # VibeTether
 
-> Long tasks drift. Skills get forgotten. Proven fixes disappear.
+> Strong agents can build fast. Long tasks still drift.
 
-VibeTether keeps coding agents anchored to project truth, routes each phase to
-the right Skill, and recalls workflows that already worked.
+VibeTether is a beginner-friendly entry Skill for long-running Codex and
+Claude projects.
+At the moments that matter, it helps the Agent re-check the goal, reread project
+rules, decide whether the work is ready, choose the right installed Skill, and
+recall workflows that already worked.
+
+You do not need to memorize Skill names or manage a rigid workflow. VibeTether
+turns recurring lessons from experienced developers into a project-local
+guidance layer, so capable Agents stay autonomous without quietly drifting into
+expensive rework.
 
 [![CI](https://github.com/t01089572455/vibetether/actions/workflows/ci.yml/badge.svg)](https://github.com/t01089572455/vibetether/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -50,6 +58,9 @@ VibeTether turns those lessons into a small project-local control layer. It is
 designed for stronger agents such as Claude Fable 5 and GPT-5.6 to reduce
 long-task drift and expensive rework—not to replace their technical judgment.
 
+Under the hood, VibeTether provides a project-local control plane for intent,
+truth, routing, checkpoints, evidence, and proven workflows.
+
 ## See it in 30 seconds
 
 You say: “Build me a customer portal.” You do not need to know any Skill name.
@@ -59,15 +70,34 @@ You say: “Build me a customer portal.” You do not need to know any Skill nam
 2. Once the goal and acceptance evidence are ready, the agent re-enters the
    router at the phase change and uses `brainstorming` for alternatives and
    trade-offs.
-3. After direction is approved, `writing-plans` creates bounded slices.
-4. During implementation, `test-driven-development` owns behavior changes.
-5. Before a completion claim, `verification-before-completion` demands fresh
-   evidence. The route is closed with `vibetether route complete`.
+3. After direction is approved, `writing-plans` maps the larger goal, but only
+   the current Smallest Verifiable Slice enters execution.
+4. Codex or Claude may use Subagents when useful. VibeTether does not limit
+   their number or orchestration; it keeps delegated work inside the same
+   approved slice.
+5. `test-driven-development` owns behavior changes, and
+   `verification-before-completion` requires fresh slice evidence before the
+   Agent advances or proposes another slice. The route is closed with
+   `vibetether route complete`.
 
 The same re-check happens at task entry, consequential phase changes, compaction,
 resume, handoff, repeated failure, the next slice, completion, merge, release,
 and publication. That phase re-entry is what keeps a long Goal-mode task from
 treating an old summary as current authority.
+
+## Powerful Agents, smaller finish lines
+
+VibeTether does not disable, ration, or limit Subagents. Codex and Claude decide
+how the host orchestrates Subagents: parallelizing, delegating, waiting, and
+combining results. Before implementation or the next slice, VibeTether asks for
+the smallest verifiable outcome that meaningfully advances the approved goal.
+All current work,
+including delegated work, stays inside that boundary, so more Agent capability
+does not silently become more project scope.
+
+This is behavioral guidance, not a hard resource limiter, and it cannot control
+hidden platform-internal orchestration. It aims to reduce avoidable expansion
+and rework; it does not guarantee Token or usage savings.
 
 ## A project control plane, not another prompt
 
@@ -94,6 +124,34 @@ owns direction, active truth, visual choices, high-risk boundaries, and whether 
 new Proven Path becomes reusable. This division gives VibeTether coordination
 without turning a capable Agent into a rigid workflow robot.
 
+## Manage VibeTether your way
+
+You can ask the Agent to propose changes in ordinary language, or edit the
+user-owned files directly. Active truth changes still require your explicit
+confirmation.
+
+| Artifact | How to manage it |
+| --- | --- |
+| `.vibetether/TRUTH.md` | Edit directly or ask the Agent to propose candidates and confirm them one at a time |
+| `.vibetether/intent.md` | Use `vibetether bootstrap --project .` or ask the Agent to propose a directional update |
+| `.vibetether/routes.local.yaml` | Use `vibetether customize --project .` or edit validated YAML directly |
+| Proven Path documents | Edit the referenced sanitized runbook; confirm before active indexing |
+| `.vibetether/project.yaml` | CLI-maintained topology; inspect it and normally repair it with `vibetether init` |
+| `.vibetether/capabilities.yaml` | Generated board; inspect it with `vibetether capabilities` |
+| `.vibetether/state/current.yaml` | Runtime checkpoint; inspect it for diagnosis and normally let VibeTether maintain it |
+
+Common guided operations:
+
+```sh
+vibetether bootstrap --project .
+vibetether customize --project .
+vibetether doctor --project . --json
+```
+
+Edit project prose outside VibeTether's markers in `AGENTS.md` or `CLAUDE.md`.
+Rerun `vibetether init` to repair the CLI-maintained block. Do not hand-edit the
+generated capability board, canonical Intent metadata, or runtime route state.
+
 ## Control project truth in ordinary language
 
 You can edit `.vibetether/TRUTH.md` yourself, or just talk to the Agent:
@@ -104,6 +162,15 @@ You can edit `.vibetether/TRUTH.md` yourself, or just talk to the Agent:
 
 > Add `docs/product/approved-prd.md` as a candidate product-direction source. Do
 > not use it for implementation until I confirm activation.
+
+Or add the same non-authoritative candidate directly under `## Candidates
+awaiting confirmation` in `.vibetether/TRUTH.md`:
+
+```markdown
+- [ ] `docs/product/approved-prd.md`
+  - role: `product-direction`
+  - scope: `.`
+```
 
 > The architecture decision moved. Find references, propose the truth-map move or
 > supersession, and ask before changing active authority.
@@ -125,7 +192,7 @@ flowchart LR
     G -->|"No directional answer"| Q["Ask one recommended question"]
     G -->|"Discoverable fact"| I["Investigate autonomously"]
     G -->|"Ready"| R["Route one phase"]
-    R --> S["Execute one bounded slice"]
+    R --> S["Execute the smallest verifiable slice"]
     S --> V["Verify fresh evidence"]
     V --> P["Capture or recall Proven Path"]
     P --> A
@@ -147,6 +214,7 @@ still require the appropriate user decision.
 | Automatic Skill routing | Maps observable task signals to one suitable installed Skill or fallback |
 | Stateful phase handshake | Records route selection, required output, evidence, completion, or abandonment |
 | Long-task checkpoints | Carries the current objective and slice through compaction, resume, and handoff |
+| Smallest Verifiable Slice | Keeps direct and delegated work aimed at the smallest result that meaningfully advances the approved goal, without limiting Subagent use |
 | Proven Path recall | Reads a matching successful runbook before rediscovering an operational workflow |
 | First-success capture | Proposes a reusable workflow the first verified time it works; active indexing needs confirmation |
 | Curated providers | Pins exact commits, fingerprints content, and keeps competing routers out of host discovery |
