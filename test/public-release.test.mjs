@@ -13,7 +13,7 @@ async function text(relativePath) {
 }
 
 test('README opens with the user problem and puts the reliable install before explanation', async () => {
-  const readme = await text('README.md');
+  const readme = (await text('README.md')).replace(/\r\n/g, '\n');
   assert.ok(readme.startsWith(`# VibeTether\n\n> Long tasks drift. Skills get forgotten. Proven fixes disappear.\n\nVibeTether keeps coding agents anchored to project truth, routes each phase to\nthe right Skill, and recalls workflows that already worked.\n`));
   const install = `${codeload} init --project . --agent both --profile extended --bundle web --bundle production --yes`;
   assert.match(readme, new RegExp(install.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
