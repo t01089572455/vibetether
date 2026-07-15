@@ -36,6 +36,21 @@ async function convertTreeToCrlf(root) {
   }
 }
 
+async function convertTreeToLf(root) {
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    const target = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      await convertTreeToLf(target);
+      continue;
+    }
+    const bytes = await readFile(target);
+    if (bytes.includes(0)) continue;
+    const text = bytes.toString('utf8');
+    if (!Buffer.from(text, 'utf8').equals(bytes)) continue;
+    await writeFile(target, text.replaceAll('\r\n', '\n'));
+  }
+}
+
 test('generic installer copies the complete provider directory atomically', async () => {
   const value = await fixture();
   const plan = await inspectDirectoryInstall(value.source, value.target, '.agents/skills/demo');
@@ -82,14 +97,17 @@ test('an exact declared legacy fingerprint is upgradeable while other difference
 test('portable core fingerprints ignore CRLF while raw provider fingerprints remain strict', async () => {
   assert.equal(typeof skillInstall.portableSkillFingerprint, 'function');
   const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-crlf-'));
+  const lfSource = path.join(root, 'vibe-tether-lf');
   const target = path.join(root, 'vibe-tether');
-  await cp(skillInstall.sourceSkill, target, { recursive: true });
+  await cp(skillInstall.sourceSkill, lfSource, { recursive: true });
+  await convertTreeToLf(lfSource);
+  await cp(lfSource, target, { recursive: true });
   await convertTreeToCrlf(target);
 
-  assert.notEqual(await skillFingerprint(target), await skillFingerprint(skillInstall.sourceSkill));
+  assert.notEqual(await skillFingerprint(target), await skillFingerprint(lfSource));
   assert.equal(
     await skillInstall.portableSkillFingerprint(target),
-    await skillInstall.portableSkillFingerprint(skillInstall.sourceSkill),
+    await skillInstall.portableSkillFingerprint(lfSource),
   );
   assert.equal((await skillInstall.inspectVibeTetherIdentity(target)).state, 'current');
 });
