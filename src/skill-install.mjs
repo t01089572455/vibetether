@@ -153,7 +153,7 @@ export async function assertSkillInstallable(target, relativePath) {
 }
 
 export async function installDirectory(source, target, operations = {}) {
-  const run = { cp, mkdir, rename, rm, ...operations };
+  const run = { cp, mkdir, readdir, rename, rm, ...operations };
   const skillsDirectory = path.dirname(target);
   await run.mkdir(skillsDirectory, { recursive: true });
   const previous = `${target}.${randomUUID()}.previous`;
@@ -165,16 +165,19 @@ export async function installDirectory(source, target, operations = {}) {
     } catch (error) {
       if (error.code !== 'ENOENT') throw error;
     }
-    const activationSource = path.resolve(source, 'SKILL.md');
+    const activationSource = path.join(source, 'SKILL.md');
     try {
-      await run.cp(source, target, {
-        recursive: true,
-        errorOnExist: true,
-        force: false,
-        filter(candidate) {
-          return path.resolve(candidate) !== activationSource;
-        },
-      });
+      await run.mkdir(target);
+      const entries = (await run.readdir(source, { withFileTypes: true }))
+        .sort((left, right) => left.name.localeCompare(right.name));
+      for (const entry of entries) {
+        if (entry.name === 'SKILL.md') continue;
+        await run.cp(path.join(source, entry.name), path.join(target, entry.name), {
+          recursive: entry.isDirectory(),
+          errorOnExist: true,
+          force: false,
+        });
+      }
       await run.cp(activationSource, path.join(target, 'SKILL.md'), {
         errorOnExist: true,
         force: false,

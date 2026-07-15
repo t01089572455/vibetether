@@ -69,7 +69,15 @@ test('first install writes the Skill activation marker last without a canonical 
   await installDirectory(value.source, value.target, {
     async cp(from, to, options) {
       copies.push({ from, to });
-      return cp(from, to, options);
+      const forwarded = options?.filter
+        ? {
+          ...options,
+          filter(candidate, destination) {
+            return options.filter(`\\\\?\\${path.resolve(candidate)}`, destination);
+          },
+        }
+        : options;
+      return cp(from, to, forwarded);
     },
     async rename(from, to) {
       if (to === value.target) canonicalRenames.push({ from, to });
