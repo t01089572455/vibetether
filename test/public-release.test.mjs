@@ -183,7 +183,7 @@ test('package metadata points to the authenticated public repository', async () 
   assert.equal(pkg.repository.url, 'git+https://github.com/t01089572455/vibetether.git');
   assert.equal(pkg.homepage, 'https://github.com/t01089572455/vibetether#readme');
   assert.equal(pkg.bugs.url, 'https://github.com/t01089572455/vibetether/issues');
-  assert.equal(pkg.version, '0.2.2');
+  assert.equal(pkg.version, '0.2.3');
   assert.equal(pkg.description, 'Direction control, guided readiness, Skill routing, and Proven Path recall for long-running coding agents.');
   assert.equal(pkg.files.includes('docs/operations'), true);
 });
@@ -242,4 +242,20 @@ test('CI verifies the release on Windows and Ubuntu with supported Node versions
   assert.match(workflow, /npm ci/);
   assert.match(workflow, /npm run check/);
   assert.match(workflow, /npm pack --dry-run/);
+  assert.match(workflow, /actions\/checkout@v4[\s\S]*fetch-depth:\s*0/);
+});
+
+test('release history reproduces every registered canonical fingerprint', () => {
+  const result = spawnSync(process.execPath, ['scripts/verify-release-history.mjs'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /release compatibility: valid \(5 historical identities\)/i);
+});
+
+test('the package check command audits release history', async () => {
+  const pkg = JSON.parse(await text('package.json'));
+  assert.equal(pkg.scripts['audit:release'], 'node scripts/verify-release-history.mjs');
+  assert.match(pkg.scripts.check, /npm run audit:release/);
 });

@@ -1,6 +1,6 @@
 {
   "name": "vibetether",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Direction control, guided readiness, Skill routing, and Proven Path recall for long-running coding agents.",
   "repository": {
     "type": "git",
@@ -28,8 +28,9 @@
     "test": "node --test",
     "eval": "node evals/run-static-evals.mjs",
     "audit:provider": "node scripts/audit-provider-source.mjs",
+    "audit:release": "node scripts/verify-release-history.mjs",
     "acceptance:tour": "node scripts/manual-acceptance-tour.mjs",
-    "check": "npm test && npm run eval && node skills/vibe-tether/scripts/validate-project.mjs --self"
+    "check": "npm test && npm run eval && npm run audit:release && node skills/vibe-tether/scripts/validate-project.mjs --self"
   },
   "engines": {
     "node": ">=20"
