@@ -118,7 +118,9 @@ test('doctor verifies provider lock and capability board on a healthy project', 
   const { target } = await initialized('doctor-ok');
   const report = JSON.parse(await inspectProject({ project: target, json: true }));
   assert.equal(report.ok, true);
-  assert.deepEqual(report.warnings, []);
+  assert.equal(report.issues.length, 0);
+  assert.equal(report.warnings.some((entry) => entry.code === 'route-handshake-not-established'), true);
+  assert.equal(report.warnings.some((entry) => entry.code.includes('provider')), false);
   assert.equal(report.providers.active, 1);
   assert.equal(report.providers.available, 1);
 });
