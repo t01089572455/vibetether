@@ -171,6 +171,22 @@ export async function loadCapabilityContext(project) {
   return loadCapabilitySnapshot(project, { includeExperience: true });
 }
 
+export async function resolveCapabilityRequest(options) {
+  const loaded = await loadCapabilityContext(options.project);
+  const board = await refreshBoardAvailability(loaded.board, loaded.root);
+  const result = resolveBoardRoute(board, {
+    phase: options.phase,
+    capability: options.capability,
+    signals: options.signals,
+    harness: options.agent,
+  });
+  result.applicable_experience = await matchExperience(loaded.experience, {
+    root: loaded.root,
+    signals: options.signals,
+  });
+  return { ...loaded, board, result };
+}
+
 function humanDashboard(root, board) {
   const lines = [
     `VibeTether capability dashboard - ${board.profile} profile (advisory routing)`,
@@ -263,24 +279,11 @@ export async function showCapabilities(options) {
     throw new CliError('--phase and --capability must be provided together.');
   }
   const loaded = queried
-    ? await loadCapabilityContext(options.project)
+    ? await resolveCapabilityRequest(options)
     : await loadCapabilityBoard(options.project);
   const root = loaded.root;
-  const board = await refreshBoardAvailability(loaded.board, root);
-  const result = queried
-    ? resolveBoardRoute(board, {
-        phase: options.phase,
-        capability: options.capability,
-        signals: options.signals,
-        harness: options.agent,
-      })
-    : board;
-  if (queried) {
-    result.applicable_experience = await matchExperience(loaded.experience, {
-      root,
-      signals: options.signals,
-    });
-  }
+  const board = queried ? loaded.board : await refreshBoardAvailability(loaded.board, root);
+  const result = queried ? loaded.result : board;
   if (options.json) return `${JSON.stringify(result, null, 2)}\n`;
   return queried ? humanResolution(result) : humanDashboard(root, board);
 }

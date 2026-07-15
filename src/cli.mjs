@@ -7,6 +7,7 @@ import { inspectProject } from './doctor.mjs';
 import { uninstall } from './uninstall.mjs';
 import { showCapabilities } from './capabilities.mjs';
 import { runCustomize } from './customize.mjs';
+import { runRoute } from './route-handshake.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -18,6 +19,9 @@ Usage:
   vibetether doctor [options]
   vibetether capabilities [options]
   vibetether customize [options]
+  vibetether route [options]
+  vibetether route complete [options]
+  vibetether route abandon [options]
   vibetether uninstall [options]
   vibetether --help
   vibetether --version
@@ -51,6 +55,27 @@ Capabilities options:
 Customize options:
   --project PATH                    Project directory (default: current directory)
   --dry-run                         Preview the project route without writing
+
+Route start options:
+  --project PATH                    Project directory (default: current directory)
+  --phase PHASE                     Resolve one lifecycle phase
+  --capability ID                   Resolve one capability
+  --signal SIGNAL                   Add an observable routing signal (repeatable)
+  --agent codex|claude              Check one enabled harness
+  --select SKILL                    Select an available alternative
+  --reason TEXT                     Required material reason with --select
+  --json                            Print machine-readable route state
+
+Route complete options:
+  --project PATH                    Project directory (default: current directory)
+  --evidence TEXT                   Add bounded completion evidence (repeatable)
+  --artifact PATH                   Add a safe project-relative artifact (repeatable)
+  --json                            Print machine-readable route state
+
+Route abandon options:
+  --project PATH                    Project directory (default: current directory)
+  --reason TEXT                     Record the material abandonment reason
+  --json                            Print machine-readable route state
 
 Uninstall options:
   --project PATH                    Project directory (default: current directory)
@@ -192,6 +217,50 @@ function parseCustomize(args) {
   return options;
 }
 
+function parseRoute(args) {
+  const action = ['complete', 'abandon'].includes(args[0]) ? args.shift() : 'start';
+  const options = {
+    action,
+    project: process.cwd(),
+    phase: null,
+    capability: null,
+    signals: [],
+    agent: null,
+    select: null,
+    reason: null,
+    evidence: [],
+    artifacts: [],
+    json: false,
+  };
+  for (let index = 0; index < args.length; index += 1) {
+    const flag = args[index];
+    if (flag === '--project') options.project = valueAfter(args, index++, flag);
+    else if (flag === '--json') options.json = true;
+    else if (flag === '--help' || flag === '-h') return { help: true };
+    else if (action === 'start' && flag === '--phase') options.phase = valueAfter(args, index++, flag);
+    else if (action === 'start' && flag === '--capability') options.capability = valueAfter(args, index++, flag);
+    else if (action === 'start' && flag === '--signal') options.signals.push(valueAfter(args, index++, flag));
+    else if (action === 'start' && flag === '--agent') options.agent = valueAfter(args, index++, flag);
+    else if (action === 'start' && flag === '--select') options.select = valueAfter(args, index++, flag);
+    else if (action === 'start' && flag === '--reason') options.reason = valueAfter(args, index++, flag);
+    else if (action === 'complete' && flag === '--evidence') options.evidence.push(valueAfter(args, index++, flag));
+    else if (action === 'complete' && flag === '--artifact') options.artifacts.push(valueAfter(args, index++, flag));
+    else if (action === 'abandon' && flag === '--reason') options.reason = valueAfter(args, index++, flag);
+    else throw new CliError(`Unknown option for route${action === 'start' ? '' : ` ${action}`}: ${flag}`);
+  }
+  if (action === 'start') {
+    if (!options.phase || !options.capability) {
+      throw new CliError('Route start requires --phase and --capability together.');
+    }
+    if (options.agent && !['codex', 'claude'].includes(options.agent)) {
+      throw new CliError(`Invalid --agent value: ${options.agent}`);
+    }
+    if (options.select && !options.reason) throw new CliError('--reason is required when --select is used.');
+    if (options.reason && !options.select) throw new CliError('--select is required when --reason is used.');
+  }
+  return options;
+}
+
 async function version() {
   const data = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
   return `${data.version}\n`;
@@ -224,6 +293,11 @@ export async function main(args = process.argv.slice(2), runtime = {}) {
     const options = parseCustomize(args.slice(1));
     if (options.help) return HELP;
     return runCustomize(options, runtime);
+  }
+  if (args[0] === 'route') {
+    const options = parseRoute(args.slice(1));
+    if (options.help) return HELP;
+    return runRoute(options);
   }
   if (args[0] === 'uninstall') {
     const options = parseSimple(args.slice(1), 'uninstall');

@@ -180,10 +180,14 @@ export function resolveCapabilityRoute(board, request) {
       ? 'No matching provider is available; use the declared fallback and record why.'
       : 'The preferred matching Skill is available.';
   const primary = {
+    id: preferred.id,
+    route_id: preferred.project_route_id ?? preferred.id,
     skill: preferred.recommendation.skill,
     available: preferredAvailable,
     available_in: preferred.recommendation.available_in ?? [],
     reason: preferred.recommendation.reason,
+    source: preferred.source ?? 'curated',
+    role: preferred.project_role ?? 'primary',
   };
   const requiredOutputs = preferred.expected_outputs ?? capability.expected_outputs ?? [];
   return {
@@ -202,6 +206,8 @@ export function resolveCapabilityRoute(board, request) {
     },
     should_invoke_provider: Boolean(available) || overlays.some((overlay) => overlay.available),
     alternatives: primaryMatches.slice(1).map((route) => ({
+      id: route.id,
+      route_id: route.project_route_id ?? route.id,
       skill: route.recommendation.skill,
       available: routeAvailable(route, request.harness),
       reason: route.recommendation.reason,
