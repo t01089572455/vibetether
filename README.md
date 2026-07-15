@@ -20,7 +20,7 @@ expensive rework.
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Preview](https://img.shields.io/badge/release-preview-orange.svg)](#honest-limits)
 
-![VibeTether control loop](docs/assets/vibetether-control-loop.svg)
+![VibeTether long-task control loop](docs/assets/vibetether-control-loop.svg)
 
 ## One-command setup
 
@@ -30,7 +30,7 @@ Copy and paste this inside the project you want to control:
 npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
 ```
 
-That is the easiest reviewed installation: VibeTether for Codex and Claude Code,
+That is the **easiest reviewed installation**: VibeTether for Codex and Claude Code,
 plus its curated product, planning, debugging, testing, UI, Web, and production
 specialists. The reliable Codeload form avoids npm's Git/SSH package path.
 
@@ -70,40 +70,45 @@ truth, routing, checkpoints, evidence, and proven workflows.
 
 You say: “Build me a customer portal.” You do not need to know any Skill name.
 
-1. Intent is vague, so VibeTether routes discovery to `grilling` and asks one
-   recommended product question at a time.
-2. Once the goal and acceptance evidence are ready, the agent re-enters the
-   router at the phase change and uses `brainstorming` for alternatives and
-   trade-offs.
-3. After direction is approved, `writing-plans` maps the larger goal, but only
-   the current Smallest Verifiable Slice enters execution.
-4. Codex or Claude may use Subagents when useful. VibeTether does not limit
-   their number or orchestration; it keeps delegated work inside the same
-   approved slice.
-5. `test-driven-development` owns behavior changes, and
-   `verification-before-completion` requires fresh slice evidence before the
-   Agent advances or proposes another slice. The route is closed with
+1. **Clarify intent.** Intent is vague, so VibeTether routes discovery to
+   `grilling` and asks one recommended product question at a time.
+2. **Choose direction.** Once the goal and acceptance evidence are ready, the
+   agent re-enters the router at the phase change and uses `brainstorming` for
+   alternatives and trade-offs.
+3. **Plan one slice.** After direction is approved, `writing-plans` maps the
+   larger goal, but only the current Smallest Verifiable Slice enters execution.
+4. **Keep delegation bounded.** The host Agent still owns Subagent orchestration,
+   whether it is Codex or Claude. VibeTether does not limit Subagent use; it keeps
+   all direct or delegated work inside the same approved slice.
+5. **Verify before advancing.** `test-driven-development` owns behavior changes,
+   and `verification-before-completion` requires fresh slice evidence before
+   the Agent advances or proposes another slice. The route is closed with
    `vibetether route complete`.
 
 The installed project instructions tell a cooperating host Agent to perform the
 same re-check at task entry, consequential phase changes, compaction, resume,
 handoff, repeated failure, the next slice, completion, merge, release, and
-publication. That phase re-entry helps keep a long Goal-mode task from treating
+publication. That **phase re-entry** helps keep a long Goal-mode task from treating
 an old summary as current authority.
 
-## Powerful Agents, smaller finish lines
+## Features
 
-VibeTether does not disable, ration, or limit Subagents. Codex and Claude decide
-how the host orchestrates Subagents: parallelizing, delegating, waiting, and
-combining results. Before implementation or the next slice, VibeTether asks for
-the smallest verifiable outcome that meaningfully advances the approved goal.
-All current work,
-including delegated work, stays inside that boundary, so more Agent capability
-does not silently become more project scope.
+**One project-local control loop—from an unclear request to verified, reusable experience.**
 
-This is behavioral guidance, not a hard resource limiter, and it cannot control
-hidden platform-internal orchestration. It aims to reduce avoidable expansion
-and rework; it does not guarantee Token or usage savings.
+|  | Capability | What it gives you |
+| :---: | --- | --- |
+| 🧭 | **Readiness gate** | Stops product work from starting on guessed direction |
+| 🗺️ | **User-owned truth map** | Keeps confirmed, candidate, and declined documents visible without silently activating them |
+| ⚓ | **Project-truth re-anchor** | Re-reads only the applicable confirmed rules before consequential actions |
+| 🧩 | **Automatic Skill routing** | Maps observable task signals to one suitable installed Skill or a declared fallback |
+| 🤝 | **Stateful phase handshake** | Records route selection, required output, evidence, completion, or abandonment |
+| 📍 | **Long-task checkpoints** | Carries the current objective and slice through compaction, resume, and handoff |
+| 🎯 | **Smallest Verifiable Slice** | Defines the smallest verifiable outcome that advances the approved goal and keeps direct or delegated work inside it—without limiting Subagent use |
+| 🔁 | **Proven Path recall** | Reads a matching successful runbook before rediscovering an operational workflow |
+| ✨ | **First-success capture** | Proposes a reusable workflow the first verified time it works; active indexing still needs confirmation |
+| 📦 | **Curated providers** | Pins exact commits, fingerprints content, and keeps competing routers out of host discovery |
+| 🪟 | **Safe Windows upgrades** | Defers replacement of a locked active Skill and resumes it on the next run |
+| 🛠️ | **Project-local extension** | Lets each project add its own primary, alternative, or overlay routes |
 
 ## A project control plane, not another prompt
 
@@ -212,23 +217,6 @@ alternative when that better fits, but it records why. Low-risk, reversible,
 goal-aligned technical work can proceed autonomously. Product direction,
 architecture, visual direction, destructive data, permissions, and release scope
 still require the appropriate user decision.
-
-## Features
-
-| Capability | What it changes |
-| --- | --- |
-| Readiness gate | Stops product work from starting on guessed direction |
-| User-owned truth map | Keeps confirmed, candidate, and declined documents visible without silent activation |
-| Project-truth re-anchor | Re-reads only applicable confirmed rules before consequential actions |
-| Automatic Skill routing | Maps observable task signals to one suitable installed Skill or fallback |
-| Stateful phase handshake | Records route selection, required output, evidence, completion, or abandonment |
-| Long-task checkpoints | Carries the current objective and slice through compaction, resume, and handoff |
-| Smallest Verifiable Slice | Keeps direct and delegated work aimed at the smallest result that meaningfully advances the approved goal, without limiting Subagent use |
-| Proven Path recall | Reads a matching successful runbook before rediscovering an operational workflow |
-| First-success capture | Proposes a reusable workflow the first verified time it works; active indexing needs confirmation |
-| Curated providers | Pins exact commits, fingerprints content, and keeps competing routers out of host discovery |
-| Safe Windows upgrades | Defers locked active-Skill replacement and resumes it on the next run |
-| Project-local extension | Lets a project add its own primary, alternative, or overlay routes |
 
 ## Automatic routes are inspectable
 

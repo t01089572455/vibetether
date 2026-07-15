@@ -57,6 +57,36 @@ test('README gives beginners a 30-second phase-routing example', async () => {
   assert.match(example, /route complete/i);
 });
 
+test('README moves the feature overview directly after the quick tour and removes the duplicate Subagent section', async () => {
+  const readme = await text('README.md');
+  const quickTour = readme.indexOf('## See it in 30 seconds');
+  const features = readme.indexOf('## Features');
+  const controlPlane = readme.indexOf('## A project control plane, not another prompt');
+  assert.ok(quickTour < features, 'Features should follow the 30-second tour');
+  assert.ok(features < controlPlane, 'Features should appear before the control-plane details');
+  const afterQuickTour = readme.slice(quickTour).match(/\n## ([^\n]+)/g)?.slice(0, 3) ?? [];
+  assert.deepEqual(afterQuickTour, [
+    '\n## Features',
+    '\n## A project control plane, not another prompt',
+    '\n## Manage VibeTether your way',
+  ]);
+  assert.doesNotMatch(readme, /## Powerful Agents, smaller finish lines/i);
+  assert.match(readme, /\*\*Readiness gate\*\*/i);
+  assert.match(readme, /\*\*Smallest Verifiable Slice\*\*/);
+  assert.match(readme, /\*\*First-success capture\*\*/i);
+});
+
+test('control-loop artwork shows the implemented readiness, bounded delegation, and re-anchor loop', async () => {
+  const svg = await text('docs/assets/vibetether-control-loop.svg');
+  assert.match(svg, /Keep capable agents aligned through long-running work\./);
+  assert.match(svg, /Readiness/);
+  assert.match(svg, /Route \+ Slice/);
+  assert.match(svg, /smallest verifiable slice/i);
+  assert.match(svg, /Subagents/i);
+  assert.match(svg, /re-anchor/i);
+  assert.doesNotMatch(svg, /without slowing them down/i);
+});
+
 test('README explains the beginner bootstrap and autonomous control loop', async () => {
   const readme = await text('README.md');
   for (const artifact of [
