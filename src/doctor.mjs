@@ -13,6 +13,7 @@ import { parseCanonicalManifest } from '../skills/vibe-tether/scripts/manifest.m
 import { refreshBoardAvailability, resolveBoardRoute } from './capabilities.mjs';
 import { loadEffectiveProjectRoutes } from './project-routes.mjs';
 import { ROUTE_HANDSHAKE_PATH } from './route-handshake.mjs';
+import { inspectSkillRecovery } from './skill-upgrade-recovery.mjs';
 
 const COMPLETION_PHASES = new Set(['REVIEW', 'SHIP']);
 const CAPTURE_TRIGGERS = new Set(['first-proven-path', 'recovered-path', 'changed-proven-path']);
@@ -406,6 +407,43 @@ export async function inspectProject(options) {
     issues.push(issue('unsupported-schema', `Expected schema_version 1, found ${manifest.schema_version ?? 'none'}`));
   }
 
+  const pendingRecoveryHarnesses = new Set();
+  const recoveryHarnesses = manifest
+    ? Object.entries(manifest.harnesses ?? {})
+        .filter(([name, harness]) => harness?.enabled && ADAPTERS[name])
+        .map(([name]) => name)
+    : Object.keys(ADAPTERS);
+  for (const harness of recoveryHarnesses) {
+    try {
+      const recovery = await inspectSkillRecovery(root, harness);
+      if (!recovery) continue;
+      if (recovery.kind === 'pending-skill-upgrade') {
+        pendingRecoveryHarnesses.add(harness);
+        warnings.push(warning(
+          'pending-skill-upgrade',
+          `A verified ${harness} Skill upgrade is waiting for host release. Close Codex and Claude, then rerun init.`,
+        ));
+      } else if (recovery.kind === 'recoverable-missing-skill') {
+        warnings.push(warning(
+          'recoverable-missing-skill',
+          `The missing ${harness} Skill has one authoritative recovery candidate. Rerun init before other work.`,
+        ));
+      } else if (recovery.kind === 'ambiguous-recovery') {
+        issues.push(issue(
+          'ambiguous-recovery',
+          `Multiple verified ${harness} Skill recovery candidates remain and none has unique peer authority.`,
+        ));
+      } else {
+        issues.push(issue(
+          'unrecoverable-skill-state',
+          `The missing ${harness} Skill has only modified, linked, or unknown recovery candidates.`,
+        ));
+      }
+    } catch {
+      issues.push(issue('unrecoverable-skill-state', `Cannot validate ${harness} Skill recovery state.`));
+    }
+  }
+
   if (manifest) {
     let checkpointState = null;
     if (!manifest.intent_contract) {
@@ -696,6 +734,14 @@ export async function inspectProject(options) {
           issues.push(issue('invalid-checkpoint', 'Cannot parse runtime checkpoint'));
         }
       }
+    }
+    if (checkpointState
+        && COMPLETION_PHASES.has(String(checkpointState.phase ?? '').toUpperCase())
+        && pendingRecoveryHarnesses.size > 0) {
+      issues.push(issue(
+        'pending-skill-upgrade',
+        'Completion-like project state cannot retain a pending Skill upgrade transaction.',
+      ));
     }
     if (board) {
       await validateRouteControlState({

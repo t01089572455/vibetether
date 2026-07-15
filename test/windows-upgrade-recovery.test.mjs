@@ -1,17 +1,21 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import YAML from 'yaml';
-import { applyInitialization } from '../src/init.mjs';
+import { applyInitialization, initialize } from '../src/init.mjs';
+import { inspectProject } from '../src/doctor.mjs';
 import { inspectVibeTetherIdentity, sourceSkill } from '../src/skill-install.mjs';
 import {
+  inspectSkillRecovery,
+  recoverSkillUpgrades,
   replaceCanonicalSkill,
   skillUpgradePaths,
 } from '../src/skill-upgrade-recovery.mjs';
+import { loadProviderRegistry } from '../src/provider-registry.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const public021 = '1f6444567873b5d1abd3371c45df19db23054ec9';
@@ -63,6 +67,15 @@ async function missing(pathname) {
     return false;
   } catch (error) {
     if (error.code === 'ENOENT') return true;
+    throw error;
+  }
+}
+
+async function doctorReport(root) {
+  try {
+    return JSON.parse(await inspectProject({ project: root, json: true }));
+  } catch (error) {
+    if (typeof error.output === 'string') return JSON.parse(error.output);
     throw error;
   }
 }
@@ -166,4 +179,166 @@ test('initialization rolls back text but never deletes a target owned by a defer
   assert.equal(await readFile(instructions, 'utf8'), '# Original\n');
   assert.equal((await inspectVibeTetherIdentity(state.target)).state, 'legacy');
   assert.equal((await transaction(state.paths.manifest)).state, 'waiting-for-host-release');
+});
+
+test('the next init recovers a released pending replacement before loading provider metadata', async () => {
+  const state = await fixture('next-run');
+  await assert.rejects(
+    replaceCanonicalSkill(state.request, {
+      async rename(from, to) {
+        if (from === state.target && to === state.paths.retired) throw windowsLockError();
+        return rename(from, to);
+      },
+    }),
+    /rerun/i,
+  );
+  let registryLoads = 0;
+  let providerFetches = 0;
+
+  const output = await initialize({
+    project: state.root,
+    agent: 'codex',
+    profile: 'core',
+    dryRun: false,
+    yes: true,
+  }, {
+    async loadRegistry() {
+      registryLoads += 1;
+      assert.equal((await inspectVibeTetherIdentity(state.target)).state, 'current');
+      assert.equal(await missing(state.paths.manifest), true);
+      return loadProviderRegistry();
+    },
+    async stageProviders() {
+      providerFetches += 1;
+      throw new Error('provider fetch must not run for this recovered core project');
+    },
+  });
+
+  assert.equal(registryLoads, 1);
+  assert.equal(providerFetches, 0);
+  assert.match(output, /recovered[\s\S]*initialized/i);
+});
+
+test('a still-locked recovery remains deferred without consuming either verified copy', async () => {
+  const state = await fixture('still-locked');
+  const locked = {
+    async rename(from, to) {
+      if (from === state.target && to === state.paths.retired) throw windowsLockError();
+      return rename(from, to);
+    },
+  };
+  await assert.rejects(replaceCanonicalSkill(state.request, locked), /rerun/i);
+
+  await assert.rejects(
+    recoverSkillUpgrades({ root: state.root, adapters: ['codex'], operations: locked }),
+    (error) => {
+      assert.equal(error.status, 'deferred');
+      assert.match(error.message, /close.*rerun/i);
+      return true;
+    },
+  );
+
+  assert.equal((await inspectVibeTetherIdentity(state.target)).state, 'legacy');
+  assert.equal((await inspectVibeTetherIdentity(state.paths.previous)).state, 'legacy');
+  assert.equal((await inspectVibeTetherIdentity(state.paths.pending)).state, 'current');
+});
+
+async function legacyCandidate(root, name, commit = public021) {
+  const target = path.join(root, '.vibetether', 'transaction', name);
+  if (commit === 'current') await cp(sourceSkill, target, { recursive: true });
+  else await materializeSkillAtCommit(commit, target);
+  return target;
+}
+
+test('a missing Skill restores the only verified registered transaction candidate', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-legacy-recovery-single-'));
+  const candidate = await legacyCandidate(root, '11111111-1111-4111-8111-111111111111.previous');
+
+  const [report] = await recoverSkillUpgrades({ root, adapters: ['codex'] });
+
+  const target = path.join(root, '.agents', 'skills', 'vibe-tether');
+  assert.equal(report.kind, 'recoverable-missing-skill');
+  assert.equal(report.status, 'recovered');
+  assert.equal(report.sourceIdentity, (await inspectVibeTetherIdentity(target)).installed);
+  assert.equal(await missing(candidate), true);
+});
+
+test('multiple legacy candidates select only the exact enabled peer-harness identity', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-legacy-recovery-peer-'));
+  const legacy = await legacyCandidate(root, '22222222-2222-4222-8222-222222222222.previous');
+  await legacyCandidate(root, '33333333-3333-4333-8333-333333333333.previous', 'current');
+  const peer = path.join(root, '.claude', 'skills', 'vibe-tether');
+  await cp(legacy, peer, { recursive: true });
+  await mkdir(path.join(root, '.vibetether'), { recursive: true });
+  await writeFile(path.join(root, '.vibetether', 'project.yaml'), YAML.stringify({
+    schema_version: 1,
+    harnesses: {
+      codex: { enabled: true },
+      claude: { enabled: true },
+    },
+  }), 'utf8');
+  const peerIdentity = (await inspectVibeTetherIdentity(peer)).installed;
+
+  const plan = await inspectSkillRecovery(root, 'codex');
+  assert.equal(plan.kind, 'recoverable-missing-skill');
+  assert.equal(plan.sourceIdentity, peerIdentity);
+  const [report] = await recoverSkillUpgrades({ root, adapters: ['codex'] });
+
+  const target = path.join(root, '.agents', 'skills', 'vibe-tether');
+  assert.equal(report.sourceIdentity, peerIdentity);
+  assert.equal((await inspectVibeTetherIdentity(target)).installed, peerIdentity);
+});
+
+test('multiple candidates without one exact peer match stop as ambiguous instead of using timestamps', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-legacy-recovery-ambiguous-'));
+  await legacyCandidate(root, '44444444-4444-4444-8444-444444444444.previous');
+  await legacyCandidate(root, '55555555-5555-4555-8555-555555555555.previous', 'current');
+
+  const plan = await inspectSkillRecovery(root, 'codex');
+  assert.equal(plan.kind, 'ambiguous-recovery');
+  await assert.rejects(
+    recoverSkillUpgrades({ root, adapters: ['codex'] }),
+    /ambiguous[\s\S]*1\.[\s\S]*2\./i,
+  );
+  assert.equal(await missing(path.join(root, '.agents', 'skills', 'vibe-tether')), true);
+});
+
+test('a modified registered candidate is never restored as canonical', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-legacy-recovery-modified-'));
+  const candidate = await legacyCandidate(root, '77777777-7777-4777-8777-777777777777.previous');
+  await writeFile(path.join(candidate, 'modified.txt'), 'user customization\n', 'utf8');
+
+  const plan = await inspectSkillRecovery(root, 'codex');
+  assert.equal(plan.kind, 'unrecoverable-skill-state');
+  await assert.rejects(
+    recoverSkillUpgrades({ root, adapters: ['codex'] }),
+    /modified.*linked.*unknown|unrecoverable/i,
+  );
+  assert.equal(await missing(path.join(root, '.agents', 'skills', 'vibe-tether')), true);
+});
+
+test('doctor exposes pending and recoverable Skill states with dedicated codes', async () => {
+  const pending = await fixture('doctor-pending');
+  await assert.rejects(
+    replaceCanonicalSkill(pending.request, {
+      async rename(from, to) {
+        if (from === pending.target && to === pending.paths.retired) throw windowsLockError();
+        return rename(from, to);
+      },
+    }),
+    /rerun/i,
+  );
+  const pendingReport = await doctorReport(pending.root);
+  assert.ok([
+    ...pendingReport.warnings,
+    ...pendingReport.issues,
+  ].some(({ code }) => code === 'pending-skill-upgrade'));
+
+  const recoverableRoot = await mkdtemp(path.join(os.tmpdir(), 'vibetether-doctor-recoverable-'));
+  await legacyCandidate(recoverableRoot, '66666666-6666-4666-8666-666666666666.previous');
+  const recoverableReport = await doctorReport(recoverableRoot);
+  assert.ok([
+    ...recoverableReport.warnings,
+    ...recoverableReport.issues,
+  ].some(({ code }) => code === 'recoverable-missing-skill'));
 });

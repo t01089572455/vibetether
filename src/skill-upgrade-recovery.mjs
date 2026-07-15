@@ -1,4 +1,4 @@
-import { access, cp, lstat, mkdir, rename, rm } from 'node:fs/promises';
+import { access, cp, lstat, mkdir, readFile, readdir, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import YAML from 'yaml';
 import { ADAPTERS } from './adapters.mjs';
@@ -13,7 +13,23 @@ import { inspectVibeTetherIdentity, sourceSkill } from './skill-install.mjs';
 const WINDOWS_LOCK_CODES = new Set(['EACCES', 'EBUSY', 'ENOTEMPTY', 'EPERM']);
 const SAFE_HARNESS = new Set(['codex', 'claude']);
 
-const defaultOperations = Object.freeze({ access, cp, lstat, mkdir, rename, rm });
+const defaultOperations = Object.freeze({ access, cp, lstat, mkdir, readFile, readdir, rename, rm });
+const HASH = /^[a-f0-9]{64}$/;
+const TRANSACTION_STATES = new Set(['applied', 'prepared', 'waiting-for-host-release']);
+const TRANSACTION_KEYS = new Set([
+  'schema_version',
+  'harness',
+  'target',
+  'previous',
+  'replacement',
+  'retired_path',
+  'state',
+  'created_at',
+  'updated_at',
+  'waiting_step',
+  'lock_code',
+  'last_failed_step',
+]);
 
 function operationsWith(overrides = {}) {
   return { ...defaultOperations, ...overrides };
@@ -144,7 +160,13 @@ export async function prepareSkillUpgrade(request, operationOverrides = {}) {
     created_at: now,
     updated_at: now,
   };
-  await writeTransaction(paths, transaction);
+  try {
+    await writeTransaction(paths, transaction);
+  } catch (error) {
+    await operations.rm(paths.pending, { recursive: true, force: true }).catch(() => {});
+    await operations.rm(paths.previous, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
   return { transaction, paths, operations };
 }
 
@@ -178,7 +200,7 @@ async function restorePreviousWithoutDeletion(prepared, request) {
 
 async function cleanupApplied(prepared) {
   const cleanupWarnings = [];
-  for (const target of [prepared.paths.previous, prepared.paths.retired]) {
+  for (const target of [prepared.paths.previous, prepared.paths.pending, prepared.paths.retired]) {
     await prepared.operations.rm(target, { recursive: true, force: true })
       .catch((error) => cleanupWarnings.push(error.message));
   }
@@ -187,6 +209,291 @@ async function cleanupApplied(prepared) {
       .catch((error) => cleanupWarnings.push(error.message));
   }
   return cleanupWarnings;
+}
+
+function record(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function exactTransactionShape(value, harness, paths) {
+  if (!record(value)
+      || value.schema_version !== 1
+      || value.harness !== harness
+      || value.target !== portable(ADAPTERS[harness].skillDirectory)
+      || value.retired_path !== paths.relative.retired
+      || !record(value.previous)
+      || !record(value.replacement)
+      || !HASH.test(value.previous.identity ?? '')
+      || !['legacy', 'current'].includes(value.previous.state)
+      || value.previous.path !== paths.relative.previous
+      || !HASH.test(value.replacement.identity ?? '')
+      || value.replacement.path !== paths.relative.pending
+      || !TRANSACTION_STATES.has(value.state)
+      || typeof value.created_at !== 'string'
+      || typeof value.updated_at !== 'string'
+      || Object.keys(value).some((key) => !TRANSACTION_KEYS.has(key))) {
+    throw new CliError('The VibeTether Skill upgrade transaction is structurally invalid.', 3);
+  }
+  return value;
+}
+
+async function readTransaction(root, harness, operationOverrides = {}) {
+  const operations = operationsWith(operationOverrides);
+  const paths = skillUpgradePaths(root, harness);
+  await rejectSymlinkPath(root, paths.relative.manifest);
+  try {
+    const source = await operations.readFile(paths.manifest, 'utf8');
+    return {
+      transaction: exactTransactionShape(YAML.parse(source), harness, paths),
+      paths,
+      operations,
+    };
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    if (error instanceof CliError) throw error;
+    throw new CliError('The VibeTether Skill upgrade transaction cannot be read safely.', 3);
+  }
+}
+
+async function identityIfPresent(target) {
+  try {
+    return await inspectVibeTetherIdentity(target);
+  } catch (error) {
+    if (['ENOENT', 'ENOTDIR'].includes(error.code)) return null;
+    throw error;
+  }
+}
+
+function legacyCandidateName(name, harness) {
+  return new RegExp(`^skill-upgrade-${harness}\\.previous$`, 'i').test(name)
+    || /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.previous$/i.test(name);
+}
+
+async function enabledPeerIdentity(root, harness, operations) {
+  const peer = harness === 'codex' ? 'claude' : 'codex';
+  try {
+    await rejectSymlinkPath(root, '.vibetether/project.yaml');
+    const manifest = YAML.parse(await operations.readFile(resolveInside(root, '.vibetether/project.yaml'), 'utf8'));
+    if (manifest?.harnesses?.[peer]?.enabled !== true) return null;
+    await rejectSymlinkPath(root, ADAPTERS[peer].skillDirectory);
+    return identityIfPresent(resolveInside(root, ADAPTERS[peer].skillDirectory));
+  } catch (error) {
+    if (['ENOENT', 'ENOTDIR'].includes(error.code)) return null;
+    return null;
+  }
+}
+
+async function legacyCandidates(root, harness, operations) {
+  const transactionRoot = resolveInside(root, '.vibetether/transaction');
+  let entries;
+  try {
+    entries = await operations.readdir(transactionRoot, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === 'ENOENT') return { candidates: [], rejected: [] };
+    throw new CliError('The VibeTether transaction directory cannot be inspected safely.', 3);
+  }
+  const candidates = [];
+  const rejected = [];
+  for (const entry of entries) {
+    if (!legacyCandidateName(entry.name, harness)) continue;
+    const relativePath = `.vibetether/transaction/${entry.name}`;
+    if (!entry.isDirectory() || entry.isSymbolicLink()) {
+      rejected.push(relativePath);
+      continue;
+    }
+    await rejectSymlinkPath(root, relativePath);
+    const target = resolveInside(root, relativePath);
+    try {
+      const identity = await inspectVibeTetherIdentity(target);
+      if (['current', 'legacy'].includes(identity.state)) {
+        candidates.push({
+          path: target,
+          relativePath,
+          identity: identity.installed,
+          state: identity.state,
+        });
+      } else {
+        rejected.push(relativePath);
+      }
+    } catch {
+      rejected.push(relativePath);
+    }
+  }
+  return { candidates, rejected };
+}
+
+export async function inspectSkillRecovery(root, harness, operationOverrides = {}) {
+  if (!SAFE_HARNESS.has(harness)) throw new CliError('Skill recovery harness must be codex or claude.', 3);
+  const operations = operationsWith(operationOverrides);
+  const pending = await readTransaction(root, harness, operations);
+  if (pending) {
+    const target = resolveInside(root, ADAPTERS[harness].skillDirectory);
+    return {
+      kind: 'pending-skill-upgrade',
+      harness,
+      state: pending.transaction.state,
+      targetState: (await identityIfPresent(target))?.state ?? 'missing',
+      transactionPath: pending.paths.relative.manifest,
+      recommendedAction: 'Close Codex and Claude processes using this project, then rerun init.',
+    };
+  }
+
+  const target = resolveInside(root, ADAPTERS[harness].skillDirectory);
+  if (await identityIfPresent(target)) return null;
+  const { candidates, rejected } = await legacyCandidates(root, harness, operations);
+  if (candidates.length === 0) {
+    return rejected.length > 0
+      ? {
+          kind: 'unrecoverable-skill-state',
+          harness,
+          rejected,
+          recommendedAction: 'Back up the transaction directory and reinstall from a verified release.',
+        }
+      : null;
+  }
+
+  let selected = candidates.length === 1 ? candidates[0] : null;
+  if (!selected) {
+    const peer = await enabledPeerIdentity(root, harness, operations);
+    const matches = peer ? candidates.filter((candidate) => candidate.identity === peer.installed) : [];
+    if (matches.length === 1) selected = matches[0];
+  }
+  if (!selected) {
+    return {
+      kind: 'ambiguous-recovery',
+      harness,
+      candidates,
+      recommendedAction: 'Choose one verified candidate explicitly; VibeTether will not guess by timestamp.',
+    };
+  }
+  return {
+    kind: 'recoverable-missing-skill',
+    harness,
+    sourcePath: selected.path,
+    source: selected.relativePath,
+    sourceIdentity: selected.identity,
+    sourceState: selected.state,
+    recommendedAction: 'Rerun init to restore this verified candidate before other work.',
+  };
+}
+
+async function recoverPendingTransaction(root, harness, operationOverrides = {}) {
+  const prepared = await readTransaction(root, harness, operationOverrides);
+  if (!prepared) return null;
+  const request = {
+    root,
+    harness,
+    relativePath: ADAPTERS[harness].skillDirectory,
+    target: resolveInside(root, ADAPTERS[harness].skillDirectory),
+  };
+  const targetIdentity = await identityIfPresent(request.target);
+  const previousIdentity = await identityIfPresent(prepared.paths.previous);
+  const pendingIdentity = await identityIfPresent(prepared.paths.pending);
+
+  if (targetIdentity?.installed === prepared.transaction.replacement.identity) {
+    await writeTransaction(prepared.paths, {
+      ...prepared.transaction,
+      state: 'applied',
+      updated_at: new Date().toISOString(),
+    });
+    return {
+      kind: 'pending-skill-upgrade',
+      harness,
+      status: 'recovered',
+      sourceIdentity: targetIdentity.installed,
+      cleanupWarnings: await cleanupApplied(prepared),
+    };
+  }
+  if (!pendingIdentity || pendingIdentity.installed !== prepared.transaction.replacement.identity) {
+    throw new CliError('Pending Skill recovery is unrecoverable because the verified replacement copy is missing or changed.', 3);
+  }
+  const oldIdentityAvailable = previousIdentity?.installed === prepared.transaction.previous.identity;
+  if (!oldIdentityAvailable && targetIdentity?.installed !== prepared.transaction.previous.identity) {
+    throw new CliError('Pending Skill recovery is unrecoverable because no verified previous copy remains.', 3);
+  }
+  if (targetIdentity) {
+    if (targetIdentity.installed !== prepared.transaction.previous.identity) {
+      throw new CliError('Pending Skill recovery found an unexpected canonical target identity.', 3);
+    }
+    if (await exists(prepared.paths.retired, prepared.operations)) {
+      throw new CliError('Pending Skill recovery found an unexpected retired target copy.', 3);
+    }
+    try {
+      await prepared.operations.rename(request.target, prepared.paths.retired);
+    } catch (error) {
+      if (isWindowsLock(error)) return deferUpgrade(prepared, request, 'recover-retire-active-skill', error);
+      throw error;
+    }
+  }
+
+  try {
+    await prepared.operations.mkdir(path.dirname(request.target), { recursive: true });
+    await prepared.operations.rename(prepared.paths.pending, request.target);
+    await verifyIdentity(request.target, 'current', prepared.transaction.replacement.identity);
+  } catch (error) {
+    const restored = await restorePreviousWithoutDeletion(prepared, request);
+    if (isWindowsLock(error) || !restored) {
+      return deferUpgrade(prepared, request, 'recover-commit-replacement', error);
+    }
+    throw error;
+  }
+  await writeTransaction(prepared.paths, {
+    ...prepared.transaction,
+    state: 'applied',
+    updated_at: new Date().toISOString(),
+  });
+  return {
+    kind: 'pending-skill-upgrade',
+    harness,
+    status: 'recovered',
+    sourceIdentity: prepared.transaction.replacement.identity,
+    cleanupWarnings: await cleanupApplied(prepared),
+  };
+}
+
+function ambiguousRecoveryError(plan) {
+  const choices = plan.candidates
+    .map((candidate, index) => `${index + 1}. ${candidate.relativePath} [${candidate.state}]`)
+    .join('\n');
+  return new CliError(
+    `VibeTether found ambiguous recovery candidates and will not choose by timestamp:\n${choices}\nBack up the candidates and keep only the intended verified copy, then rerun init.`,
+    3,
+  );
+}
+
+export async function recoverSkillUpgrades({ root, adapters, operations = {} }) {
+  const reports = [];
+  for (const harness of adapters) {
+    const harnessOperations = operations?.[harness] ?? operations;
+    const pending = await readTransaction(root, harness, harnessOperations);
+    if (pending) {
+      reports.push(await recoverPendingTransaction(root, harness, harnessOperations));
+      continue;
+    }
+    const plan = await inspectSkillRecovery(root, harness, harnessOperations);
+    if (!plan) continue;
+    if (plan.kind === 'ambiguous-recovery') throw ambiguousRecoveryError(plan);
+    if (plan.kind === 'unrecoverable-skill-state') {
+      throw new CliError('VibeTether found only modified, linked, or unknown recovery candidates. Back them up and reinstall from a verified release.', 3);
+    }
+    const activeOperations = operationsWith(harnessOperations);
+    const target = resolveInside(root, ADAPTERS[harness].skillDirectory);
+    await activeOperations.mkdir(path.dirname(target), { recursive: true });
+    try {
+      await activeOperations.rename(plan.sourcePath, target);
+    } catch (error) {
+      if (isWindowsLock(error)) {
+        throw new CliError(`VibeTether could not restore the ${harness} Skill because Windows reports the destination is in use. Close Codex and Claude, then rerun init.`, 3);
+      }
+      throw error;
+    }
+    const restored = await inspectVibeTetherIdentity(target);
+    if (restored.installed !== plan.sourceIdentity) {
+      throw new CliError('Recovered Skill identity does not match the selected verified candidate.', 3);
+    }
+    reports.push({ ...plan, status: 'recovered' });
+  }
+  return reports;
 }
 
 export async function replaceCanonicalSkill(request, operationOverrides = {}) {

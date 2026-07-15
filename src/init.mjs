@@ -67,7 +67,10 @@ import {
   PROJECT_ROUTES_PATH,
   validateProjectRoutes,
 } from './project-routes.mjs';
-import { replaceCanonicalSkill } from './skill-upgrade-recovery.mjs';
+import {
+  recoverSkillUpgrades,
+  replaceCanonicalSkill,
+} from './skill-upgrade-recovery.mjs';
 
 function instructionBody(adapter) {
   return ADAPTERS[adapter].managedBody;
@@ -253,6 +256,16 @@ export async function initialize(options, dependencies = {}) {
   }
 
   const adapters = selectedAdapters(options.agent);
+  const recoveryReports = options.dryRun || !options.yes
+    ? []
+    : await recoverSkillUpgrades({
+        root,
+        adapters,
+        operations: dependencies.skillUpgradeOperations,
+      });
+  const recoveryPrefix = recoveryReports.length > 0
+    ? `VibeTether recovered ${recoveryReports.length} interrupted Skill upgrade state(s) before initialization.\n`
+    : '';
   const loadRegistry = dependencies.loadRegistry ?? loadProviderRegistry;
   const stageProviders = dependencies.stageProviders ?? stageProviderSources;
   let registry;
@@ -546,6 +559,8 @@ export async function initialize(options, dependencies = {}) {
     target: resolveInside(root, ADAPTERS[adapter].skillDirectory),
     source: sourceSkill,
     kind: 'vibetether',
+    upgradeOperations: dependencies.skillUpgradeOperations?.[adapter]
+      ?? dependencies.skillUpgradeOperations,
   }));
   for (const plan of skillPlans) {
     const inspection = await inspectVibeTetherInstall(plan.target, plan.relativePath);
@@ -571,7 +586,7 @@ export async function initialize(options, dependencies = {}) {
     if (applied.cleanupWarnings.length > 0) {
       throw new CliError(`Bootstrap completed with unexpected cleanup failures (${applied.cleanupWarnings.join('; ')}).`, 3);
     }
-    return `VibeTether bootstrapped project truth in ${root} without changing provider installations.\n`;
+    return `${recoveryPrefix}VibeTether bootstrapped project truth in ${root} without changing provider installations.\n`;
   }
 
   if (options.dryRun) {
@@ -861,5 +876,5 @@ export async function initialize(options, dependencies = {}) {
     warningMessages.push('A verified Skill upgrade completed, but transaction cleanup remains. Close Codex and Claude, then rerun init.');
   }
   const warnings = warningMessages.map((warning) => `- ${warning}`).join('\n');
-  return `VibeTether initialized ${root} for ${adapters.join(' + ')} using the ${options.profile} profile with ${providers.length} curated provider Skill(s).\n${warnings ? `Warnings:\n${warnings}\n` : ''}`;
+  return `${recoveryPrefix}VibeTether initialized ${root} for ${adapters.join(' + ')} using the ${options.profile} profile with ${providers.length} curated provider Skill(s).\n${warnings ? `Warnings:\n${warnings}\n` : ''}`;
 }
