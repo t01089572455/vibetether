@@ -124,7 +124,7 @@ test('the compatibility registry includes the exact public 0.2.1 Skill', () => {
     LEGACY_VIBETETHER_FINGERPRINTS.has('2488d70f4a07bd5df8267c0baa15439f9463868778fd837d2d11134c2209f3df'),
     true,
   );
-  assert.equal(skillInstall.VIBETETHER_RELEASE_COMPATIBILITY?.current?.version, '0.3.0');
+  assert.equal(skillInstall.VIBETETHER_RELEASE_COMPATIBILITY?.current?.version, '0.4.0');
   assert.equal(
     skillInstall.VIBETETHER_RELEASE_COMPATIBILITY.history.some((entry) => (
       entry.version === '0.2.3'
@@ -158,6 +158,7 @@ test('every Skill reference is direct, present, and intentionally routed', async
     'references/capability-routing.md',
     'references/checkpoint-and-drift.md',
     'references/project-manifest.md',
+    'references/project-truth.md',
     'references/scenario-routing.md',
     'references/success-capture.md',
     'references/ui-control-loop.md',
@@ -168,6 +169,27 @@ test('every Skill reference is direct, present, and intentionally routed', async
     const target = path.resolve(skillDir, relative);
     assert.equal(path.dirname(target), path.join(skillDir, 'references'));
     assert.equal((await stat(target)).isFile(), true);
+  }
+});
+
+test('the Skill defines a user-confirmed project truth lifecycle and selective re-entry', async () => {
+  const skill = await readFile(skillPath, 'utf8');
+  const truth = await readFile(path.join(skillDir, 'references', 'project-truth.md'), 'utf8');
+
+  assert.match(skill, /candidates? (?:are|remain) non-authoritative/i);
+  assert.match(skill, /active additions?.*require user confirmation/i);
+  assert.match(skill, /truth.*experience.*conflict.*ask the user/i);
+  assert.match(skill, /unchanged.*low-risk.*fingerprint/i);
+  assert.match(truth, /generated during.*conversation.*candidate/i);
+  assert.match(truth, /move.*delete.*supersed/i);
+});
+
+test('managed host instructions re-enter the complete project control plane', () => {
+  for (const adapter of Object.values(ADAPTERS)) {
+    assert.match(adapter.managedBody, /\.vibetether\/TRUTH\.md/);
+    assert.match(adapter.managedBody, /candidate.*user confirmation/i);
+    assert.match(adapter.managedBody, /truth.*experience.*conflict.*ask the user/i);
+    assert.match(adapter.managedBody, /low-risk.*autonomously/i);
   }
 });
 
@@ -201,6 +223,24 @@ test('the public Skill ships the zero-dependency experience resolver substrate',
   assert.match(experience, /matchExperience/);
   assert.match(safety, /isSensitiveArtifactPath/);
   assert.doesNotMatch(`${resolver}\n${experience}\n${safety}`, /from ['"]yaml['"]/);
+});
+
+test('the installed manifest resolver requires and exposes the project truth route', async () => {
+  const { authorityRoutesFromManifest } = await import(
+    new URL('../skills/vibe-tether/scripts/manifest.mjs', import.meta.url)
+  );
+  const source = [
+    'schema_version: 1',
+    'capability_board: .vibetether/capabilities.yaml',
+    'truth_index: .vibetether/TRUTH.md',
+    '',
+  ].join('\n');
+
+  assert.equal(authorityRoutesFromManifest(source).truthIndex, '.vibetether/TRUTH.md');
+  assert.throws(
+    () => authorityRoutesFromManifest(source.replace('truth_index: .vibetether/TRUTH.md\n', '')),
+    /truth_index/i,
+  );
 });
 
 test('the installed validator performs its own recursive leakage scan', async () => {

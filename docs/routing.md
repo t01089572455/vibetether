@@ -16,10 +16,11 @@ The managed project instructions tell a cooperating host to reload VibeTether at
 - selection of the next slice;
 - completion, merge, release, or publication.
 
-Re-entry reloads `.vibetether/project.yaml`, applicable truth sources, the current
-checkpoint, `.vibetether/routes.local.yaml` when present, and matching Proven
-Path metadata. This is more reliable than assuming the first prompt or an old
-conversation summary is still complete.
+Re-entry reloads `.vibetether/project.yaml`, `.vibetether/TRUTH.md`, the Intent
+Contract, the current checkpoint, only applicable confirmed truth sources,
+`.vibetether/routes.local.yaml` when present, and matching Proven Path metadata.
+Candidates remain non-authoritative. This is more reliable than assuming the
+first prompt or an old conversation summary is still complete.
 
 ## Route one phase
 

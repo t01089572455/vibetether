@@ -1,6 +1,7 @@
-import { lstat, realpath } from 'node:fs/promises';
+import { lstat, realpath, rm } from 'node:fs/promises';
 import path from 'node:path';
 import YAML from 'yaml';
+import { createAuthoritySnapshot } from './authority-snapshot.mjs';
 import {
   containsSecretValue,
   isSafeProjectRelativeArtifactPath,
@@ -64,6 +65,22 @@ async function readCheckpoint(root, manifest) {
   }
 }
 
+async function readManifest(root) {
+  const relativePath = '.vibetether/project.yaml';
+  await rejectSymlinkPath(root, relativePath);
+  const source = await readTextIfPresent(resolveInside(root, relativePath));
+  if (source === null) throw new CliError('Project manifest is missing. Run vibetether doctor.', 3);
+  try {
+    const value = YAML.parse(source);
+    if (!value || typeof value !== 'object' || Array.isArray(value) || value.schema_version !== 1) {
+      throw new Error('invalid manifest');
+    }
+    return value;
+  } catch {
+    throw new CliError('Project manifest is invalid. Run vibetether doctor.', 3);
+  }
+}
+
 async function readHandshake(root) {
   await rejectSymlinkPath(root, ROUTE_HANDSHAKE_PATH);
   const source = await readTextIfPresent(resolveInside(root, ROUTE_HANDSHAKE_PATH));
@@ -79,10 +96,48 @@ async function readHandshake(root) {
   }
 }
 
-async function writeHandshake(root, state) {
+async function restoreText(target, original, operations = {}) {
+  const runRm = operations.rm ?? rm;
+  const runWrite = operations.writeAtomic ?? writeAtomic;
+  if (original === null) await runRm(target, { force: true });
+  else await runWrite(target, original);
+}
+
+export async function writeControlState(root, manifest, state, checkpoint, operations = {}) {
+  const runWrite = operations.writeAtomic ?? writeAtomic;
+  const checkpointPath = manifest.checkpoint?.path;
+  if (typeof checkpointPath !== 'string' || !checkpointPath) {
+    throw new CliError('Manifest checkpoint route is missing. Run vibetether doctor.', 3);
+  }
   await rejectSymlinkPath(root, ROUTE_HANDSHAKE_PATH);
-  await writeAtomic(resolveInside(root, ROUTE_HANDSHAKE_PATH), YAML.stringify(state, { lineWidth: 0 }));
+  await rejectSymlinkPath(root, checkpointPath);
+  const handshakeTarget = resolveInside(root, ROUTE_HANDSHAKE_PATH);
+  const checkpointTarget = resolveInside(root, checkpointPath);
+  const handshakeOriginal = await readTextIfPresent(handshakeTarget);
+  const checkpointOriginal = await readTextIfPresent(checkpointTarget);
+  try {
+    await runWrite(handshakeTarget, YAML.stringify(state, { lineWidth: 0 }));
+    await runWrite(checkpointTarget, YAML.stringify(checkpoint, { lineWidth: 0 }));
+  } catch (error) {
+    const rollback = [];
+    await restoreText(handshakeTarget, handshakeOriginal, operations).catch((failure) => rollback.push(failure.message));
+    await restoreText(checkpointTarget, checkpointOriginal, operations).catch((failure) => rollback.push(failure.message));
+    if (rollback.length > 0) {
+      throw new CliError(`Route control update failed and rollback was incomplete (${rollback.join('; ')}).`, 3);
+    }
+    throw error;
+  }
   return state;
+}
+
+function selectionCheckpoint(selection, result, status, reason = selection.reason) {
+  return {
+    capability: result.capability,
+    recommended: result.recommendation?.skill ?? result.selection?.skill ?? null,
+    selected: selection.skill,
+    selection_reason: reason ?? null,
+    invocation_status: status,
+  };
 }
 
 function candidateRoutes(result) {
@@ -134,6 +189,12 @@ export async function startRoute(options) {
     throw new CliError('Complete or abandon the active route before entering a new phase or capability.', 3);
   }
   const checkpoint = await readCheckpoint(root, resolved.manifest);
+  if (String(checkpoint.phase).toUpperCase() !== String(resolved.result.phase).toUpperCase()) {
+    throw new CliError(
+      `Checkpoint phase ${checkpoint.phase} does not match route phase ${resolved.result.phase}. Re-anchor and update the semantic checkpoint first.`,
+      3,
+    );
+  }
   const selection = selectRoute(resolved.result, options.select, options.reason);
   const now = new Date().toISOString();
   const state = {
@@ -153,7 +214,10 @@ export async function startRoute(options) {
     status: 'active',
     updated_at: now,
   };
-  await writeHandshake(root, state);
+  checkpoint.provider_selection = selectionCheckpoint(selection, resolved.result, 'active');
+  checkpoint.last_reanchor = now;
+  checkpoint.authority_snapshot = await createAuthoritySnapshot(root, resolved.manifest, now);
+  await writeControlState(root, resolved.manifest, state, checkpoint);
   return {
     ...resolved.result,
     ...state,
@@ -164,11 +228,16 @@ export async function startRoute(options) {
 
 async function requireActiveHandshake(project) {
   const root = await resolveProject(project);
+  const manifest = await readManifest(root);
   const state = await readHandshake(root);
   if (!state || state.status !== 'active') {
     throw new CliError('An active route handshake is required for this operation.', 3);
   }
-  return { root, state };
+  const checkpoint = await readCheckpoint(root, manifest);
+  if (String(checkpoint.phase).toUpperCase() !== String(state.phase).toUpperCase()) {
+    throw new CliError('Checkpoint phase and active route phase differ. Reconcile them before changing route state.', 3);
+  }
+  return { root, manifest, state, checkpoint };
 }
 
 async function inspectArtifact(root, artifact) {
@@ -212,7 +281,7 @@ async function artifactPaths(root, values) {
 }
 
 export async function completeRoute(options) {
-  const { root, state } = await requireActiveHandshake(options.project);
+  const { root, manifest, state, checkpoint } = await requireActiveHandshake(options.project);
   const evidence = nonemptyStrings(options.evidence, 'Route completion', {
     required: true,
     requiredNoun: 'evidence description',
@@ -225,12 +294,21 @@ export async function completeRoute(options) {
     artifacts: await artifactPaths(root, options.artifacts),
     updated_at: new Date().toISOString(),
   };
-  await writeHandshake(root, completed);
+  checkpoint.provider_selection = {
+    ...(checkpoint.provider_selection ?? {}),
+    capability: state.capability,
+    recommended: state.recommended_skill,
+    selected: state.selected_skill,
+    selection_reason: state.selection_reason ?? state.alternative_reason ?? null,
+    invocation_status: 'satisfied',
+  };
+  checkpoint.last_reanchor = completed.updated_at;
+  await writeControlState(root, manifest, completed, checkpoint);
   return completed;
 }
 
 export async function abandonRoute(options) {
-  const { root, state } = await requireActiveHandshake(options.project);
+  const { root, manifest, state, checkpoint } = await requireActiveHandshake(options.project);
   const [reason] = nonemptyStrings([options.reason], 'Route abandonment', {
     required: true,
     requiredNoun: 'material reason',
@@ -242,7 +320,16 @@ export async function abandonRoute(options) {
     abandonment_reason: reason,
     updated_at: new Date().toISOString(),
   };
-  await writeHandshake(root, abandoned);
+  checkpoint.provider_selection = {
+    ...(checkpoint.provider_selection ?? {}),
+    capability: state.capability,
+    recommended: state.recommended_skill,
+    selected: state.selected_skill,
+    selection_reason: reason,
+    invocation_status: 'abandoned',
+  };
+  checkpoint.last_reanchor = abandoned.updated_at;
+  await writeControlState(root, manifest, abandoned, checkpoint);
   return abandoned;
 }
 

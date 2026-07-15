@@ -5,7 +5,8 @@ import YAML from 'yaml';
 import { ADAPTERS } from './adapters.mjs';
 import { CliError } from './errors.mjs';
 import { EMPTY_EXPERIENCE_INDEX, serializeExperienceIndex } from './experience-index.mjs';
-import { isVibeTetherOwnedExperienceIndex } from './manifest.mjs';
+import { isVibeTetherOwnedExperienceIndex, isVibeTetherOwnedTruthIndex } from './manifest.mjs';
+import { createTruthMap, TRUTH_INDEX_PATH } from './truth-map.mjs';
 import {
   inspectManagedBlock,
   readTextIfPresent,
@@ -293,6 +294,8 @@ export async function uninstall(options) {
     }
     if (manifest && typeof manifest === 'object' && !Array.isArray(manifest)) {
       let removedCanonicalEmptyExperienceIndex = false;
+      let removedCanonicalEmptyTruthIndex = false;
+      let clearedStaleTruthOwnership = false;
       const canonicalEmptyIndex = serializeExperienceIndex(EMPTY_EXPERIENCE_INDEX);
       if (manifest.experience_index === '.vibetether/experience-index.yaml'
         && isVibeTetherOwnedExperienceIndex(manifest.experience_index_ownership)) {
@@ -312,9 +315,35 @@ export async function uninstall(options) {
           removedCanonicalEmptyExperienceIndex = true;
         }
       }
+      if (manifest.truth_index === TRUTH_INDEX_PATH
+        && isVibeTetherOwnedTruthIndex(manifest.truth_index_ownership)) {
+        await rejectSymlinkPath(root, manifest.truth_index);
+        const truthPath = resolveInside(root, manifest.truth_index);
+        const truthOriginal = await readTextIfPresent(truthPath);
+        const harnesses = Object.entries(manifest.harnesses ?? {})
+          .filter(([, value]) => value?.enabled)
+          .map(([name]) => name);
+        if (truthOriginal === createTruthMap({ harnesses })) {
+          textPlans.push({
+            relativePath: manifest.truth_index,
+            target: truthPath,
+            original: truthOriginal,
+            content: '',
+            removeFile: true,
+          });
+          delete manifest.truth_index;
+          delete manifest.truth_index_ownership;
+          removedCanonicalEmptyTruthIndex = true;
+        } else {
+          delete manifest.truth_index_ownership;
+          clearedStaleTruthOwnership = true;
+        }
+      }
       const hadRouting = 'capability_board' in manifest
         || 'provider_lock' in manifest
-        || removedCanonicalEmptyExperienceIndex;
+        || removedCanonicalEmptyExperienceIndex
+        || removedCanonicalEmptyTruthIndex
+        || clearedStaleTruthOwnership;
       delete manifest.capability_board;
       delete manifest.provider_lock;
       if (hadRouting) {

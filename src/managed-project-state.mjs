@@ -30,6 +30,7 @@ const CONTROL_FILES = new Set([
   '.vibetether/capabilities.yaml',
   '.vibetether/providers.lock.yaml',
   '.vibetether/experience-index.yaml',
+  '.vibetether/TRUTH.md',
 ]);
 const CONTROL_PREFIXES = new Set([
   '.vibetether/state',

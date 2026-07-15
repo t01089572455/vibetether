@@ -16,6 +16,15 @@ The file is the single authoritative index of project truth sources. VibeTether 
 
 This change extends the existing VibeTether control plane; it does not replace it. VibeTether remains responsible for coordinating host governance, the current Intent Contract, durable project truth, runtime checkpoints, capability routing, evidence gates, and reusable experience. Skill routing is one control-plane function, not the product's entire purpose.
 
+### 1.1 Explicit supersession
+
+This specification intentionally changes two earlier contracts:
+
+- it supersedes the automatic project-truth activation rules in `2026-07-14-guided-bootstrap-and-experience-recall-design.md`; repository inspection may still detect project state and optional provider bundles, but a new installation no longer promotes discovered product documents into governing truth;
+- it supersedes the immediate **active indexing** rule in `2026-07-13-reusable-success-capture-design.md`; the Success Capture Gate still creates a first-success candidate immediately, but the candidate becomes an active Proven Path only after user confirmation.
+
+Implementation must update the installed Skill, managed `AGENTS.md`/`CLAUDE.md` block, tests, and public documentation so the superseded behavior cannot remain live as a second contract.
+
 VibeTether will use two related but separate rails:
 
 - `.vibetether/TRUTH.md` answers **what must be true for this project**;
@@ -757,7 +766,7 @@ Equivalent concise Chinese examples may appear in a localized section or linked 
 
 ### 16.6 Terminal animation
 
-A deterministic, accessible terminal animation is stored under `docs/assets/` and kept below approximately 2 MB and 10-12 seconds. It demonstrates:
+A deterministic, accessible terminal animation will be stored under `docs/assets/` and kept below approximately 2 MB and 10-12 seconds. It demonstrates:
 
 1. VibeTether loading intent, truth, checkpoint, routing, and relevant experience through one control-plane entry;
 2. detecting a missing directional decision;
@@ -852,7 +861,7 @@ These are presentation references, not normative product requirements or bundled
 
 ### 18.6 Installation matrix
 
-Automated and clean-room tests cover:
+Automated and clean-room tests must cover:
 
 - Windows and Linux;
 - Node.js 20 and 24;

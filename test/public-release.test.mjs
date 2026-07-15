@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
@@ -50,6 +51,7 @@ test('README explains the beginner bootstrap and autonomous control loop', async
   const readme = await text('README.md');
   for (const artifact of [
     '.vibetether/intent.md',
+    '.vibetether/TRUTH.md',
     '.vibetether/project.yaml',
     '.vibetether/capabilities.yaml',
     '.vibetether/state/current.yaml',
@@ -61,6 +63,21 @@ test('README explains the beginner bootstrap and autonomous control loop', async
   assert.match(readme, /compaction|resume|handoff/i);
   assert.match(readme, /first-proven-path/i);
   assert.match(readme, /captured.*already-encoded.*not-reusable/is);
+  assert.match(readme, /does not.*(?:scan|activate).*project documents|no.*automatic.*activation/is);
+  assert.match(readme, /candidate.*user confirmation/is);
+  assert.match(readme, /truth.*experience.*conflict.*ask/is);
+});
+
+test('README teaches project truth control in ordinary language and links the visual control loop', async () => {
+  const readme = await text('README.md');
+  assert.match(readme, /find.*candidate.*truth|search.*candidate.*specification/is);
+  assert.match(readme, /add.*candidate|activate.*candidate/is);
+  assert.match(readme, /move.*delete.*supersed/is);
+  assert.match(readme, /docs\/assets\/vibetether-control-loop\.svg/);
+  assert.match(readme, /\(docs\/project-truth\.md\)/);
+  const guide = await text('docs/project-truth.md');
+  assert.match(guide, /confirmed.*candidate.*declined/is);
+  assert.match(guide, /user confirmation/i);
 });
 
 test('README exposes route customization and the stateful handshake', async () => {
@@ -81,6 +98,7 @@ test('README stays focused and delegates complete inventories and operations', a
     'docs/installation.md',
     'docs/routing.md',
     'docs/proven-paths.md',
+    'docs/project-truth.md',
     'docs/providers.md',
     'docs/troubleshooting.md',
   ]) {
@@ -184,12 +202,13 @@ test('package metadata points to the public repository', async () => {
   assert.equal(pkg.repository.url, 'git+https://github.com/t01089572455/vibetether.git');
   assert.equal(pkg.homepage, 'https://github.com/t01089572455/vibetether#readme');
   assert.equal(pkg.bugs.url, 'https://github.com/t01089572455/vibetether/issues');
-  assert.equal(pkg.version, '0.3.0');
+  assert.equal(pkg.version, '0.4.0');
   for (const entry of [
     'docs/operations',
     'docs/installation.md',
     'docs/routing.md',
     'docs/proven-paths.md',
+    'docs/project-truth.md',
     'docs/providers.md',
     'docs/troubleshooting.md',
   ]) assert.ok(pkg.files.includes(entry), `package files are missing ${entry}`);
@@ -211,6 +230,7 @@ test('the npm tarball contains new routing, recovery, and focused documentation 
     cwd: root,
     encoding: 'utf8',
     shell: false,
+    env: { ...process.env, npm_config_cache: path.join(os.tmpdir(), 'vibetether-npm-pack-cache') },
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const [{ files }] = JSON.parse(result.stdout);
@@ -223,6 +243,8 @@ test('the npm tarball contains new routing, recovery, and focused documentation 
     'docs/installation.md',
     'docs/routing.md',
     'docs/proven-paths.md',
+    'docs/project-truth.md',
+    'docs/assets/vibetether-control-loop.svg',
     'docs/providers.md',
     'docs/troubleshooting.md',
   ]) assert.ok(packFiles.includes(file), `tarball is missing ${file}`);
@@ -232,7 +254,7 @@ test('the npm tarball contains new routing, recovery, and focused documentation 
 test('public release documents contain no local path or non-English brand leakage', async () => {
   const corpus = await Promise.all([
     'README.md', 'SECURITY.md', 'CONTRIBUTING.md', 'THIRD_PARTY_NOTICES.md',
-    'docs/installation.md', 'docs/routing.md', 'docs/proven-paths.md', 'docs/providers.md', 'docs/troubleshooting.md',
+    'docs/installation.md', 'docs/routing.md', 'docs/project-truth.md', 'docs/proven-paths.md', 'docs/providers.md', 'docs/troubleshooting.md',
   ].map(text));
   const joined = corpus.join('\n');
   assert.doesNotMatch(joined, /(?:^|\s)[A-Za-z]:[\\/]/m);
@@ -274,5 +296,5 @@ test('release history reproduces every registered canonical fingerprint', () => 
     encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /release compatibility: valid \(6 historical identities\)/i);
+  assert.match(result.stdout, /release compatibility: valid \(7 historical identities\)/i);
 });

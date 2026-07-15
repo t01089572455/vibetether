@@ -2,7 +2,7 @@
 
 ## Core Rule
 
-After every verified user-level or engineering-level success, decide whether the result establishes or changes a reusable workflow. The first verified reusable path must be captured immediately even when the first attempt succeeded.
+After every verified user-level or engineering-level success, decide whether the result establishes or changes a reusable workflow. For a first, recovered, or changed reusable path, immediately create or update a sanitized candidate artifact even when the first attempt succeeded. Active experience indexing requires user confirmation.
 
 Evidence proves success. The checkpoint only records how the experience was handled.
 
@@ -10,9 +10,9 @@ Evidence proves success. The checkpoint only records how the experience was hand
 
 | Trigger | Meaning | Required disposition |
 | --- | --- | --- |
-| `first-proven-path` | A reusable workflow succeeds for the first time in this project or environment | `captured` |
-| `recovered-path` | A failing workflow succeeds after investigation or changed conditions | `captured` |
-| `changed-proven-path` | A known workflow succeeds with materially changed versions, permissions, environment, or steps | `captured` |
+| `first-proven-path` | A reusable workflow succeeds for the first time in this project or environment | candidate, then `captured` after confirmation |
+| `recovered-path` | A failing workflow succeeds after investigation or changed conditions | candidate update, then `captured` after confirmation |
+| `changed-proven-path` | A known workflow succeeds with materially changed versions, permissions, environment, or steps | candidate update, then `captured` after confirmation |
 | `repeat-proven-path` | An unchanged documented or automated workflow succeeds again | `already-encoded` |
 | `routine-non-path` | A routine result does not establish a reusable workflow | `not-reusable` |
 
@@ -43,11 +43,11 @@ These questions enrich the record. They do not make first success optional.
 | Repeated project-local agent convention | Project instruction or its referenced document |
 | Cross-project agent method | VibeTether Skill reference plus evaluation scenario |
 
-Use executable enforcement first when possible, then document when and why to use it. Do not create a universal success ledger. When a new durable source is created, route it from the project manifest so later re-anchors can find it.
+Use executable enforcement first when possible, then document when and why to use it. Do not create a universal success ledger. Product, architecture, or design authority uses the truth-map confirmation lifecycle; reusable procedure uses the experience index. If the two conflict, stop and ask the user which durable source to update.
 
 ## Metadata Index Update
 
-The manifest's `experience_index` field normally points to `.vibetether/experience-index.yaml`. After a captured or materially changed Proven Path is written to its natural artifact, create or update the matching metadata entry. Keep the stable entry ID, add the artifact path, preserve applicable signals and revalidation conditions, and update verification facts only from fresh evidence. Deduplicate unchanged repeats by entry ID plus artifact path; do not create a second entry for the same durable path.
+The manifest's `experience_index` field normally points to `.vibetether/experience-index.yaml`. After the user confirms a first, recovered, or changed Proven Path candidate, create or update the matching metadata entry. Keep the stable entry ID, add the artifact path, preserve applicable signals and revalidation conditions, and update verification facts only from fresh evidence. Deduplicate unchanged repeats by entry ID plus artifact path; do not create a second entry for the same durable path.
 
 The index is a safe routing aid, not a second runbook: persist only metadata and project-relative artifact paths, never commands with secrets, transcripts, credentials, or private reasoning. The next task resolves matching entries through [capability-routing.md](capability-routing.md) before reading a returned artifact.
 
@@ -80,13 +80,13 @@ experience_feedback:
     - docs/operations/publication.md
 ```
 
-Valid final dispositions are:
+Use `pending` while the candidate is awaiting an activation decision. Valid final dispositions are:
 
 - `captured`: first, recovered, or changed path; at least one durable artifact exists;
 - `already-encoded`: unchanged repeated path; at least one existing enforcing artifact exists;
 - `not-reusable`: routine non-path; a reason exists and artifacts stay empty.
 
-`pending` is valid only while work is in progress. A completion-like checkpoint must pass `vibetether doctor` before the agent claims completion.
+If the user declines activation, use `not-reusable` with the decision reason and do not index the candidate. A completion-like checkpoint must pass `vibetether doctor` before the agent claims completion.
 
 ## Security and Redaction
 
@@ -106,12 +106,13 @@ If a safe record cannot be written without exposing a secret, record the method 
 1. Verify the user-level or engineering-level outcome from fresh evidence.
 2. Search applicable project truth, runbooks, tests, scripts, and CI for the workflow.
 3. Classify the trigger.
-4. Capture or update a durable source for first, recovered, or changed paths.
+4. Create or update a sanitized candidate artifact for first, recovered, or changed paths.
 5. Point to existing artifacts for an unchanged repeat; create nothing new.
 6. Mark a routine result `not-reusable`; create nothing new.
 7. Redact sensitive data and verify every recorded artifact exists.
-8. Update `experience_feedback` and run `vibetether doctor` at the completion boundary.
-9. On the next similar task, read the applicable Proven Path before inventing a new route.
+8. Ask the user to activate or decline the candidate; only confirmed activation updates the experience index.
+9. Update `experience_feedback` and run `vibetether doctor` at the completion boundary.
+10. On the next similar task, read the applicable Proven Path before inventing a new route.
 
 ## Rationalization Counters
 

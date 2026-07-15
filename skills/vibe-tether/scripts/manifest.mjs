@@ -237,10 +237,14 @@ export function authorityRoutesFromManifest(source) {
       && (typeof manifest.experience_index !== 'string' || manifest.experience_index.length === 0)) {
     unsupported('Manifest experience_index route must be text');
   }
+  if (typeof manifest.truth_index !== 'string' || manifest.truth_index.length === 0) {
+    unsupported('Manifest requires a truth_index route');
+  }
   return {
     manifest,
     capabilityBoard: manifest.capability_board,
     experienceIndex: manifest.experience_index ?? DEFAULT_EXPERIENCE_INDEX,
+    truthIndex: manifest.truth_index,
     projectRoutes: manifest.project_routes,
   };
 }

@@ -3,8 +3,10 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promise
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { applyUninstallPlans } from '../src/uninstall.mjs';
+import YAML from 'yaml';
+import { applyUninstallPlans, uninstall } from '../src/uninstall.mjs';
 import { writeAtomic } from '../src/files.mjs';
+import { createTruthMap } from '../src/truth-map.mjs';
 
 async function exists(target) {
   try {
@@ -117,4 +119,46 @@ test('rollback restores a removed canonical text artifact when a later write fai
 
   assert.equal(await readFile(index, 'utf8'), originalIndex);
   assert.equal(await readFile(manifest, 'utf8'), originalManifest);
+});
+
+test('uninstall removes only an unchanged owned truth scaffold', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-uninstall-truth-empty-'));
+  const control = path.join(root, '.vibetether');
+  await mkdir(control, { recursive: true });
+  const truthPath = path.join(control, 'TRUTH.md');
+  await writeFile(truthPath, createTruthMap({ harnesses: ['codex'] }), 'utf8');
+  await writeFile(path.join(control, 'project.yaml'), YAML.stringify({
+    schema_version: 1,
+    truth_index: '.vibetether/TRUTH.md',
+    truth_index_ownership: { owner: 'vibetether', fingerprint: 'canonical-empty-v1' },
+    harnesses: { codex: { enabled: true, instruction_file: 'AGENTS.md' } },
+  }), 'utf8');
+
+  await uninstall({ project: root, yes: true });
+
+  assert.equal(await exists(truthPath), false);
+  const manifest = YAML.parse(await readFile(path.join(control, 'project.yaml'), 'utf8'));
+  assert.equal(Object.hasOwn(manifest, 'truth_index'), false);
+  assert.equal(Object.hasOwn(manifest, 'truth_index_ownership'), false);
+});
+
+test('uninstall preserves a customized project-owned truth map', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-uninstall-truth-custom-'));
+  const control = path.join(root, '.vibetether');
+  await mkdir(control, { recursive: true });
+  const truthPath = path.join(control, 'TRUTH.md');
+  const customized = `${createTruthMap({ harnesses: ['codex'] })}\nUser note.\n`;
+  await writeFile(truthPath, customized, 'utf8');
+  await writeFile(path.join(control, 'project.yaml'), YAML.stringify({
+    schema_version: 1,
+    truth_index: '.vibetether/TRUTH.md',
+    truth_index_ownership: { owner: 'vibetether', fingerprint: 'canonical-empty-v1' },
+    harnesses: { codex: { enabled: true, instruction_file: 'AGENTS.md' } },
+  }), 'utf8');
+
+  await uninstall({ project: root, yes: true });
+
+  assert.equal(await readFile(truthPath, 'utf8'), customized);
+  const manifest = YAML.parse(await readFile(path.join(control, 'project.yaml'), 'utf8'));
+  assert.equal(manifest.truth_index, '.vibetether/TRUTH.md');
 });

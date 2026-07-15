@@ -9,14 +9,16 @@ transcript.
 After every verified user-level or engineering-level success, the agent must
 classify the result:
 
-- `captured`: a reusable workflow was recorded or materially updated;
+- `captured`: the user confirmed a reusable workflow and it was indexed;
 - `already-encoded`: an unchanged documented path worked again, so no duplicate
   is created;
 - `not-reusable`: the result was too local or trivial to preserve, with a reason.
 
-A reusable first success must be captured as a `first-proven-path`, even when it
+A reusable first success becomes a `first-proven-path` candidate, even when it
 worked on the first attempt. Prior failure is not required. A recovered path or
-a path whose decisive conditions changed updates the existing durable artifact.
+a path whose decisive conditions changed proposes an update. The Agent presents
+the sanitized candidate; active indexing requires user confirmation. A deferred
+decision remains pending and cannot pass a completion-like `doctor` gate.
 
 ## What deserves capture
 
@@ -47,6 +49,11 @@ The durable body belongs in its natural project source:
 
 The checkpoint records the disposition and artifact paths. A completion-like
 state with a pending disposition fails `vibetether doctor`.
+
+Confirmed project truth and experience have different jobs: truth says what the
+project requires; experience says how a procedure previously worked. If they
+conflict, the Agent stops the affected action, recommends which durable source to
+update, and asks the user. It never lets an old runbook override current direction.
 
 ## Recall before rediscovery
 

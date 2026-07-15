@@ -2,6 +2,7 @@ import { lstat, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import YAML from 'yaml';
+import { createAuthoritySnapshot } from './authority-snapshot.mjs';
 import { ADAPTERS, MANAGED_END, MANAGED_START } from './adapters.mjs';
 import { CliError } from './errors.mjs';
 import { managedBlockBody, rejectSymlinkPath } from './files.mjs';
@@ -14,6 +15,7 @@ import { refreshBoardAvailability, resolveBoardRoute } from './capabilities.mjs'
 import { loadEffectiveProjectRoutes } from './project-routes.mjs';
 import { ROUTE_HANDSHAKE_PATH } from './route-handshake.mjs';
 import { inspectSkillRecovery } from './skill-upgrade-recovery.mjs';
+import { parseTruthMap, validateConfirmedTruth } from './truth-map.mjs';
 
 const COMPLETION_PHASES = new Set(['REVIEW', 'SHIP']);
 const CAPTURE_TRIGGERS = new Set(['first-proven-path', 'recovered-path', 'changed-proven-path']);
@@ -123,7 +125,7 @@ async function validateExperienceFeedback(root, state, manifest, experienceIndex
     !VALID_DISPOSITIONS.has(disposition) ||
     !reason ||
     !Array.isArray(artifacts) ||
-    (CAPTURE_TRIGGERS.has(trigger) && disposition !== 'captured') ||
+    (CAPTURE_TRIGGERS.has(trigger) && !['captured', 'not-reusable'].includes(disposition)) ||
     (trigger === 'repeat-proven-path' && disposition !== 'already-encoded') ||
     (trigger === 'routine-non-path' && disposition !== 'not-reusable') ||
     (disposition !== 'not-reusable' && artifacts.length === 0) ||
@@ -159,10 +161,12 @@ async function validateExperienceFeedback(root, state, manifest, experienceIndex
     }
     if (artifactStatus === 'ok' && /\.md$/i.test(artifact)) {
       const normalizedArtifact = portablePath(artifact).replace(/^\.\//, '');
-      const declaredSources = [manifest.goal_source, manifest.intent_contract, ...flattenSources(manifest.sources)]
-        .filter(Boolean)
-        .map((source) => portablePath(source).replace(/^\.\//, '').replace(/\/+$/, ''));
-      const routed = declaredSources.some(
+      const declaredSources = manifest.truth_index
+        ? []
+        : [manifest.goal_source, manifest.intent_contract, ...flattenSources(manifest.sources)]
+          .filter(Boolean)
+          .map((source) => portablePath(source).replace(/^\.\//, '').replace(/\/+$/, ''));
+      const routed = indexedArtifacts.has(normalizedArtifactPath(artifact)) || declaredSources.some(
         (source) => normalizedArtifact === source || normalizedArtifact.startsWith(`${source}/`),
       );
       if (!routed) {
@@ -180,6 +184,107 @@ async function validateExperienceFeedback(root, state, manifest, experienceIndex
         'unindexed-experience-artifact',
         `Reusable experience artifact is not indexed: ${artifact}`,
       ));
+    }
+  }
+}
+
+async function readTruthIndex(root, manifest, issues) {
+  const relativePath = manifest.truth_index;
+  if (typeof relativePath !== 'string' || !relativePath.trim()) {
+    issues.push(issue('missing-truth-index-field', 'Manifest truth_index is required'));
+    return null;
+  }
+  const entry = await projectEntryStatus(root, relativePath);
+  if (entry.status === 'escape') {
+    issues.push(issue('truth-index-escape', 'Truth index path must stay inside the project'));
+    return null;
+  }
+  if (entry.status === 'missing') {
+    issues.push(issue('missing-truth-index', 'Missing project truth map declared by the manifest'));
+    return null;
+  }
+  if (entry.status !== 'ok') {
+    issues.push(issue('unsafe-truth-index', unsafeAuthorityMessage('Truth index')));
+    return null;
+  }
+  try {
+    const parsed = parseTruthMap(await readFile(entry.target, 'utf8'));
+    for (const problem of await validateConfirmedTruth(root, parsed)) {
+      issues.push(issue(
+        problem.code,
+        problem.code === 'missing-confirmed-truth'
+          ? `Confirmed project truth is missing: ${problem.path}`
+          : `Confirmed project truth is unsafe: ${problem.path}`,
+      ));
+    }
+    return parsed;
+  } catch {
+    issues.push(issue('invalid-truth-index', 'Invalid project truth map. Preserve it, repair the reported structure, and rerun vibetether doctor.'));
+    return null;
+  }
+}
+
+function controlPlaneSummary(issues, warnings) {
+  const areas = {
+    bootstrap: ['manifest', 'harness', 'instructions', 'managed-block', 'skill', 'recovery'],
+    intent: ['intent'],
+    truth: ['truth', 'source', 'authority'],
+    state: ['checkpoint'],
+    routing: ['route', 'capability', 'project-routes'],
+    experience: ['experience'],
+    providers: ['provider', 'catalog', 'license'],
+  };
+  return Object.fromEntries(Object.entries(areas).map(([area, tokens]) => {
+    const has = (entries) => entries.some((entry) => tokens.some((token) => entry.code.includes(token)));
+    return [area, has(issues) ? 'error' : has(warnings) ? 'attention' : 'healthy'];
+  }));
+}
+
+async function validateAuthoritySnapshot(root, manifest, truth, state, issues, warnings) {
+  const snapshot = state.authority_snapshot;
+  const completionLike = COMPLETION_PHASES.has(String(state.phase ?? '').toUpperCase());
+  if (!snapshot) {
+    (completionLike ? issues : warnings).push((completionLike ? issue : warning)(
+      'authority-snapshot-not-established',
+      'Run a full VibeTether route re-anchor so the checkpoint records current project truth fingerprints.',
+    ));
+    return;
+  }
+  const hash = /^[a-f0-9]{64}$/;
+  const valid = typeof snapshot.anchored_at === 'string'
+    && snapshot.truth_index?.path === manifest.truth_index
+    && hash.test(snapshot.truth_index?.sha256 ?? '')
+    && Array.isArray(snapshot.confirmed_sources)
+    && snapshot.confirmed_sources.every((entry) => (
+      typeof entry?.path === 'string'
+      && typeof entry?.role === 'string'
+      && typeof entry?.scope === 'string'
+      && hash.test(entry?.sha256 ?? '')
+    ));
+  if (!valid) {
+    issues.push(issue('invalid-authority-snapshot', 'Checkpoint authority_snapshot is structurally invalid.'));
+    return;
+  }
+  let current;
+  try {
+    current = await createAuthoritySnapshot(root, manifest, snapshot.anchored_at);
+  } catch {
+    issues.push(issue('invalid-authority-snapshot', 'Current project authority cannot be fingerprinted safely.'));
+    return;
+  }
+  if (snapshot.truth_index.sha256 !== current.truth_index.sha256) {
+    issues.push(issue('changed-truth-index', 'Project truth map changed after the last full re-anchor.'));
+  }
+  if ((snapshot.intent?.sha256 ?? null) !== (current.intent?.sha256 ?? null)) {
+    issues.push(issue('changed-intent-contract', 'Intent Contract changed after the last full re-anchor.'));
+  }
+  const currentSources = new Map(current.confirmed_sources.map((entry) => [entry.path, entry]));
+  const snapshotSources = new Map(snapshot.confirmed_sources.map((entry) => [entry.path, entry]));
+  for (const entry of truth?.confirmed ?? []) {
+    const before = snapshotSources.get(entry.path);
+    const after = currentSources.get(entry.path);
+    if (!before || !after || before.sha256 !== after.sha256 || before.role !== entry.role || before.scope !== entry.scope) {
+      issues.push(issue('changed-confirmed-truth', `Confirmed project truth changed after the last full re-anchor: ${entry.path}`));
     }
   }
 }
@@ -449,7 +554,11 @@ export async function inspectProject(options) {
     if (!manifest.intent_contract) {
       issues.push(issue('missing-intent-contract', 'Manifest intent_contract is required'));
     }
-    const declared = [manifest.goal_source, manifest.intent_contract, ...flattenSources(manifest.sources)].filter(Boolean);
+    const truth = await readTruthIndex(root, manifest, issues);
+    const declared = [
+      manifest.intent_contract,
+      ...(truth ? truth.confirmed.map((entry) => entry.path) : flattenSources(manifest.sources)),
+    ].filter(Boolean);
     for (const source of [...new Set(declared)]) {
       const sourceEntry = await projectEntryStatus(root, source, 'any');
       if (sourceEntry.status === 'escape') {
@@ -727,6 +836,7 @@ export async function inspectProject(options) {
             } else if (Date.now() - updatedAt > maxAge) {
               issues.push(issue('stale-checkpoint', `Runtime checkpoint is older than ${checkpoint.max_age_hours ?? 168} hours`));
             }
+            await validateAuthoritySnapshot(root, manifest, truth, state, issues, warnings);
             await validateExperienceFeedback(root, state, manifest, experienceIndex, issues);
             checkpointState = state;
           }
@@ -765,6 +875,7 @@ export async function inspectProject(options) {
     harnesses,
     issues,
     warnings,
+    control_plane: controlPlaneSummary(issues, warnings),
     providers: manifest?.__providerSummary ?? { active: 0, available: 0, total: 0 },
   };
   if (manifest) delete manifest.__providerSummary;

@@ -9,6 +9,8 @@ the right Skill, and recalls workflows that already worked.
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Preview](https://img.shields.io/badge/release-preview-orange.svg)](#honest-limits)
 
+![VibeTether control loop](docs/assets/vibetether-control-loop.svg)
+
 ## One-command setup
 
 Copy and paste this inside the project you want to control:
@@ -67,7 +69,7 @@ resume, handoff, repeated failure, the next slice, completion, merge, release,
 and publication. That phase re-entry is what keeps a long Goal-mode task from
 treating an old summary as current authority.
 
-## What initialization adds
+## A project control plane, not another prompt
 
 VibeTether gives a new or existing project a beginner-readable control surface:
 
@@ -75,13 +77,44 @@ VibeTether gives a new or existing project a beginner-readable control surface:
 | --- | --- |
 | `AGENTS.md` and/or `CLAUDE.md` | Tells Codex or Claude Code when to re-enter VibeTether |
 | `.vibetether/intent.md` | Records the user-owned goal, evidence, boundaries, and constraints |
-| `.vibetether/project.yaml` | Indexes the project's governing truth sources |
+| `.vibetether/TRUTH.md` | Lists confirmed truth, candidates awaiting confirmation, and declined candidates |
+| `.vibetether/project.yaml` | Routes the control artifacts without copying their content |
 | `.vibetether/capabilities.yaml` | Shows scenarios, routes, fallbacks, outputs, and exit evidence |
 | `.vibetether/state/current.yaml` | Keeps the current phase and bounded slice resumable |
 | `.vibetether/experience-index.yaml` | Points to reusable workflows that have actually succeeded |
 
-Existing specifications, ADRs, product docs, and instructions remain
-authoritative. VibeTether does not generate fake documents just to fill a tree.
+Initialization creates a blank truth entry list. It does not scan or activate
+project documents, even when a file is named `PRD.md` or lives under `docs/adr/`.
+Existing projects can migrate previously active VibeTether sources, but newly
+discovered documents stay candidates until the user confirms them.
+
+The CLI maintains deterministic structure and validation. The Agent performs
+semantic discovery, selective reading, routing, and checkpoint updates. The user
+owns direction, active truth, visual choices, high-risk boundaries, and whether a
+new Proven Path becomes reusable. This division gives VibeTether coordination
+without turning a capable Agent into a rigid workflow robot.
+
+## Control project truth in ordinary language
+
+You can edit `.vibetether/TRUTH.md` yourself, or just talk to the Agent:
+
+> Search this repository for candidate truth and specification documents. Explain
+> the role, scope, authority evidence, and conflicts, then ask me to activate them
+> one at a time.
+
+> Add `docs/product/approved-prd.md` as a candidate product-direction source. Do
+> not use it for implementation until I confirm activation.
+
+> The architecture decision moved. Find references, propose the truth-map move or
+> supersession, and ask before changing active authority.
+
+Documents generated during a planning conversation can become candidates too.
+Candidates are non-authoritative. Active additions, removals, role or scope
+changes, or any move, delete, or supersede action require user confirmation. If
+confirmed truth and a previously successful workflow conflict, VibeTether stops the affected
+action, recommends a resolution, and asks the user instead of choosing silently.
+
+See [Project truth and document lifecycle](docs/project-truth.md).
 
 ## The control loop
 
@@ -109,12 +142,13 @@ still require the appropriate user decision.
 | Capability | What it changes |
 | --- | --- |
 | Readiness gate | Stops product work from starting on guessed direction |
-| Project-truth re-anchor | Re-reads applicable rules before consequential actions |
+| User-owned truth map | Keeps confirmed, candidate, and declined documents visible without silent activation |
+| Project-truth re-anchor | Re-reads only applicable confirmed rules before consequential actions |
 | Automatic Skill routing | Maps observable task signals to one suitable installed Skill or fallback |
 | Stateful phase handshake | Records route selection, required output, evidence, completion, or abandonment |
 | Long-task checkpoints | Carries the current objective and slice through compaction, resume, and handoff |
 | Proven Path recall | Reads a matching successful runbook before rediscovering an operational workflow |
-| First-success capture | Records a reusable workflow the first verified time it works |
+| First-success capture | Proposes a reusable workflow the first verified time it works; active indexing needs confirmation |
 | Curated providers | Pins exact commits, fingerprints content, and keeps competing routers out of host discovery |
 | Safe Windows upgrades | Defers locked active-Skill replacement and resumes it on the next run |
 | Project-local extension | Lets a project add its own primary, alternative, or overlay routes |
@@ -164,13 +198,16 @@ VibeTether names the problem and falls back to the curated route.
 After every verified engineering- or user-level success, the Success Capture
 Gate decides whether the result is `captured`, `already-encoded`, or
 `not-reusable`. A reusable workflow that works for the first time is a
-`first-proven-path` even when it never failed first.
+`first-proven-path` even when it never failed first. The Agent proposes a
+sanitized candidate; it becomes active experience only after user confirmation.
 
 Later, `applicable_experience` returns only matching metadata and safe artifact
 paths. The agent reads the selected runbook before improvising the same build,
 environment, deployment, publishing, migration, authentication, or recovery
 path again. Credentials, private keys, one-time codes, private reasoning, and
 sensitive tool output are never captured. See [Proven Paths](docs/proven-paths.md).
+Confirmed truth always outranks procedural experience. A mismatch returns to the
+user for a durable decision and update.
 
 ## Profiles and providers
 
@@ -226,6 +263,7 @@ they are not proof that every model will obey every instruction.
 ## Documentation
 
 - [Installation and updates](docs/installation.md)
+- [Project truth and document lifecycle](docs/project-truth.md)
 - [Routing, phase re-entry, and project extensions](docs/routing.md)
 - [Proven Path capture and recall](docs/proven-paths.md)
 - [Providers, catalogs, exposure, and licenses](docs/providers.md)

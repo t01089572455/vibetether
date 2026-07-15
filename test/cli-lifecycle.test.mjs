@@ -7,6 +7,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import YAML from 'yaml';
 import { serializeExperienceIndex } from '../src/experience-index.mjs';
+import { createTruthMap } from '../src/truth-map.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cli = path.join(root, 'bin', 'vibetether.mjs');
@@ -216,6 +217,33 @@ test('doctor exits 4 when a declared truth source is missing', async () => {
   assert.match(validator.stderr, /missing declared source.*intent\.md/i);
 });
 
+test('installed validator checks confirmed truth while absent candidates remain advisory', async () => {
+  const target = await initializedProject('installed-validator-truth-authority');
+  const truthPath = path.join(target, '.vibetether', 'TRUTH.md');
+  const installedValidator = path.join(target, '.agents', 'skills', 'vibe-tether', 'scripts', 'validate-project.mjs');
+
+  await writeFile(truthPath, createTruthMap({
+    harnesses: ['codex'],
+    candidates: [{ path: 'docs/not-created.md', role: 'requirements', scope: '.' }],
+  }), 'utf8');
+  const candidate = spawnSync(process.execPath, [installedValidator, '--project', target], {
+    cwd: target,
+    encoding: 'utf8',
+  });
+  assert.equal(candidate.status, 0, candidate.stderr || candidate.stdout);
+
+  await writeFile(truthPath, createTruthMap({
+    harnesses: ['codex'],
+    confirmed: [{ path: 'docs/not-created.md', role: 'requirements', scope: '.' }],
+  }), 'utf8');
+  const confirmed = spawnSync(process.execPath, [installedValidator, '--project', target], {
+    cwd: target,
+    encoding: 'utf8',
+  });
+  assert.equal(confirmed.status, 1, confirmed.stderr || confirmed.stdout);
+  assert.match(confirmed.stderr, /missing confirmed truth/i);
+});
+
 test('doctor requires an explicit Intent Contract manifest field', async () => {
   const target = await project('doctor-intent-field');
   assert.equal(runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
@@ -262,7 +290,6 @@ test('doctor blocks a completion-like checkpoint while success capture is pendin
   const checkpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
   checkpoint.phase = 'REVIEW';
   await writeFile(checkpointPath, YAML.stringify(checkpoint), 'utf8');
-
   const result = runCli(['doctor', '--project', target, '--json']);
 
   assert.equal(result.status, 4, result.stderr || result.stdout);
@@ -288,6 +315,19 @@ test('doctor rejects first-proven capture without a durable artifact', async () 
   assert.equal(result.status, 4, result.stderr || result.stdout);
   const report = JSON.parse(result.stdout);
   assert.equal(report.issues.some((issue) => issue.code === 'invalid-experience-feedback'), true);
+});
+
+test('doctor accepts a user-declined first Proven Path as not reusable', async () => {
+  const target = await initializedProject('doctor-declined-first-proven');
+  await setExperienceFeedback(target, {
+    trigger: 'first-proven-path',
+    disposition: 'not-reusable',
+    reason: 'The user declined durable reuse for this one-off success.',
+    artifacts: [],
+  });
+
+  const result = runCli(['doctor', '--project', target, '--json']);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
 });
 
 test('doctor rejects a captured Markdown Proven Path that is not manifest-routed', async () => {
@@ -824,17 +864,20 @@ test('doctor redacts untrusted harness and capability-board profile values', asy
   assert.doesNotMatch(profileResult.stderr, new RegExp(secret));
 });
 
-test('installed validator accepts safe declared source directories and rejects linked or escaping directories', async (context) => {
+test('installed validator accepts safe confirmed truth directories and rejects linked or escaping directories', async (context) => {
   const target = await initializedProject('installed-validator-source-directories');
   await mkdir(path.join(target, 'docs', 'operations'), { recursive: true });
   await mkdir(path.join(target, 'docs', 'adr'), { recursive: true });
   await writeFile(path.join(target, 'docs', 'operations', 'release.md'), '# Release\n', 'utf8');
   await writeFile(path.join(target, 'docs', 'adr', '001.md'), '# ADR\n', 'utf8');
-  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
-  const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
-  manifest.sources.conditional.operations = ['docs/operations/'];
-  manifest.sources.conditional.architecture = ['docs/adr/'];
-  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+  const truthPath = path.join(target, '.vibetether', 'TRUTH.md');
+  await writeFile(truthPath, createTruthMap({
+    harnesses: ['codex'],
+    confirmed: [
+      { path: 'docs/operations/', role: 'operations', scope: '.' },
+      { path: 'docs/adr/', role: 'architecture', scope: '.' },
+    ],
+  }), 'utf8');
   const installedValidator = path.join(target, '.agents', 'skills', 'vibe-tether', 'scripts', 'validate-project.mjs');
 
   const doctor = runCli(['doctor', '--project', target, '--json']);
@@ -846,18 +889,23 @@ test('installed validator accepts safe declared source directories and rejects l
   assert.equal(valid.status, 0, valid.stderr || valid.stdout);
 
   const secret = `github_pat_${'S'.repeat(30)}`;
-  manifest.sources.conditional.operations = [`../${secret}/`];
-  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+  const escapingTruth = createTruthMap({
+    harnesses: ['codex'],
+    confirmed: [{ path: 'docs/operations/', role: 'operations', scope: '.' }],
+  }).replace('`docs/operations/`', `\`../${secret}/\``);
+  await writeFile(truthPath, escapingTruth, 'utf8');
   const escaping = spawnSync(process.execPath, [installedValidator, '--project', target], {
     cwd: target,
     encoding: 'utf8',
   });
   assert.equal(escaping.status, 1, escaping.stderr || escaping.stdout);
-  assert.match(escaping.stderr, /declared source escapes project root/i);
+  assert.match(escaping.stderr, /invalid truth map/i);
   assert.doesNotMatch(escaping.stderr, new RegExp(secret));
 
-  manifest.sources.conditional.operations = ['docs/linked-operations/'];
-  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+  await writeFile(truthPath, createTruthMap({
+    harnesses: ['codex'],
+    confirmed: [{ path: 'docs/linked-operations/', role: 'operations', scope: '.' }],
+  }), 'utf8');
   const external = path.join(await project('installed-validator-source-directory-external'), secret);
   await mkdir(external, { recursive: true });
   try {

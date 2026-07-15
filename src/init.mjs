@@ -32,12 +32,19 @@ import {
   EXPERIENCE_INDEX_OWNERSHIP,
   EXPERIENCE_INDEX_PATH,
   isVibeTetherOwnedExperienceIndex,
+  isVibeTetherOwnedTruthIndex,
   parseManifest,
-  refreshCanonicalOperationsSource,
   serializeManifest,
+  TRUTH_INDEX_OWNERSHIP,
 } from './manifest.mjs';
 import { validateProviderLock } from './managed-project-state.mjs';
 import { scanProject } from './project-scan.mjs';
+import {
+  createTruthMap,
+  legacyManifestEntries,
+  parseTruthMap,
+  TRUTH_INDEX_PATH,
+} from './truth-map.mjs';
 import { stageProviderSources } from './provider-fetch.mjs';
 import { mergeProviderStages, resolveLocalProviderStage } from './provider-cache.mjs';
 import {
@@ -324,6 +331,7 @@ export async function initialize(options, dependencies = {}) {
     '.vibetether/intent.md',
     '.vibetether/state/current.yaml',
     EXPERIENCE_INDEX_PATH,
+    TRUTH_INDEX_PATH,
     PROJECT_ROUTES_PATH,
   ]) {
     await rejectSymlinkPath(root, relativePath);
@@ -337,7 +345,7 @@ export async function initialize(options, dependencies = {}) {
   if (options.bootstrapOnly && manifestOriginal === null) {
     throw new CliError('VibeTether bootstrap requires an initialized project. Run `vibetether init` first.');
   }
-  const scanned = await scanProject(root, adapters, options.profile);
+  const scanned = await scanProject(root, adapters, options.profile, { discoverTruth: false });
   let manifest;
   let persistedManifest = null;
   if (manifestOriginal === null) {
@@ -352,9 +360,8 @@ export async function initialize(options, dependencies = {}) {
       );
     }
     try {
-      const refreshedManifest = refreshCanonicalOperationsSource(persistedManifest, scanned);
       manifest = {
-        ...enableHarnesses(refreshedManifest, adapters),
+        ...enableHarnesses(persistedManifest, adapters),
         profile: options.profile,
         project_state: scanned.project_state,
       };
@@ -368,6 +375,12 @@ export async function initialize(options, dependencies = {}) {
   if (manifest.experience_index !== undefined && manifest.experience_index !== EXPERIENCE_INDEX_PATH) {
     throw new CliError(
       `Manifest conflict in .vibetether/project.yaml: experience_index must route to ${EXPERIENCE_INDEX_PATH}.`,
+      3,
+    );
+  }
+  if (manifest.truth_index !== undefined && manifest.truth_index !== TRUTH_INDEX_PATH) {
+    throw new CliError(
+      `Manifest conflict in .vibetether/project.yaml: truth_index must route to ${TRUTH_INDEX_PATH}.`,
       3,
     );
   }
@@ -410,7 +423,42 @@ export async function initialize(options, dependencies = {}) {
     capability_board: '.vibetether/capabilities.yaml',
     provider_lock: '.vibetether/providers.lock.yaml',
     experience_index: EXPERIENCE_INDEX_PATH,
+    truth_index: TRUTH_INDEX_PATH,
   };
+
+  const truthTarget = resolveInside(root, TRUTH_INDEX_PATH);
+  const truthOriginal = await readTextIfPresent(truthTarget);
+  let truthContent = truthOriginal;
+  if (truthOriginal !== null) {
+    try {
+      parseTruthMap(truthOriginal);
+    } catch (error) {
+      throw new CliError(`Truth map conflict in ${TRUTH_INDEX_PATH}: ${error.message}`, 3);
+    }
+  } else if (persistedManifest && persistedManifest.truth_index === undefined) {
+    truthContent = createTruthMap({
+      harnesses: adapters,
+      confirmed: legacyManifestEntries(persistedManifest),
+    });
+    delete manifest.truth_index_ownership;
+  } else {
+    truthContent = createTruthMap({ harnesses: adapters });
+    manifest.truth_index_ownership = { ...TRUTH_INDEX_OWNERSHIP };
+  }
+  if (truthOriginal !== null) {
+    const previousHarnesses = Object.entries(persistedManifest?.harnesses ?? manifest.harnesses ?? {})
+      .filter(([, value]) => value?.enabled)
+      .map(([name]) => name);
+    const currentHarnesses = Object.entries(manifest.harnesses ?? {})
+      .filter(([, value]) => value?.enabled)
+      .map(([name]) => name);
+    const previousCanonical = createTruthMap({ harnesses: previousHarnesses });
+    if (truthOriginal === previousCanonical && isVibeTetherOwnedTruthIndex(manifest.truth_index_ownership)) {
+      truthContent = createTruthMap({ harnesses: currentHarnesses });
+    } else {
+      delete manifest.truth_index_ownership;
+    }
+  }
   const routingSignals = (scanned.bundle_signals ?? []).map((signal) => signal.signal);
   providers = resolveExposurePlan(registry, options.profile, {
     bundles: manifest.bundles,
@@ -437,6 +485,12 @@ export async function initialize(options, dependencies = {}) {
     target: manifestTarget,
     original: manifestOriginal,
     content: serializeManifest(manifest),
+  });
+  textPlans.push({
+    relativePath: TRUTH_INDEX_PATH,
+    target: truthTarget,
+    original: truthOriginal,
+    content: truthContent,
   });
   textPlans.push({
     relativePath: EXPERIENCE_INDEX_PATH,
@@ -876,5 +930,8 @@ export async function initialize(options, dependencies = {}) {
     warningMessages.push('A verified Skill upgrade completed, but transaction cleanup remains. Close Codex and Claude, then rerun init.');
   }
   const warnings = warningMessages.map((warning) => `- ${warning}`).join('\n');
-  return `${recoveryPrefix}VibeTether initialized ${root} for ${adapters.join(' + ')} using the ${options.profile} profile with ${providers.length} curated provider Skill(s).\n${warnings ? `Warnings:\n${warnings}\n` : ''}`;
+  const truthNotice = manifestOriginal === null
+    ? `Project truth is intentionally empty. Edit ${TRUTH_INDEX_PATH}, or ask the Agent to search for candidates and confirm activation one at a time.\n`
+    : '';
+  return `${recoveryPrefix}VibeTether initialized ${root} for ${adapters.join(' + ')} using the ${options.profile} profile with ${providers.length} curated provider Skill(s).\n${truthNotice}${warnings ? `Warnings:\n${warnings}\n` : ''}`;
 }

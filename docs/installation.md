@@ -36,8 +36,10 @@ Use guided discovery again without rebuilding unchanged provider catalogs:
 vibetether bootstrap --project .
 ```
 
-`bootstrap --dry-run` discovers truth and previews changes without writing.
-`bootstrap --yes` still refuses to invent required user-owned direction.
+`bootstrap --dry-run` previews Intent Contract changes without writing.
+`bootstrap --yes` still refuses to invent required user-owned direction and does
+not activate repository documents. Use `.vibetether/TRUTH.md` directly or ask the
+Agent to search for candidates and confirm them one at a time.
 
 ## Profiles
 
@@ -76,7 +78,7 @@ sources use provider networking.
 
 Initialization can add a bounded managed block to `AGENTS.md`, `CLAUDE.md`, or
 both; install VibeTether and exposed specialists under the enabled host Skill
-directory; and create the `.vibetether/` intent, truth index, capability board,
+directory; and create the `.vibetether/` intent, blank user-owned `TRUTH.md`, capability board,
 provider lock, checkpoint, and experience index.
 
 VibeTether backs up an instruction file before its first managed-block change.

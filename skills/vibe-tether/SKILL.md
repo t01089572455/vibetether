@@ -13,7 +13,7 @@ Do not replace the coding agent's implementation ability. Control direction, aut
 
 ## Start Here
 
-1. Read the nearest project instruction file, `.vibetether/project.yaml`, the live `.vibetether/routes.local.yaml` overlay when present, applicable truth, the current checkpoint, and applicable experience.
+1. Read the nearest project instruction file, `.vibetether/project.yaml`, `.vibetether/TRUTH.md`, the current checkpoint, the live `.vibetether/routes.local.yaml` overlay when present, applicable confirmed truth, and applicable experience.
 2. Identify the approved goal, current lifecycle state, active task slice, observable signals, and evidence gap.
 3. Run the automatic work-readiness gate. Resolve discoverable facts and project-source conflicts before choosing an implementation action.
 4. At task entry and every phase transition or re-entry boundary, start a stateful route:
@@ -35,11 +35,33 @@ Do not replace the coding agent's implementation ability. Control direction, aut
 
 If no project manifest exists, run `vibetether init` or create one using [project-manifest.md](references/project-manifest.md) before long-running product work.
 
+## Project Control Plane
+
+Treat the installed artifacts as one control plane, not a loose router:
+
+- host instructions trigger re-entry;
+- `intent.md` holds the user-owned outcome and boundaries;
+- `TRUTH.md` lists confirmed, candidate, and declined project sources;
+- `project.yaml` routes the control artifacts without duplicating their prose;
+- `capabilities.yaml` recommends methods and providers;
+- `state/current.yaml` makes the current phase and slice resumable;
+- `experience-index.yaml` recalls workflows that have actually succeeded.
+
+On a fresh install, do not scan repository documents into active truth. A user may edit `TRUTH.md` directly or ask the Agent to find candidates. Candidates are non-authoritative and must never guide implementation. The Agent may record a discoverable candidate with its role, scope, and reason, but active additions, removals, role changes, scope changes, and supersession require user confirmation. A document generated during an approved discussion is still a candidate until separately confirmed. A later command such as "continue with the new direction" does not silently activate the file; activation needs explicit approval of its governing path, role, scope, and any supersession, without requiring a magic phrase.
+
+At task entry, read the host instructions, manifest, truth map, intent, checkpoint, then only the confirmed sources applicable to the active scope. At phase, goal, risk, authority, source, compaction, resume, handoff, merge, deployment, release, or publication boundaries, perform a full re-anchor. For an unchanged low-risk slice, compare known fingerprints and reread only affected sources; do not reload the whole corpus.
+
+If confirmed truth conflicts with applicable experience, stop the affected action, explain the conflict, recommend which durable source should change, and ask the user. Safety policy remains non-overridable.
+
+If a confirmed directional source changes materially, treat the new bytes as current only when the user explicitly made or approved that exact change. Otherwise preserve the working tree, write a blocked or alignment checkpoint, explain the affected slice, and ask one recommended decision before replanning. Run provider routing and experience recall after alignment is restored, not before the decision.
+
+Read [project-truth.md](references/project-truth.md) before finding, proposing, activating, moving, deleting, or superseding project sources.
+
 ## Project Bootstrap and Proven Path Recall
 
 When project direction is unresolved, route to `project-bootstrap`; do not start product implementation from a directory name, package metadata, or agent preference. In an interactive terminal, use guided `vibetether init` or `vibetether bootstrap`. In automation, require explicit goal and success evidence or leave the lifecycle at `DISCOVER`.
 
-Before repeatable operational work, resolve `proven-path-recall` with current task and environment signals. Read only returned artifacts, not the entire index corpus. A `provisional` result or `requires_revalidation: true` guides investigation but is not known-good until fresh evidence passes. If a matching proven path is not used, record the material applicability reason.
+Before repeatable operational work, resolve `proven-path-recall` with current task and environment signals. Read only returned artifacts, not the entire index corpus. A `provisional` result or `requires_revalidation: true` guides investigation but is not known-good until fresh evidence passes. If a matching proven path is not used, record the material applicability reason. Experience is reusable procedure, never authority to override confirmed project truth.
 
 ## Automatic Work-Readiness Gate
 
@@ -108,7 +130,9 @@ Risk: Authorized, reversible, scoped, and supported by evidence?
 Verdict: PROCEED, INVESTIGATE, ASK, STOP, or PROPOSE_ROLLBACK?
 ```
 
-Do not reload the entire repository for a lightweight preflight. Read only the manifest routes and sources needed for the proposed action.
+Do not reload the entire repository for a lightweight preflight. On an unchanged low-risk slice, compare the checkpoint and known source fingerprints, then read only the manifest routes and confirmed sources needed for the proposed action.
+
+A consequential action is normally a phase or slice transition, product or contract decision, structural change, destructive or external operation, or completion/release boundary. It is not every individual edit, read-only query, or routine test inside one unchanged approved slice.
 
 ## Full Re-Anchor
 
@@ -128,7 +152,7 @@ Perform a full re-anchor when:
 
 During a full re-anchor:
 
-1. Reload the manifest and applicable sources in declared order.
+1. Reload the host instructions, manifest, truth map, intent, checkpoint, and applicable confirmed sources in declared order.
 2. Compare the current request, durable decisions, checkpoint, working tree, and runtime evidence.
 3. List unresolved conflicts and high-impact assumptions.
 4. Reconstruct the current goal, protected capabilities, approved slice, and evidence gap.
@@ -239,9 +263,9 @@ Keep lifecycle labels, checkpoint mechanics, and control-kernel terminology inte
 
 ## Success Capture Gate
 
-After every verified user-level or engineering-level success, determine whether the outcome establishes or changes a reusable workflow. A first verified reusable workflow is a `first-proven-path` and must be captured immediately even when its first attempt succeeded. Recovered or materially changed paths must update their durable artifacts; unchanged repeated paths must point to existing encoding without duplicate documentation; routine non-paths create no document.
+After every verified user-level or engineering-level success, determine whether the outcome establishes or changes a reusable workflow. A first verified reusable workflow is a `first-proven-path` even when its first attempt succeeded. Immediately create or update a sanitized candidate artifact; do not silently activate it as durable project experience. Ask the user to confirm active indexing. Recovered or materially changed paths follow the same candidate-to-confirmed lifecycle; unchanged repeated paths point to existing encoding without duplicate documentation; routine non-paths create no document.
 
-Use exactly one final disposition: `captured`, `already-encoded`, or `not-reusable`. Record the trigger, reason, and artifact paths in checkpoint `experience_feedback`. Fresh tests, runtime, remote, browser, deployment, or CI evidence proves success; the checkpoint only records the disposition.
+Use `pending` while candidate activation awaits a user decision. After the decision, use exactly one final disposition: `captured`, `already-encoded`, or `not-reusable`. Record the trigger, reason, and artifact paths in checkpoint `experience_feedback`. Fresh tests, runtime, remote, browser, deployment, or CI evidence proves success; the checkpoint only records the disposition.
 
 Before completion, handoff, the next slice, merge, release, or publication, run `vibetether doctor`. Do not advance while the disposition is `pending`. Never persist credentials, private keys, one-time codes, private reasoning, sensitive tool output, or full transcripts.
 

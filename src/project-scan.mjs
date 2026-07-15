@@ -86,33 +86,40 @@ export async function scanProject(root, enabledAdapters, profile, dependencies =
     return found;
   };
 
-  const contexts = await recordMany(['CONTEXT.md', 'docs/context.md'], 'product context');
-  const directions = await recordMany(
+  const discoverTruth = dependencies.discoverTruth !== false;
+  const contexts = discoverTruth
+    ? await recordMany(['CONTEXT.md', 'docs/context.md'], 'product context')
+    : [];
+  const directions = discoverTruth ? await recordMany(
     ['docs/product-direction.md', 'PRD.md', 'docs/PRD.md', 'docs/prd.md', 'docs/product.md'],
     'product direction',
     'high',
-  );
+  ) : [];
   if (directions.length > 1) {
     throw new CliError(`Competing product direction candidates require user confirmation: ${directions.join(', ')}`, 3);
   }
   const direction = directions[0] ?? null;
-  const architecture = await record('docs/adr', 'architecture decisions');
-  const uiSpecs = await recordMany(
+  const architecture = discoverTruth ? await record('docs/adr', 'architecture decisions') : false;
+  const uiSpecs = discoverTruth ? await recordMany(
     ['docs/ui-spec.md', 'docs/ux-spec.md', 'docs/ui-design.md'],
     'user interface specification',
     'high',
-  );
+  ) : [];
   if (uiSpecs.length > 1) {
     throw new CliError(`Competing UI direction candidates require user confirmation: ${uiSpecs.join(', ')}`, 3);
   }
-  const designSystem = await record('docs/design-system.md', 'design system');
-  const requirements = await recordMany(['docs/specs', 'docs/prd', 'specs'], 'requirements and specifications');
-  const testing = await recordMany(['docs/testing.md', 'docs/test-plan.md'], 'testing contract');
-  const release = await recordMany(
+  const designSystem = discoverTruth ? await record('docs/design-system.md', 'design system') : false;
+  const requirements = discoverTruth
+    ? await recordMany(['docs/specs', 'docs/prd', 'specs'], 'requirements and specifications')
+    : [];
+  const testing = discoverTruth ? await recordMany(['docs/testing.md', 'docs/test-plan.md'], 'testing contract') : [];
+  const release = discoverTruth ? await recordMany(
     ['docs/release-checklist.md', 'docs/release.md', 'RELEASE.md'],
     'release checklist',
-  );
-  const operations = await hasOperationsDocumentation(root, dependencies.operationsIo) ? 'docs/operations/' : false;
+  ) : [];
+  const operations = discoverTruth && await hasOperationsDocumentation(root, dependencies.operationsIo)
+    ? 'docs/operations/'
+    : false;
   if (operations) {
     discovery[operations] = {
       role: 'operational proven paths',

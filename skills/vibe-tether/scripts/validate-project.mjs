@@ -8,6 +8,7 @@ import { isSafeProjectRelativeArtifactPath, isSensitiveArtifactPath } from './ar
 import { assertCapabilityBoard, validateProjectRouteDocument } from './capability-routing.mjs';
 import { parseExperienceIndex } from './experience-index.mjs';
 import { parseCanonicalManifest, parseCanonicalYaml } from './manifest.mjs';
+import { parseProjectTruthMap } from './truth-map.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const skillDir = path.resolve(scriptDir, '..');
@@ -82,6 +83,7 @@ async function validateSelf() {
     'capability-routing.md',
     'checkpoint-and-drift.md',
     'project-manifest.md',
+    'project-truth.md',
     'ui-control-loop.md',
   ];
   for (const reference of references) {
@@ -145,17 +147,34 @@ async function validateProject(projectRoot) {
   if (!manifest?.capability_board) errors.push('Manifest capability_board is required');
   if (!manifest?.provider_lock) errors.push('Manifest provider_lock is required');
   if (!manifest?.experience_index) errors.push('Manifest experience_index is required');
+  if (!manifest?.truth_index) errors.push('Manifest truth_index is required');
+  let truth = null;
+  if (manifest.truth_index) {
+    const truthStatus = await projectEntryStatus(projectRoot, manifest.truth_index);
+    if (truthStatus === 'escape') {
+      errors.push('Truth index escapes project root');
+    } else if (truthStatus === 'missing') {
+      errors.push('Missing truth index');
+    } else if (truthStatus !== 'ok') {
+      errors.push('Truth index must be a regular non-linked file');
+    } else {
+      try {
+        truth = parseProjectTruthMap(await readFile(path.resolve(projectRoot, manifest.truth_index), 'utf8'));
+      } catch {
+        errors.push('Invalid truth map');
+      }
+    }
+  }
   const declaredSources = [
-    manifest?.goal_source,
     manifest?.intent_contract,
-    ...flattenSources(manifest?.sources),
+    ...(truth ? truth.confirmed.map((entry) => entry.path) : flattenSources(manifest?.sources)),
   ].filter(Boolean);
   for (const source of [...new Set(declaredSources)]) {
     const sourceStatus = await projectEntryStatus(projectRoot, source, 'any');
     if (sourceStatus === 'escape') {
       errors.push('Declared source escapes project root');
     } else if (sourceStatus === 'missing') {
-      errors.push(`Missing declared source: ${safeDiagnosticPath(source, 'redacted')}`);
+      errors.push(`${truth?.confirmed.some((entry) => entry.path === source) ? 'Missing confirmed truth' : 'Missing declared source'}: ${safeDiagnosticPath(source, 'redacted')}`);
     } else if (sourceStatus !== 'ok') {
       errors.push('Declared source must be a regular non-linked file or directory');
     }

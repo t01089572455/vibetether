@@ -242,74 +242,55 @@ test('repeated init refreshes persisted project state from the live scan', async
   assert.equal(refreshed.project_state, 'existing');
 });
 
-test('re-init dry-run discovers a later canonical operations source, apply persists it, and repetition is idempotent', async () => {
+test('re-init does not silently activate a later operations document', async () => {
   const target = await project('operations-refresh');
   const args = ['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes'];
   assert.equal(runCli(args).status, 0);
   const manifestPath = path.join(target, '.vibetether', 'project.yaml');
-  const before = await readFile(manifestPath, 'utf8');
+  const truthPath = path.join(target, '.vibetether', 'TRUTH.md');
+  const truthBefore = await readFile(truthPath, 'utf8');
   await mkdir(path.join(target, 'docs', 'operations'), { recursive: true });
   await writeFile(path.join(target, 'docs', 'operations', 'publishing.md'), '# Publishing\n', 'utf8');
 
   const dryRun = runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--dry-run']);
   assert.equal(dryRun.status, 0, dryRun.stderr || dryRun.stdout);
-  assert.match(dryRun.stdout, /docs\/operations\//);
-  assert.match(dryRun.stdout, /operational proven paths/);
-  assert.equal(await readFile(manifestPath, 'utf8'), before);
+  assert.doesNotMatch(dryRun.stdout, /docs\/operations\//);
+  assert.equal(await readFile(truthPath, 'utf8'), truthBefore);
 
   const applied = runCli(args);
   assert.equal(applied.status, 0, applied.stderr || applied.stdout);
   const after = await readFile(manifestPath, 'utf8');
   const manifest = YAML.parse(after);
-  assert.deepEqual(manifest.sources.conditional.operations, ['docs/operations/']);
-  assert.deepEqual(manifest.discovery['docs/operations/'], {
-    role: 'operational proven paths',
-    confidence: 'high',
-    kind: 'directory',
-  });
+  assert.equal(JSON.stringify(manifest.sources).includes('docs/operations/'), false);
+  assert.equal(JSON.stringify(manifest.discovery).includes('docs/operations/'), false);
+  assert.equal(await readFile(truthPath, 'utf8'), truthBefore);
   assert.equal(runCli(args).status, 0);
   assert.equal(await readFile(manifestPath, 'utf8'), after);
 });
 
-test('re-init removes only a stale or unsafe canonical operations route and preserves custom manifest sources', async () => {
-  for (const unsafe of [false, true]) {
-    const target = await project(`operations-stale-${unsafe ? 'unsafe' : 'missing'}`);
-    const args = ['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes'];
-    await mkdir(path.join(target, 'docs', 'operations'), { recursive: true });
-    await writeFile(path.join(target, 'docs', 'operations', 'publishing.md'), '# Publishing\n', 'utf8');
-    assert.equal(runCli(args).status, 0);
-    const manifestPath = path.join(target, '.vibetether', 'project.yaml');
-    const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
-    manifest.sources.custom = ['docs/custom-truth.md'];
-    manifest.sources.conditional.operations.push('docs/custom-operations/');
-    manifest.sources.conditional.team_runbooks = ['docs/team-runbooks/'];
-    manifest.discovery['docs/custom-operations/'] = {
-      role: 'custom operational source',
-      confidence: 'medium',
-      kind: 'directory',
-    };
-    manifest.custom_extension = { preserve: true };
-    await writeFile(manifestPath, YAML.stringify(manifest, { lineWidth: 0 }), 'utf8');
+test('re-init preserves compatibility sources without treating them as live truth', async () => {
+  const target = await project('legacy-sources-preserved');
+  const args = ['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes'];
+  assert.equal(runCli(args).status, 0);
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
+  manifest.sources.custom = ['docs/legacy-custom-truth.md'];
+  manifest.sources.conditional.operations = ['docs/legacy-operations/'];
+  manifest.custom_extension = { preserve: true };
+  await writeFile(manifestPath, YAML.stringify(manifest, { lineWidth: 0 }), 'utf8');
+  const truthPath = path.join(target, '.vibetether', 'TRUTH.md');
+  const truthBefore = await readFile(truthPath, 'utf8');
 
-    if (unsafe) {
-      await writeFile(path.join(target, 'docs', 'operations', '.npmrc'), 'fixture\n', 'utf8');
-    } else {
-      await rm(path.join(target, 'docs', 'operations'), { recursive: true });
-    }
-
-    const result = runCli(args);
-    assert.equal(result.status, 0, result.stderr || result.stdout);
-    const refreshed = YAML.parse(await readFile(manifestPath, 'utf8'));
-    assert.deepEqual(refreshed.sources.conditional.operations, ['docs/custom-operations/']);
-    assert.deepEqual(refreshed.sources.custom, ['docs/custom-truth.md']);
-    assert.deepEqual(refreshed.sources.conditional.team_runbooks, ['docs/team-runbooks/']);
-    assert.equal(refreshed.discovery['docs/operations/'], undefined);
-    assert.equal(refreshed.discovery['docs/custom-operations/'].role, 'custom operational source');
-    assert.deepEqual(refreshed.custom_extension, { preserve: true });
-  }
+  const result = runCli(args);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const refreshed = YAML.parse(await readFile(manifestPath, 'utf8'));
+  assert.deepEqual(refreshed.sources.custom, ['docs/legacy-custom-truth.md']);
+  assert.deepEqual(refreshed.sources.conditional.operations, ['docs/legacy-operations/']);
+  assert.deepEqual(refreshed.custom_extension, { preserve: true });
+  assert.equal(await readFile(truthPath, 'utf8'), truthBefore);
 });
 
-test('init discovers existing truth sources with explicit confidence', async () => {
+test('init leaves existing documents unconfirmed until the user promotes candidates', async () => {
   const target = await project('scan');
   await mkdir(path.join(target, 'docs', 'adr'), { recursive: true });
   await writeFile(path.join(target, 'CONTEXT.md'), '# Product context\n', 'utf8');
@@ -322,17 +303,14 @@ test('init discovers existing truth sources with explicit confidence', async () 
 
   const manifest = YAML.parse(await readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'));
   assert.equal(manifest.schema_version, 1);
-  assert.equal(manifest.goal_source, 'docs/product-direction.md');
   assert.equal(manifest.intent_contract, '.vibetether/intent.md');
-  assert.deepEqual(manifest.sources.always, [
-    'AGENTS.md',
-    'CONTEXT.md',
-    'docs/product-direction.md',
-    '.vibetether/intent.md',
-  ]);
-  assert.deepEqual(manifest.sources.conditional.architecture, ['docs/adr/']);
-  assert.deepEqual(manifest.sources.conditional.ui, ['docs/ui-spec.md']);
-  assert.equal(manifest.discovery['docs/product-direction.md'].confidence, 'high');
+  assert.equal(JSON.stringify(manifest.sources).includes('CONTEXT.md'), false);
+  assert.equal(JSON.stringify(manifest.sources).includes('docs/product-direction.md'), false);
+  assert.equal(JSON.stringify(manifest.sources).includes('docs/adr/'), false);
+  assert.equal(JSON.stringify(manifest.sources).includes('docs/ui-spec.md'), false);
+  const truth = await readFile(path.join(target, '.vibetether', 'TRUTH.md'), 'utf8');
+  assert.doesNotMatch(truth, /`CONTEXT\.md`/);
+  assert.doesNotMatch(truth, /`docs\/product-direction\.md`/);
   assert.equal(manifest.harnesses.codex.enabled, true);
   assert.equal(manifest.harnesses.claude.enabled, false);
 });
@@ -462,23 +440,23 @@ test('repeated init preserves curated manifest fields and existing harnesses', a
   assert.equal(after.harnesses.claude.enabled, true);
 });
 
-test('init discovers requirement and testing sources but stops on competing product direction', async () => {
+test('init neither activates broad candidates nor guesses between competing product directions', async () => {
   const discovered = await project('broader-scan');
   await mkdir(path.join(discovered, 'docs', 'specs'), { recursive: true });
   await writeFile(path.join(discovered, 'docs', 'testing.md'), '# Testing\n', 'utf8');
   assert.equal(runCli(['init', '--project', discovered, '--agent', 'codex', '--profile', 'core', '--yes']).status, 0);
   const manifest = YAML.parse(await readFile(path.join(discovered, '.vibetether', 'project.yaml'), 'utf8'));
-  assert.deepEqual(manifest.sources.conditional.requirements, ['docs/specs/']);
-  assert.deepEqual(manifest.sources.conditional.testing, ['docs/testing.md']);
+  assert.equal(JSON.stringify(manifest.sources).includes('docs/specs/'), false);
+  assert.equal(JSON.stringify(manifest.sources).includes('docs/testing.md'), false);
 
   const ambiguous = await project('competing-direction');
   await mkdir(path.join(ambiguous, 'docs'), { recursive: true });
   await writeFile(path.join(ambiguous, 'docs', 'product-direction.md'), '# Direction A\n', 'utf8');
   await writeFile(path.join(ambiguous, 'PRD.md'), '# Direction B\n', 'utf8');
   const result = runCli(['init', '--project', ambiguous, '--agent', 'codex', '--profile', 'core', '--yes']);
-  assert.equal(result.status, 3, result.stderr || result.stdout);
-  assert.match(result.stderr, /competing product direction/i);
-  assert.equal(await exists(path.join(ambiguous, '.vibetether')), false);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const truth = await readFile(path.join(ambiguous, '.vibetether', 'TRUTH.md'), 'utf8');
+  assert.doesNotMatch(truth, /`PRD\.md`|`docs\/product-direction\.md`/);
 });
 
 test('init records detected bundle evidence while --no-auto-bundles keeps optional packs inactive', async () => {

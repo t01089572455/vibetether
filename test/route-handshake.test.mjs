@@ -6,7 +6,8 @@ import test from 'node:test';
 import YAML from 'yaml';
 import { main } from '../src/cli.mjs';
 import { inspectProject } from '../src/doctor.mjs';
-import { ROUTE_HANDSHAKE_PATH } from '../src/route-handshake.mjs';
+import { ROUTE_HANDSHAKE_PATH, writeControlState } from '../src/route-handshake.mjs';
+import { createTruthMap } from '../src/truth-map.mjs';
 
 async function exists(target) {
   try {
@@ -38,6 +39,7 @@ async function startRoute(root, overrides = {}) {
   for (const signal of signals) args.push('--signal', signal);
   if (overrides.select) args.push('--select', overrides.select);
   if (overrides.reason) args.push('--reason', overrides.reason);
+  if (overrides.syncCheckpoint !== false) await updateCheckpoint(root, { phase });
   return JSON.parse(await main(args));
 }
 
@@ -74,7 +76,7 @@ test('route starts a bounded active handshake with live experience metadata', as
   assert.ok(Array.isArray(output.expected_outputs));
   assert.ok(Array.isArray(output.exit_evidence));
   assert.deepEqual(output.applicable_experience, []);
-  assert.equal(output.checkpoint_phase, 'DISCOVER');
+  assert.equal(output.checkpoint_phase, 'PLAN');
   const state = await readHandshake(root);
   assert.equal(state.status, 'active');
   assert.equal(state.phase, 'PLAN');
@@ -83,6 +85,100 @@ test('route starts a bounded active handshake with live experience metadata', as
   for (const forbidden of ['reasoning', 'chain_of_thought', 'private_reasoning', 'raw_output']) {
     assert.equal(Object.hasOwn(state, forbidden), false);
   }
+});
+
+test('route refuses a checkpoint phase mismatch without writing either control file', async () => {
+  const root = await initializedProject('phase-mismatch');
+  const checkpointPath = path.join(root, '.vibetether', 'state', 'current.yaml');
+  const before = await readFile(checkpointPath, 'utf8');
+
+  await assert.rejects(
+    startRoute(root, { syncCheckpoint: false }),
+    /checkpoint phase.*route phase|phase.*mismatch/i,
+  );
+
+  assert.equal(await exists(path.join(root, ...ROUTE_HANDSHAKE_PATH.split('/'))), false);
+  assert.equal(await readFile(checkpointPath, 'utf8'), before);
+});
+
+test('paired route and checkpoint writes roll back when the second write fails', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-route-pair-'));
+  const handshakePath = path.join(root, '.vibetether', 'state', 'route-handshake.yaml');
+  const checkpointPath = path.join(root, '.vibetether', 'state', 'current.yaml');
+  await mkdir(path.dirname(handshakePath), { recursive: true });
+  const handshakeBefore = 'schema_version: 1\nstatus: satisfied\n';
+  const checkpointBefore = 'schema_version: 1\nphase: PLAN\n';
+  await writeFile(handshakePath, handshakeBefore, 'utf8');
+  await writeFile(checkpointPath, checkpointBefore, 'utf8');
+  const failure = new Error('injected checkpoint write failure');
+
+  await assert.rejects(
+    writeControlState(
+      root,
+      { checkpoint: { path: '.vibetether/state/current.yaml' } },
+      { schema_version: 1, status: 'active' },
+      { schema_version: 1, phase: 'EXECUTE_ONE' },
+      {
+        writeAtomic: async (target, content) => {
+          if (target === checkpointPath && content !== checkpointBefore) throw failure;
+          await writeFile(target, content, 'utf8');
+        },
+      },
+    ),
+    (error) => error === failure,
+  );
+
+  assert.equal(await readFile(handshakePath, 'utf8'), handshakeBefore);
+  assert.equal(await readFile(checkpointPath, 'utf8'), checkpointBefore);
+});
+
+test('route lifecycle synchronizes checkpoint provider selection', async () => {
+  const root = await initializedProject('checkpoint-selection');
+  const checkpointPath = path.join(root, '.vibetether', 'state', 'current.yaml');
+  const started = await startRoute(root);
+  let checkpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
+  assert.deepEqual(checkpoint.provider_selection, {
+    capability: 'planning',
+    recommended: started.recommended_skill,
+    selected: started.selected_skill,
+    selection_reason: started.selection_reason,
+    invocation_status: 'active',
+  });
+
+  await main(['route', 'complete', '--project', root, '--evidence', 'Plan approved']);
+  checkpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
+  assert.equal(checkpoint.provider_selection.invocation_status, 'satisfied');
+
+  await startRoute(root, { phase: 'DESIGN', capability: 'product-design', signals: ['behavior-choice-needed'] });
+  await main(['route', 'abandon', '--project', root, '--reason', 'Direction changed']);
+  checkpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
+  assert.equal(checkpoint.provider_selection.invocation_status, 'abandoned');
+  assert.equal(checkpoint.provider_selection.selection_reason, 'Direction changed');
+});
+
+test('route re-anchor fingerprints confirmed authority and doctor detects later source drift', async () => {
+  const root = await initializedProject('authority-snapshot');
+  await mkdir(path.join(root, 'docs'), { recursive: true });
+  await writeFile(path.join(root, 'docs', 'product.md'), '# Approved A\n', 'utf8');
+  await writeFile(
+    path.join(root, '.vibetether', 'TRUTH.md'),
+    createTruthMap({
+      harnesses: ['codex'],
+      confirmed: [{ path: 'docs/product.md', role: 'product-direction', scope: '.' }],
+    }),
+    'utf8',
+  );
+
+  await startRoute(root);
+  const checkpoint = YAML.parse(await readFile(path.join(root, '.vibetether', 'state', 'current.yaml'), 'utf8'));
+  assert.equal(checkpoint.authority_snapshot.truth_index.path, '.vibetether/TRUTH.md');
+  assert.match(checkpoint.authority_snapshot.truth_index.sha256, /^[a-f0-9]{64}$/);
+  assert.deepEqual(checkpoint.authority_snapshot.confirmed_sources.map((entry) => entry.path), ['docs/product.md']);
+  assert.match(checkpoint.authority_snapshot.confirmed_sources[0].sha256, /^[a-f0-9]{64}$/);
+
+  await writeFile(path.join(root, 'docs', 'product.md'), '# Approved B\n', 'utf8');
+  const report = await doctorReport(root);
+  assert.equal(report.issues.some(({ code }) => code === 'changed-confirmed-truth'), true);
 });
 
 test('an active route blocks a different phase but permits an idempotent same-route refresh', async () => {

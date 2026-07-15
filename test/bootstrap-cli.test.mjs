@@ -885,7 +885,7 @@ test('bootstrap yes reuses a confirmed intent and never stages or rewrites provi
   assert.equal(stageCounter.calls, 0);
 });
 
-test('bootstrapOnly dry-run and apply learn a later canonical operations source without staging providers', async () => {
+test('bootstrapOnly dry-run and apply do not activate a later operations source or stage providers', async () => {
   const target = await project('bootstrap-operations-refresh');
   await main([
     'init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes',
@@ -893,19 +893,23 @@ test('bootstrapOnly dry-run and apply learn a later canonical operations source 
   ]);
   const manifestPath = path.join(target, '.vibetether', 'project.yaml');
   const before = await readFile(manifestPath, 'utf8');
+  const truthPath = path.join(target, '.vibetether', 'TRUTH.md');
+  const truthBefore = await readFile(truthPath, 'utf8');
   await mkdir(path.join(target, 'docs', 'operations'), { recursive: true });
   await writeFile(path.join(target, 'docs', 'operations', 'publishing.md'), '# Publishing\n', 'utf8');
   const stageCounter = { calls: 0 };
 
   const dryRun = await main(['bootstrap', '--project', target, '--dry-run'], runtime(null, stageCounter));
-  assert.match(dryRun, /docs\/operations\//);
+  assert.doesNotMatch(dryRun, /docs\/operations\//);
   assert.equal(await readFile(manifestPath, 'utf8'), before);
+  assert.equal(await readFile(truthPath, 'utf8'), truthBefore);
   assert.equal(stageCounter.calls, 0);
 
   await main(['bootstrap', '--project', target, '--yes'], runtime(null, stageCounter));
   const refreshed = YAML.parse(await readFile(manifestPath, 'utf8'));
-  assert.deepEqual(refreshed.sources.conditional.operations, ['docs/operations/']);
-  assert.equal(refreshed.discovery['docs/operations/'].role, 'operational proven paths');
+  assert.equal(JSON.stringify(refreshed.sources).includes('docs/operations/'), false);
+  assert.equal(JSON.stringify(refreshed.discovery).includes('docs/operations/'), false);
+  assert.equal(await readFile(truthPath, 'utf8'), truthBefore);
   assert.equal(stageCounter.calls, 0);
 });
 

@@ -2,6 +2,10 @@ import YAML from 'yaml';
 import { unresolvedIntent } from './bootstrap-model.mjs';
 
 export const EXPERIENCE_INDEX_PATH = '.vibetether/experience-index.yaml';
+export const TRUTH_INDEX_OWNERSHIP = Object.freeze({
+  owner: 'vibetether',
+  fingerprint: 'canonical-empty-v1',
+});
 export const OPERATIONS_SOURCE_PATH = 'docs/operations/';
 export const EXPERIENCE_INDEX_OWNERSHIP = Object.freeze({
   owner: 'vibetether',
@@ -103,6 +107,11 @@ export function createInitialExperienceFeedback() {
 export function isVibeTetherOwnedExperienceIndex(value) {
   return value?.owner === EXPERIENCE_INDEX_OWNERSHIP.owner
     && value?.fingerprint === EXPERIENCE_INDEX_OWNERSHIP.fingerprint;
+}
+
+export function isVibeTetherOwnedTruthIndex(value) {
+  return value?.owner === TRUTH_INDEX_OWNERSHIP.owner
+    && value?.fingerprint === TRUTH_INDEX_OWNERSHIP.fingerprint;
 }
 
 export function createInitialCheckpoint(goalSource, recommendedProvider = 'vibe-tether') {
