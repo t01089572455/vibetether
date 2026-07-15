@@ -9,6 +9,7 @@ import {
   assertCapabilityBoard,
   resolveCapabilityRoute,
 } from '../skills/vibe-tether/scripts/capability-routing.mjs';
+import { loadEffectiveProjectRoutes } from './project-routes.mjs';
 import { parseCanonicalManifest } from '../skills/vibe-tether/scripts/manifest.mjs';
 
 const DEFAULT_EXPERIENCE_INDEX = '.vibetether/experience-index.yaml';
@@ -141,14 +142,22 @@ async function loadCapabilitySnapshot(project, { includeExperience = false } = {
   } catch {
     throw new CliError('Unsupported capability board; expected schema_version 1 and advisory-router mode. Run vibetether doctor for details.', 3);
   }
-  if (!includeExperience) return { root, manifest, board };
+  let effective;
+  try {
+    effective = await loadEffectiveProjectRoutes(root, manifest, board);
+  } catch (error) {
+    if (error instanceof CliError) throw error;
+    throw new CliError('Cannot load project routes. Run vibetether doctor for details.', 3);
+  }
+  board = effective.board;
+  if (!includeExperience) return { root, manifest, board, routeOverlay: effective.overlay };
   try {
     const route = manifest.experience_index === undefined
       ? DEFAULT_EXPERIENCE_INDEX
       : manifest.experience_index;
     const source = await readSafeProjectFile(root, route, 'Experience index', { authorityRoute: true });
     const experience = parseExperienceIndex(source);
-    return { root, manifest, board, experience };
+    return { root, manifest, board, experience, routeOverlay: effective.overlay };
   } catch {
     throw new CliError('Cannot read experience index because it is missing, unsafe, or structurally invalid. Run vibetether doctor for details.', 3);
   }
@@ -184,6 +193,14 @@ function humanDashboard(root, board) {
     lines.push(`  Exit evidence: ${(capability.exit_evidence ?? []).join(' ') || 'Record fresh evidence before moving phases.'}`);
     if (capability.catalog_alternatives?.length) {
       lines.push(`  Catalog-only alternatives: ${capability.catalog_alternatives.join(', ')}`);
+    }
+  }
+  if ((board.project_routes ?? []).length) {
+    lines.push('');
+    lines.push('Project-local routes:');
+    for (const route of board.project_routes) {
+      lines.push(`  ${route.id} | ${route.role} | ${route.skill} | ${(route.available_in ?? []).join(', ') || 'unavailable'}`);
+      lines.push(`    ${route.phases.join('/')} / ${route.capability} | signals: ${route.when_any.join(', ') || 'none'}`);
     }
   }
   lines.push('');

@@ -1,11 +1,16 @@
 import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import YAML from 'yaml';
 import {
+  mergeProjectRoutes,
   parseProjectRoutes,
   PROJECT_ROUTES_PATH,
   validateProjectRoutes,
 } from '../src/project-routes.mjs';
+import { resolveBoardRoute } from '../src/capabilities.mjs';
 
 const baseBoard = {
   schema_version: 1,
@@ -192,5 +197,88 @@ test('document and board structures fail closed', () => {
   assert.throws(
     () => validateProjectRoutes({ schema_version: 1, routes: [] }, { capabilities: null }),
     /capability board/i,
+  );
+});
+
+test('local alternatives remain selectable metadata and overlays remain additive', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-project-route-roles-'));
+  for (const skill of ['request-refactor-plan', 'karpathy-guidelines']) {
+    const directory = path.join(root, '.agents', 'skills', skill);
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, 'SKILL.md'), `# ${skill}\n`, 'utf8');
+  }
+  const board = {
+    ...structuredClone(baseBoard),
+    providers: [],
+    routes: [{
+      id: 'curated-planning',
+      phase: 'PLAN',
+      capability: 'planning',
+      priority: 100,
+      signals: { all: [], any: [] },
+      recommendation: {
+        skill: 'writing-plans',
+        available_in: ['codex'],
+        installations: { codex: '.agents/skills/writing-plans' },
+        reason: 'Write the approved plan.',
+      },
+      fallback: 'vibe-tether',
+      selection: 'recommend',
+      expected_outputs: ['bounded-plan'],
+      exit_evidence: ['The approved design is mapped to verifiable slices.'],
+    }],
+  };
+  const document = {
+    schema_version: 1,
+    routes: [
+      route({
+        id: 'local-alternative',
+        skill: 'request-refactor-plan',
+        role: 'alternative',
+        when_any: ['refactor'],
+      }),
+      route({
+        id: 'local-overlay',
+        skill: 'karpathy-guidelines',
+        role: 'overlay',
+        when_any: ['large-change'],
+      }),
+    ],
+  };
+  const effective = await mergeProjectRoutes({ root, board, document, harnesses: ['codex'] });
+  const result = resolveBoardRoute(effective, {
+    phase: 'PLAN',
+    capability: 'planning',
+    signals: ['refactor', 'large-change'],
+    harness: 'codex',
+  });
+
+  assert.equal(result.selection.skill, 'writing-plans');
+  assert.deepEqual(
+    result.alternatives.find(({ skill }) => skill === 'request-refactor-plan'),
+    {
+      skill: 'request-refactor-plan',
+      available: true,
+      reason: 'A reviewed PRD needs actionable issues.',
+      source: 'project-local',
+      role: 'alternative',
+    },
+  );
+  assert.deepEqual(
+    result.overlays.find(({ skill }) => skill === 'karpathy-guidelines'),
+    {
+      id: 'project-local:local-overlay:PLAN',
+      skill: 'karpathy-guidelines',
+      available: true,
+      available_in: ['codex'],
+      reason: 'A reviewed PRD needs actionable issues.',
+      expected_outputs: ['bounded-plan', 'scoped-issues'],
+      exit_evidence: [
+        'The approved design is mapped to verifiable slices.',
+        'Every approved requirement is mapped to an issue.',
+      ],
+      source: 'project-local',
+      role: 'overlay',
+    },
   );
 });

@@ -133,6 +133,8 @@ export function resolveCapabilityRoute(board, request) {
     reason: route.recommendation.reason,
     expected_outputs: route.expected_outputs ?? [],
     exit_evidence: route.exit_evidence ?? [],
+    source: route.source ?? 'curated',
+    role: route.project_role ?? null,
   }));
 
   if (!preferred) {
@@ -166,10 +168,14 @@ export function resolveCapabilityRoute(board, request) {
   const preferredAvailable = routeAvailable(preferred, request.harness);
   const selectedSkill = available?.recommendation?.skill ?? preferred.fallback ?? 'vibe-tether';
   const selectionSource = available
-    ? available.id === preferred.id ? 'recommended' : 'available-alternative'
-    : 'declared-fallback';
-  const rationale = selectionSource === 'available-alternative'
-    ? `The preferred Skill is unavailable in ${request.harness ?? 'enabled harnesses'}; use the next matching installed route.`
+    ? available.id === preferred.id
+      ? preferred.source === 'project-local' ? 'project-local' : 'recommended'
+      : preferred.source === 'project-local' ? 'curated-fallback' : 'available-alternative'
+    : preferred.source === 'project-local' ? 'curated-fallback' : 'declared-fallback';
+  const rationale = selectionSource === 'curated-fallback'
+    ? `The matching project-local Skill is unavailable in ${request.harness ?? 'enabled harnesses'}; use the curated route or declared fallback.`
+    : selectionSource === 'available-alternative'
+      ? `The preferred Skill is unavailable in ${request.harness ?? 'enabled harnesses'}; use the next matching installed route.`
     : selectionSource === 'declared-fallback'
       ? 'No matching provider is available; use the declared fallback and record why.'
       : 'The preferred matching Skill is available.';
@@ -199,6 +205,8 @@ export function resolveCapabilityRoute(board, request) {
       skill: route.recommendation.skill,
       available: routeAvailable(route, request.harness),
       reason: route.recommendation.reason,
+      source: route.source ?? 'curated',
+      role: route.project_role ?? null,
     })),
     rationale,
     fallback: preferred.fallback ?? capability.fallback,

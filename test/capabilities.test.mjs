@@ -372,3 +372,151 @@ test('package route queries refuse a symlinked experience-index route', async (c
     /symbolic-link|symlink|experience index[\s\S]*doctor/i,
   );
 });
+
+async function installLocalSkill(root, harness, skill) {
+  const parent = harness === 'codex' ? '.agents' : '.claude';
+  const target = path.join(root, parent, 'skills', skill);
+  await mkdir(target, { recursive: true });
+  await writeFile(
+    path.join(target, 'SKILL.md'),
+    `---\nname: ${skill}\ndescription: Project fixture Skill.\n---\n\n# ${skill}\n`,
+    'utf8',
+  );
+}
+
+async function writeLocalPlanningRoute(root, skill, overrides = {}) {
+  const target = path.join(root, '.vibetether', 'routes.local.yaml');
+  await writeFile(target, YAML.stringify({
+    schema_version: 1,
+    routes: [{
+      id: 'project-prd-to-issues',
+      phases: ['PLAN'],
+      capability: 'planning',
+      when_any: ['prd-approved'],
+      skill,
+      role: 'primary',
+      use_when: ['A reviewed PRD needs actionable issues.'],
+      expected_outputs: ['scoped-issues'],
+      exit_evidence: ['Every approved requirement is mapped to an issue.'],
+      ...overrides,
+    }],
+  }), 'utf8');
+}
+
+async function initializedLocalRouteProject(name, agent = 'codex') {
+  const target = await mkdtemp(path.join(os.tmpdir(), `vibetether-local-route-${name}-`));
+  const initialized = runCli(['init', '--project', target, '--agent', agent, '--profile', 'core', '--yes']);
+  assert.equal(initialized.status, 0, initialized.stderr || initialized.stdout);
+  return target;
+}
+
+async function resolveLocalPlanning(root, agent = 'codex') {
+  return JSON.parse(await showCapabilities({
+    project: root,
+    phase: 'PLAN',
+    capability: 'planning',
+    signals: ['prd-approved'],
+    agent,
+    json: true,
+  }));
+}
+
+test('matching available local primary replaces only the curated recommendation', async () => {
+  const root = await initializedLocalRouteProject('primary');
+  await installLocalSkill(root, 'codex', 'to-issues');
+  await writeLocalPlanningRoute(root, 'to-issues');
+
+  const baseBoard = JSON.parse(await readFile(path.join(root, '.vibetether', 'capabilities.yaml'), 'utf8'));
+  const baseCapability = baseBoard.capabilities.find(({ id }) => id === 'planning');
+  const result = await resolveLocalPlanning(root);
+
+  assert.equal(result.selection.skill, 'to-issues');
+  assert.equal(result.selection.source, 'project-local');
+  assert.equal(result.recommendation.available, true);
+  assert.ok(result.required_outputs.includes('scoped-issues'));
+  for (const output of baseCapability.expected_outputs) assert.ok(result.required_outputs.includes(output));
+  for (const evidence of baseCapability.exit_evidence) assert.ok(result.exit_evidence.includes(evidence));
+  assert.ok(result.exit_evidence.includes('Every approved requirement is mapped to an issue.'));
+  assert.deepEqual(result.confirmation_gates, []);
+});
+
+test('local routes reload after a safe manual edit without reinitialization', async () => {
+  const root = await initializedLocalRouteProject('live-edit');
+  await installLocalSkill(root, 'codex', 'first-planner');
+  await installLocalSkill(root, 'codex', 'second-planner');
+  await writeLocalPlanningRoute(root, 'first-planner');
+  assert.equal((await resolveLocalPlanning(root)).selection.skill, 'first-planner');
+
+  await writeLocalPlanningRoute(root, 'second-planner');
+  assert.equal((await resolveLocalPlanning(root)).selection.skill, 'second-planner');
+
+  const generated = JSON.parse(await readFile(path.join(root, '.vibetether', 'capabilities.yaml'), 'utf8'));
+  assert.equal(Object.hasOwn(generated, 'project_routes'), false);
+});
+
+test('a missing local primary falls back to the curated route with an explicit source', async () => {
+  const root = await initializedLocalRouteProject('missing');
+  await writeLocalPlanningRoute(root, 'to-issues');
+
+  const result = await resolveLocalPlanning(root);
+
+  assert.notEqual(result.selection.skill, 'to-issues');
+  assert.equal(result.selection.source, 'curated-fallback');
+  assert.match(result.selection.reason, /project-local.*unavailable/i);
+  assert.equal(result.recommendation.skill, 'to-issues');
+  assert.equal(result.recommendation.available, false);
+});
+
+test('project Skills are discovered only in the enabled harness', async () => {
+  const root = await initializedLocalRouteProject('claude', 'claude');
+  await installLocalSkill(root, 'claude', 'to-issues');
+  await writeLocalPlanningRoute(root, 'to-issues');
+
+  assert.equal((await resolveLocalPlanning(root, 'claude')).selection.source, 'project-local');
+  const codex = await resolveLocalPlanning(root, 'codex');
+  assert.notEqual(codex.selection.skill, 'to-issues');
+  assert.equal(codex.selection.source, 'curated-fallback');
+});
+
+test('a linked project Skill or route overlay is rejected', async (context) => {
+  const root = await initializedLocalRouteProject('linked');
+  const external = await mkdtemp(path.join(os.tmpdir(), 'vibetether-linked-skill-'));
+  await writeFile(path.join(external, 'SKILL.md'), '# linked\n', 'utf8');
+  const skillTarget = path.join(root, '.agents', 'skills', 'to-issues');
+  try {
+    await symlink(external, skillTarget, 'dir');
+  } catch (error) {
+    if (process.platform === 'win32' && ['EACCES', 'EPERM'].includes(error.code)) {
+      context.skip(`Windows denied symlink creation: ${error.code}`);
+      return;
+    }
+    throw error;
+  }
+  await writeLocalPlanningRoute(root, 'to-issues');
+  await assert.rejects(resolveLocalPlanning(root), /linked|symbolic/i);
+
+  await rm(skillTarget, { recursive: true, force: true });
+  const overlay = path.join(root, '.vibetether', 'routes.local.yaml');
+  const externalOverlay = path.join(external, 'routes.local.yaml');
+  await writeFile(externalOverlay, 'schema_version: 1\nroutes: []\n', 'utf8');
+  await rm(overlay);
+  await symlink(externalOverlay, overlay, 'file');
+  await assert.rejects(resolveLocalPlanning(root), /linked|symbolic/i);
+});
+
+test('projects without local routes retain the same generated resolution', async () => {
+  const root = await initializedLocalRouteProject('unchanged');
+  const generated = JSON.parse(await readFile(path.join(root, '.vibetether', 'capabilities.yaml'), 'utf8'));
+  const refreshed = await refreshBoardAvailability(generated, root);
+  const expected = resolveBoardRoute(refreshed, {
+    phase: 'PLAN',
+    capability: 'planning',
+    signals: ['prd-approved'],
+    harness: 'codex',
+  });
+  const actual = await resolveLocalPlanning(root);
+  assert.deepEqual(actual.applicable_experience, []);
+  delete actual.applicable_experience;
+  assert.deepEqual(actual, expected);
+  assert.equal(Object.hasOwn(actual, 'project_routes'), false);
+});

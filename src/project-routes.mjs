@@ -1,3 +1,5 @@
+import { lstat, readFile } from 'node:fs/promises';
+import path from 'node:path';
 import YAML from 'yaml';
 import { CliError } from './errors.mjs';
 
@@ -18,6 +20,10 @@ const ROUTE_KEYS = new Set([
   'exit_evidence',
 ]);
 const REQUIRED_ROUTE_KEYS = ['id', 'phases', 'capability', 'skill', 'role', 'use_when'];
+const HARNESS_SKILL_ROOTS = Object.freeze({
+  codex: '.agents/skills',
+  claude: '.claude/skills',
+});
 
 function isMapping(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -156,4 +162,145 @@ export function validateProjectRoutes(document, board) {
   const routes = document.routes.map((route, index) => normalizeRoute(route, index, capabilities));
   validateUniqueRoutes(routes);
   return { schema_version: 1, routes };
+}
+
+function resolveProjectPath(root, relativePath, label) {
+  const target = path.resolve(root, relativePath);
+  const relative = path.relative(root, target);
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new CliError(`${label} path must stay inside the project.`, 3);
+  }
+  return { target, relative };
+}
+
+async function inspectRegularProjectEntry(root, relativePath, expectedType, label) {
+  const { target, relative } = resolveProjectPath(root, relativePath, label);
+  let current = root;
+  for (const part of relative.split(path.sep).filter(Boolean)) {
+    current = path.join(current, part);
+    let metadata;
+    try {
+      metadata = await lstat(current);
+    } catch (error) {
+      if (error.code === 'ENOENT') return null;
+      throw new CliError(`${label} cannot be inspected safely.`, 3);
+    }
+    if (metadata.isSymbolicLink()) throw new CliError(`${label} path is linked or symbolic.`, 3);
+    if (current !== target && !metadata.isDirectory()) {
+      throw new CliError(`${label} has a non-directory ancestor.`, 3);
+    }
+    if (current === target) {
+      const valid = expectedType === 'directory' ? metadata.isDirectory() : metadata.isFile();
+      if (!valid) throw new CliError(`${label} must be a regular ${expectedType}.`, 3);
+    }
+  }
+  return target;
+}
+
+function enabledHarnesses(manifest) {
+  return Object.entries(manifest?.harnesses ?? {})
+    .filter(([name, value]) => Object.hasOwn(HARNESS_SKILL_ROOTS, name) && value?.enabled)
+    .map(([name]) => name);
+}
+
+export async function discoverProjectSkill(root, skill, harnesses) {
+  validateSafeName(skill, 'Project Skill name');
+  const installations = {};
+  for (const harness of harnesses) {
+    const skillRoot = HARNESS_SKILL_ROOTS[harness];
+    if (!skillRoot) continue;
+    const relativePath = `${skillRoot}/${skill}`;
+    const directory = await inspectRegularProjectEntry(
+      root,
+      relativePath,
+      'directory',
+      `Project Skill ${skill}`,
+    );
+    if (!directory) continue;
+    const entry = await inspectRegularProjectEntry(
+      root,
+      `${relativePath}/SKILL.md`,
+      'file',
+      `Project Skill ${skill} entry`,
+    );
+    if (entry) installations[harness] = relativePath;
+  }
+  return installations;
+}
+
+function union(left = [], right = []) {
+  return [...new Set([...left, ...right])];
+}
+
+function baseRouteFor(board, phase, capability) {
+  return (board.routes ?? [])
+    .filter((route) => route.phase === phase && route.capability === capability)
+    .sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0))[0] ?? null;
+}
+
+function localBoardRoute(board, route, phase, installations) {
+  const capability = board.capabilities.find((entry) => entry.id === route.capability);
+  const baseRoute = baseRouteFor(board, phase, route.capability);
+  const primary = route.role === 'primary';
+  const overlay = route.role === 'overlay';
+  const priority = primary ? 1_000_000 : overlay ? 900_000 : -1;
+  return {
+    id: `project-local:${route.id}:${phase}`,
+    project_route_id: route.id,
+    project_role: route.role,
+    source: 'project-local',
+    phase,
+    capability: route.capability,
+    priority,
+    signals: { all: [], any: route.when_any },
+    recommendation: {
+      skill: route.skill,
+      available_in: Object.keys(installations),
+      installations,
+      reason: route.use_when.join(' '),
+    },
+    fallback: baseRoute?.fallback ?? capability.fallback,
+    selection: overlay ? 'recommend-overlay' : 'recommend',
+    workflow_role: overlay ? 'policy' : route.role,
+    expected_outputs: union(capability.expected_outputs, route.expected_outputs),
+    exit_evidence: union(capability.exit_evidence, route.exit_evidence),
+  };
+}
+
+export async function mergeProjectRoutes({ root, board, document, harnesses }) {
+  const validated = validateProjectRoutes(document, board);
+  const effective = structuredClone(board);
+  const localRoutes = [];
+  for (const route of validated.routes) {
+    const installations = await discoverProjectSkill(root, route.skill, harnesses);
+    const routeRecord = { ...route, installations, available_in: Object.keys(installations) };
+    localRoutes.push(routeRecord);
+    for (const phase of route.phases) {
+      effective.routes.push(localBoardRoute(effective, route, phase, installations));
+    }
+  }
+  effective.project_routes = localRoutes;
+  return effective;
+}
+
+export async function loadEffectiveProjectRoutes(root, manifest, board) {
+  const declared = Object.hasOwn(manifest, 'project_routes');
+  if (declared && manifest.project_routes !== PROJECT_ROUTES_PATH) {
+    throw new CliError(`Manifest project_routes must use ${PROJECT_ROUTES_PATH}.`, 3);
+  }
+  const target = await inspectRegularProjectEntry(
+    root,
+    PROJECT_ROUTES_PATH,
+    'file',
+    'Project routes',
+  );
+  if (!target) {
+    if (declared) throw new CliError(`Manifest declares missing project routes at ${PROJECT_ROUTES_PATH}.`, 3);
+    return { board, overlay: { path: PROJECT_ROUTES_PATH, present: false } };
+  }
+  const document = parseProjectRoutes(await readFile(target, 'utf8'));
+  return {
+    board: await mergeProjectRoutes({ root, board, document, harnesses: enabledHarnesses(manifest) }),
+    overlay: { path: PROJECT_ROUTES_PATH, present: true },
+  };
 }
