@@ -105,35 +105,150 @@ No visual direction has been recorded yet.
 `;
 }
 
-test('terminal prompt adapter prints recommendations, trims answers, defaults blanks, and accepts only yes', async () => {
+test('terminal prompt adapter renders explained choices and recovers from invalid input', async () => {
   const output = new PassThrough();
   let printed = '';
   output.on('data', (chunk) => { printed += chunk.toString('utf8'); });
   const input = new PassThrough();
   const adapter = createTerminalPromptAdapter({ input, output });
 
-  const answerPromise = adapter.ask({ id: 'goal', prompt: 'Project goal?', recommended: 'Recommended goal' });
-  input.write('  chosen goal  \n');
-  assert.equal(await answerPromise, 'chosen goal');
-  assert.match(printed, /Project goal\?/);
-  assert.match(printed, /Recommended goal/);
+  const answerPromise = adapter.ask({
+    id: 'agent',
+    prompt: 'Which agent harness should VibeTether configure?',
+    recommended: 'both',
+    required: true,
+    choices: [
+      { value: 'both', label: 'Codex + Claude', description: 'Configure both harnesses.' },
+      { value: 'codex', label: 'Codex only', description: 'Configure AGENTS.md.' },
+      { value: 'claude', label: 'Claude only', description: 'Configure CLAUDE.md.' },
+    ],
+  });
+  input.write('9\n');
+  setTimeout(() => input.write('2\n'), 5);
+  assert.equal(await answerPromise, 'codex');
+  assert.match(printed, /1\) Codex \+ Claude \(Recommended\)/);
+  assert.match(printed, /Configure both harnesses/);
+  assert.match(printed, /Please choose 1, 2, or 3/i);
   adapter.close();
+});
 
-  const blankInput = new PassThrough();
-  const blankAdapter = createTerminalPromptAdapter({ input: blankInput, output: new PassThrough() });
-  const blankPromise = blankAdapter.ask({ id: 'profile', prompt: 'Profile?', recommended: 'standard' });
-  blankInput.write('   \n');
-  assert.equal(await blankPromise, 'standard');
-  blankAdapter.close();
+test('terminal prompt adapter guides required text and repeats after a blank answer', async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  let printed = '';
+  output.on('data', (chunk) => { printed += chunk.toString('utf8'); });
+  const adapter = createTerminalPromptAdapter({ input, output });
 
-  for (const [response, expected] of [['yes', true], ['Y', true], ['true', false], ['', false]]) {
+  const answer = adapter.ask({
+    id: 'goal',
+    prompt: 'Who should this project help?',
+    help: 'Write one sentence naming the user and result.',
+    example: 'Help an operations team deploy reporting safely.',
+    required: true,
+    recommended: null,
+  });
+  input.write('   \n');
+  setTimeout(() => input.write('Help maintainers ship safely\n'), 5);
+
+  assert.equal(await answer, 'Help maintainers ship safely');
+  assert.match(printed, /Write one sentence/);
+  assert.match(printed, /Example: Help an operations team/);
+  assert.match(printed, /A response is required/i);
+  adapter.close();
+});
+
+test('terminal prompt adapter handles custom choices and explicit safe confirmation', async () => {
+  const customInput = new PassThrough();
+  const customAdapter = createTerminalPromptAdapter({ input: customInput, output: new PassThrough() });
+  const customAnswer = customAdapter.ask({
+    id: 'scope_boundaries',
+    prompt: 'Choose a scope boundary.',
+    recommended: 'safe',
+    choices: [
+      { value: 'safe', label: 'Use safe boundary' },
+      {
+        value: 'custom',
+        label: 'Enter a custom boundary',
+        customPrompt: {
+          id: 'scope_boundaries_custom',
+          prompt: 'What must stay out of scope?',
+          required: true,
+          example: 'Do not change public APIs.',
+        },
+      },
+      { value: '', label: 'No additional boundary' },
+    ],
+  });
+  customInput.write('2\n');
+  setTimeout(() => customInput.write('Do not change public APIs\n'), 5);
+  assert.equal(await customAnswer, 'Do not change public APIs');
+  customAdapter.close();
+
+  for (const [response, expected] of [['1', true], ['yes', true], ['2', false], ['', false]]) {
     const confirmInput = new PassThrough();
-    const confirmAdapter = createTerminalPromptAdapter({ input: confirmInput, output: new PassThrough() });
+    const confirmOutput = new PassThrough();
+    let printed = '';
+    confirmOutput.on('data', (chunk) => { printed += chunk.toString('utf8'); });
+    const confirmAdapter = createTerminalPromptAdapter({ input: confirmInput, output: confirmOutput });
     const confirmation = confirmAdapter.confirm('Preview');
     confirmInput.write(`${response}\n`);
     assert.equal(await confirmation, expected);
+    assert.match(printed, /1\) Apply these changes/);
+    assert.match(printed, /2\) Cancel \(Default\)/);
     confirmAdapter.close();
   }
+});
+
+test('pseudo-terminal init recovers from invalid and blank answers, previews, cancels safely, then applies', async () => {
+  const target = await project('pseudo-terminal-init');
+
+  async function runResponses(responses) {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    input.isTTY = true;
+    output.isTTY = true;
+    let printed = '';
+    let sent = 0;
+    let promptsSeen = 0;
+    output.on('data', (chunk) => {
+      printed += chunk.toString('utf8');
+      const visiblePrompts = printed.match(/> /g)?.length ?? 0;
+      if (visiblePrompts <= promptsSeen || sent >= responses.length) return;
+      promptsSeen = visiblePrompts;
+      const response = responses[sent];
+      sent += 1;
+      setTimeout(() => input.write(`${response}\n`), 0);
+    });
+    const adapter = createTerminalPromptAdapter({ input, output });
+    let timeout;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeout = setTimeout(() => reject(new Error('pseudo-terminal response timeout')), 10000);
+    });
+    const result = await Promise.race([main(['init', '--project', target], runtime(adapter)), timeoutPromise])
+      .finally(() => clearTimeout(timeout));
+    assert.equal(sent, responses.length);
+    return { result, printed };
+  }
+
+  const before = await snapshot(target);
+  const cancelled = await runResponses([
+    '9', '2', '2', '', 'Help beginners control long coding tasks',
+    'A clean initialization completes', '2', 'Do not change public APIs', '2',
+  ]);
+  assert.match(cancelled.result, /cancelled/i);
+  assert.match(cancelled.printed, /Please choose 1, 2, or 3/i);
+  assert.match(cancelled.printed, /A response is required/i);
+  assert.match(cancelled.printed, /What is explicitly out of scope/i);
+  assert.match(cancelled.printed, /DRY RUN/);
+  assert.deepEqual(await snapshot(target), before);
+
+  const applied = await runResponses([
+    '2', '2', 'Help beginners control long coding tasks',
+    'A clean initialization completes', '1', '1',
+  ]);
+  assert.match(applied.result, /initialized/i);
+  assert.match(applied.printed, /1\) Apply these changes/);
+  assert.match(await readFile(path.join(target, '.vibetether', 'intent.md'), 'utf8'), /Status: confirmed/);
 });
 
 test('interactive prompt adapters may omit close and asynchronous cleanup is awaited', async (t) => {
@@ -261,6 +376,11 @@ test('interactive init asks one question at a time, rescans changed config, and 
   const intent = await readFile(path.join(target, '.vibetether', 'intent.md'), 'utf8');
   assert.match(intent, /Status: confirmed/);
   assert.equal(parseIntentContract(intent).goal, 'Help maintainers guide long coding tasks');
+  const agentQuestion = promptAdapter.asked.find((question) => question.id === 'agent');
+  const profileQuestion = promptAdapter.asked.find((question) => question.id === 'profile');
+  assert.equal(agentQuestion.choices.length, 3);
+  assert.equal(profileQuestion.choices.length, 3);
+  assert.match(agentQuestion.choices[0].description, /both/i);
 });
 
 test('interactive init recommends harnesses from existing instruction files and profile from a valid manifest', async () => {

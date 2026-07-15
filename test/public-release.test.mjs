@@ -169,7 +169,7 @@ test('README explains support, architecture, UI control, and preview limitations
   assert.match(readme, /Claude Code[\s\S]*official preview/i);
   assert.match(readme, /```mermaid[\s\S]*control kernel/i);
   assert.match(readme, /```mermaid[\s\S]*golden screen/i);
-  assert.match(readme, /0\.2\.2 preview/i);
+  assert.match(readme, /0\.2\.3 preview/i);
   assert.match(readme, /not independent agent forward tests/i);
   assert.match(readme, /30\/30[\s\S]*24\/30/);
   assert.match(readme, /35\.0%/);
@@ -183,7 +183,7 @@ test('package metadata points to the authenticated public repository', async () 
   assert.equal(pkg.repository.url, 'git+https://github.com/t01089572455/vibetether.git');
   assert.equal(pkg.homepage, 'https://github.com/t01089572455/vibetether#readme');
   assert.equal(pkg.bugs.url, 'https://github.com/t01089572455/vibetether/issues');
-  assert.equal(pkg.version, '0.2.2');
+  assert.equal(pkg.version, '0.2.3');
   assert.equal(pkg.description, 'Direction control, guided readiness, Skill routing, and Proven Path recall for long-running coding agents.');
   assert.equal(pkg.files.includes('docs/operations'), true);
 });
@@ -196,7 +196,21 @@ test('Windows Skill lifecycle recovery is documented without weakening customiza
   assert.match(runbook, /close.*Claude Code.*retry/is);
   assert.match(runbook, /partial rollback/i);
   assert.match(runbook, /unknown|customized/i);
+  assert.match(runbook, /0\.2\.1/);
+  assert.match(runbook, /CRLF|line ending/i);
   assert.doesNotMatch(runbook, /Remove-Item.*-Recurse|rm\s+-rf/i);
+});
+
+test('README explains guided initialization, canonical upgrades, and provider network recovery honestly', async () => {
+  const readme = await text('README.md');
+  assert.match(readme, /numbered choices|guided choices/i);
+  assert.match(readme, /goal[\s\S]*success[\s\S]*(?:user-owned|does not invent)/i);
+  assert.match(readme, /registered canonical[\s\S]*upgrade/i);
+  assert.match(readme, /line ending|CRLF/i);
+  assert.match(readme, /cannot guarantee[\s\S]*host|host[\s\S]*must honor/i);
+  assert.match(readme, /transient[\s\S]*retry|TLS[\s\S]*retry/i);
+  assert.match(readme, /verified[\s\S]*catalog[\s\S]*without[\s\S]*network|unchanged[\s\S]*provider[\s\S]*without[\s\S]*fetch/i);
+  assert.doesNotMatch(readme, /guaranteed automatic invocation|saves? tokens/i);
 });
 
 test('public release documents contain no local path or non-English brand leakage', async () => {
@@ -242,4 +256,20 @@ test('CI verifies the release on Windows and Ubuntu with supported Node versions
   assert.match(workflow, /npm ci/);
   assert.match(workflow, /npm run check/);
   assert.match(workflow, /npm pack --dry-run/);
+  assert.match(workflow, /actions\/checkout@v4[\s\S]*fetch-depth:\s*0/);
+});
+
+test('release history reproduces every registered canonical fingerprint', () => {
+  const result = spawnSync(process.execPath, ['scripts/verify-release-history.mjs'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /release compatibility: valid \(5 historical identities\)/i);
+});
+
+test('the package check command audits release history', async () => {
+  const pkg = JSON.parse(await text('package.json'));
+  assert.equal(pkg.scripts['audit:release'], 'node scripts/verify-release-history.mjs');
+  assert.match(pkg.scripts.check, /npm run audit:release/);
 });

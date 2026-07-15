@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "current": {
+    "version": "0.2.3",
+    "fingerprint": "047f54c493f2ff17443f0c891f7b2f88e2bae67466a021bf30df321c5a7db5a2"
+  },
+  "history": [
+    {
+      "id": "v0.1.0",
+      "version": "0.1.0",
+      "commit": "cbfe55a935d8b4d593aa14e0f98deaabd17f25b6",
+      "fingerprint": "07e14f9aae4f66ed8baed16893f35a5730b9702174f72a04bf61dd5df45ca89d"
+    },
+    {
+      "id": "v0.2.0-routing",
+      "version": "0.2.0",
+      "commit": "02b71ab295e633908710d9e80153f550c406b96a",
+      "fingerprint": "80cfe6c12fc583cc7788e60e5090603a88cdabfd7d1df45cfcbef45f67688bef"
+    },
+    {
+      "id": "v0.2.0-readiness",
+      "version": "0.2.0",
+      "commit": "b4e6fe96250f22aa4315a30ce11bdbc84df0fe7b",
+      "fingerprint": "182c098aeb578bc36601157e8e07cfc96a864cf7046569b80cd178ba0dedcf7a"
+    },
+    {
+      "id": "v0.2.0-scenarios",
+      "version": "0.2.0",
+      "commit": "baac2854b5b7ec65f2a03df51a08e9ec99e7ca5e",
+      "fingerprint": "321086f1ca2e4f2204891d701114727a969b930459d7a3b960711fb7f3497fe4"
+    },
+    {
+      "id": "v0.2.1",
+      "version": "0.2.1",
+      "commit": "1f6444567873b5d1abd3371c45df19db23054ec9",
+      "fingerprint": "2488d70f4a07bd5df8267c0baa15439f9463868778fd837d2d11134c2209f3df"
+    }
+  ]
+}

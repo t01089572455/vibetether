@@ -7,7 +7,7 @@ import { CliError } from './errors.mjs';
 import { managedBlockBody, rejectSymlinkPath } from './files.mjs';
 import { parseExperienceIndex, validateExperienceIndex } from './experience-index.mjs';
 import { isSafeProjectRelativeArtifactPath, isSensitiveArtifactPath } from './artifact-safety.mjs';
-import { skillFingerprint, sourceSkill } from './skill-install.mjs';
+import { inspectVibeTetherIdentity, skillFingerprint } from './skill-install.mjs';
 import { assertCapabilityBoard } from '../skills/vibe-tether/scripts/capability-routing.mjs';
 import { parseCanonicalManifest } from '../skills/vibe-tether/scripts/manifest.mjs';
 
@@ -320,11 +320,12 @@ export async function inspectProject(options) {
         issues.push(issue('unsafe-skill', unsafeAuthorityMessage('Installed Skill', 'directory')));
       } else {
         try {
-          const [canonical, installed] = await Promise.all([
-            skillFingerprint(sourceSkill),
-            skillFingerprint(skillDirectory.target),
-          ]);
-          if (canonical !== installed) issues.push(issue('changed-skill', `Installed Skill changed for ${name}`));
+          const identity = await inspectVibeTetherIdentity(skillDirectory.target);
+          if (identity.state === 'legacy') {
+            warnings.push(warning('legacy-skill', `Installed Skill for ${name} is a registered canonical earlier release; rerun init to upgrade it.`));
+          } else if (identity.state === 'unknown') {
+            issues.push(issue('changed-skill', `Installed Skill changed for ${name}`));
+          }
         } catch {
           issues.push(issue('invalid-skill', `Cannot verify installed Skill for ${name}`));
         }

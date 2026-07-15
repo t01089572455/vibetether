@@ -39,6 +39,7 @@ import {
 import { validateProviderLock } from './managed-project-state.mjs';
 import { scanProject } from './project-scan.mjs';
 import { stageProviderSources } from './provider-fetch.mjs';
+import { mergeProviderStages, resolveLocalProviderStage } from './provider-cache.mjs';
 import {
   createCapabilityBoard,
   createProviderLock,
@@ -664,7 +665,13 @@ export async function initialize(options, dependencies = {}) {
 
   let staged = null;
   try {
-    staged = providerSources.length > 0 ? await stageProviders(providerSources) : null;
+    if (providerSources.length > 0) {
+      const localStage = await resolveLocalProviderStage(root, providerSources, existingLock);
+      const remoteStage = localStage.unresolved.length > 0
+        ? await stageProviders(localStage.unresolved)
+        : null;
+      staged = mergeProviderStages(localStage, remoteStage);
+    }
     const stagedSkills = new Map((staged?.skills ?? []).map((provider) => [provider.id, provider]));
     const stagedRepositories = new Map((staged?.repositories ?? []).map((source) => [source.source_id, source]));
     const installedSources = [];

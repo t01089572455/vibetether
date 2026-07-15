@@ -233,3 +233,127 @@ test('retries a Windows Schannel TLS handshake failure with the OpenSSL Git back
   assert.equal(calls[0].includes('http.sslBackend=openssl'), false);
   assert.equal(calls[1].includes('http.sslBackend=openssl'), true);
 });
+
+test('retries the exact OpenSSL TLS EOF provider failure and then succeeds', () => {
+  const calls = [];
+  const delays = [];
+  const execute = (_command, args) => {
+    calls.push(args);
+    if (calls.length === 1) {
+      return {
+        status: 128,
+        stdout: '',
+        stderr: "fatal: unable to access 'https://github.com/multica-ai/andrej-karpathy-skills.git/': TLS connect error: error:0A000126:SSL routines::unexpected eof while reading",
+      };
+    }
+    return { status: 0, stdout: 'ok\n', stderr: '' };
+  };
+
+  const result = runProviderGit(
+    'fixture',
+    'disabled-hooks',
+    ['fetch', '--depth', '1', 'origin', 'abc'],
+    execute,
+    { sleep: (milliseconds) => delays.push(milliseconds) },
+  );
+
+  assert.equal(result, 'ok');
+  assert.equal(calls.length, 2);
+  assert.deepEqual(delays, [200]);
+});
+
+test('keeps OpenSSL after Schannel failure and retries a later TLS EOF', () => {
+  const calls = [];
+  const execute = (_command, args) => {
+    calls.push(args);
+    if (calls.length === 1) {
+      return {
+        status: 128,
+        stdout: '',
+        stderr: 'fatal: schannel: failed to receive handshake, SSL/TLS connection failed',
+      };
+    }
+    if (calls.length === 2) {
+      return {
+        status: 128,
+        stdout: '',
+        stderr: 'fatal: TLS connect error: unexpected eof while reading',
+      };
+    }
+    return { status: 0, stdout: 'ok\n', stderr: '' };
+  };
+
+  const result = runProviderGit(
+    'fixture',
+    'disabled-hooks',
+    ['fetch', 'origin', 'abc'],
+    execute,
+    { sleep: () => {} },
+  );
+
+  assert.equal(result, 'ok');
+  assert.equal(calls.length, 3);
+  assert.equal(calls[0].includes('http.sslBackend=openssl'), false);
+  assert.equal(calls[1].includes('http.sslBackend=openssl'), true);
+  assert.equal(calls[2].includes('http.sslBackend=openssl'), true);
+});
+
+test('bounds transient provider fetch retries and explains that project files were unchanged', () => {
+  let calls = 0;
+  const execute = () => {
+    calls += 1;
+    return { status: 128, stdout: '', stderr: 'fatal: TLS connect error: unexpected eof while reading' };
+  };
+
+  assert.throws(
+    () => runProviderGit(
+      'fixture',
+      'disabled-hooks',
+      ['fetch', 'origin', 'abc'],
+      execute,
+      { sleep: () => {} },
+    ),
+    /after 3 attempts.*retry the same command.*no project files were changed/is,
+  );
+  assert.equal(calls, 3);
+});
+
+test('retries a common OpenSSL connection-reset transport failure', () => {
+  let calls = 0;
+  const execute = () => {
+    calls += 1;
+    if (calls === 1) {
+      return {
+        status: 128,
+        stdout: '',
+        stderr: 'fatal: OpenSSL SSL_connect: Connection was reset in connection to github.com:443',
+      };
+    }
+    return { status: 0, stdout: 'ok\n', stderr: '' };
+  };
+
+  assert.equal(
+    runProviderGit('fixture', 'disabled-hooks', ['fetch', 'origin', 'abc'], execute, { sleep: () => {} }),
+    'ok',
+  );
+  assert.equal(calls, 2);
+});
+
+test('does not retry non-transient or non-fetch Git failures', () => {
+  for (const [args, detail] of [
+    [['fetch', 'origin', 'abc'], 'fatal: repository not found'],
+    [['fetch', 'origin', 'abc'], 'fatal: Authentication failed'],
+    [['checkout', '--detach', 'FETCH_HEAD'], 'fatal: TLS connect error: unexpected eof while reading'],
+  ]) {
+    let calls = 0;
+    const execute = () => {
+      calls += 1;
+      return { status: 128, stdout: '', stderr: detail };
+    };
+    assert.throws(
+      () => runProviderGit('fixture', 'disabled-hooks', args, execute, { sleep: () => {} }),
+      /Provider git/i,
+    );
+    assert.equal(calls, 1);
+  }
+});

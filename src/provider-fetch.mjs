@@ -18,7 +18,15 @@ function resolveSourcePath(root, relativePath, label) {
   return target;
 }
 
-export function runProviderGit(cwd, hooksPath, args, execute = spawnSync) {
+const TRANSIENT_FETCH_FAILURE = /(?:TLS connect error|unexpected eof|SSL_read|connection (?:was )?reset|recv failure|failed to connect|timed out|could not resolve host|remote end hung up unexpectedly|early EOF|requested URL returned error:\s*(?:502|503|504))/i;
+const SCHANNEL_FAILURE = /schannel:[\s\S]*(?:AcquireCredentialsHandle|SEC_E_NO_CREDENTIALS|failed to receive handshake|SSL\/TLS connection failed)/i;
+const RETRY_DELAYS = [200, 600];
+
+function blockingSleep(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+export function runProviderGit(cwd, hooksPath, args, execute = spawnSync, retryOptions = {}) {
   const options = {
     cwd,
     encoding: 'utf8',
@@ -28,32 +36,48 @@ export function runProviderGit(cwd, hooksPath, args, execute = spawnSync) {
       GCM_INTERACTIVE: 'Never',
     },
   };
-  const controlledArgs = ['-c', `core.hooksPath=${hooksPath}`, '-c', 'core.autocrlf=false', ...args];
-  let result = execute('git', controlledArgs, options);
-  if (result.error) {
-    throw new CliError(`Git is required to install curated providers: ${result.error.message}`, 3);
-  }
-  const detail = (result.stderr || result.stdout || '').trim();
-  if (
-    result.status !== 0 &&
-    /schannel:[\s\S]*(?:AcquireCredentialsHandle|SEC_E_NO_CREDENTIALS|failed to receive handshake|SSL\/TLS connection failed)/i.test(
-      detail,
-    )
-  ) {
-    result = execute(
-      'git',
-      ['-c', `core.hooksPath=${hooksPath}`, '-c', 'core.autocrlf=false', '-c', 'http.sslBackend=openssl', ...args],
-      options,
-    );
+  const sleep = retryOptions.sleep ?? blockingSleep;
+  let useOpenSSL = false;
+  let attempts = 0;
+  let result;
+  let failure = 'unknown git failure';
+  let exhaustedTransient = false;
+
+  while (attempts < 3) {
+    attempts += 1;
+    const controlledArgs = [
+      '-c',
+      `core.hooksPath=${hooksPath}`,
+      '-c',
+      'core.autocrlf=false',
+      ...(useOpenSSL ? ['-c', 'http.sslBackend=openssl'] : []),
+      ...args,
+    ];
+    result = execute('git', controlledArgs, options);
     if (result.error) {
       throw new CliError(`Git is required to install curated providers: ${result.error.message}`, 3);
     }
+    if (result.status === 0) return result.stdout.trim();
+
+    failure = (result.stderr || result.stdout || 'unknown git failure').trim();
+    const schannelFailure = SCHANNEL_FAILURE.test(failure);
+    const transient = args[0] === 'fetch' && (schannelFailure || TRANSIENT_FETCH_FAILURE.test(failure));
+    if (!transient) break;
+    if (schannelFailure) useOpenSSL = true;
+    if (attempts >= 3) {
+      exhaustedTransient = true;
+      break;
+    }
+    sleep(RETRY_DELAYS[attempts - 1]);
   }
-  if (result.status !== 0) {
-    const failure = (result.stderr || result.stdout || 'unknown git failure').trim();
-    throw new CliError(`Provider git ${args[0]} failed: ${failure}`, 3);
+
+  if (exhaustedTransient) {
+    throw new CliError(
+      `Provider git fetch failed after 3 attempts because the pinned upstream transport was interrupted. Retry the same command; no project files were changed. Last error: ${failure}`,
+      3,
+    );
   }
-  return result.stdout.trim();
+  throw new CliError(`Provider git ${args[0]} failed: ${failure}`, 3);
 }
 
 function runGit(cwd, hooksPath, args) {

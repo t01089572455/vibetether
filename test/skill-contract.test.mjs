@@ -4,8 +4,10 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { LEGACY_VIBETETHER_FINGERPRINTS } from '../src/skill-install.mjs';
+import * as skillInstall from '../src/skill-install.mjs';
 import { ADAPTERS } from '../src/adapters.mjs';
+
+const { LEGACY_VIBETETHER_FINGERPRINTS } = skillInstall;
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const skillDir = path.join(root, 'skills', 'vibe-tether');
@@ -97,6 +99,29 @@ test('the public 0.1.0 Skill fingerprint remains an explicit upgrade allowlist e
   assert.equal(
     LEGACY_VIBETETHER_FINGERPRINTS.has('07e14f9aae4f66ed8baed16893f35a5730b9702174f72a04bf61dd5df45ca89d'),
     true,
+  );
+});
+
+test('the compatibility registry includes the exact public 0.2.1 Skill', () => {
+  assert.equal(
+    LEGACY_VIBETETHER_FINGERPRINTS.has('2488d70f4a07bd5df8267c0baa15439f9463868778fd837d2d11134c2209f3df'),
+    true,
+  );
+  assert.equal(skillInstall.VIBETETHER_RELEASE_COMPATIBILITY?.current?.version, '0.2.3');
+});
+
+test('the exported compatibility view cannot grant new historical identities', () => {
+  assert.equal(Object.isFrozen(LEGACY_VIBETETHER_FINGERPRINTS), true);
+  assert.equal(LEGACY_VIBETETHER_FINGERPRINTS.add, undefined);
+  assert.equal(LEGACY_VIBETETHER_FINGERPRINTS.delete, undefined);
+  assert.equal(LEGACY_VIBETETHER_FINGERPRINTS.clear, undefined);
+});
+
+test('the current packaged Skill matches its portable release identity', async () => {
+  assert.equal(typeof skillInstall.portableSkillFingerprint, 'function');
+  assert.equal(
+    skillInstall.VIBETETHER_RELEASE_COMPATIBILITY.current.fingerprint,
+    await skillInstall.portableSkillFingerprint(skillInstall.sourceSkill),
   );
 });
 

@@ -16,9 +16,8 @@ import {
 } from './files.mjs';
 import { parseManifest } from './manifest.mjs';
 import {
-  LEGACY_VIBETETHER_FINGERPRINTS,
+  inspectVibeTetherIdentity,
   skillFingerprint,
-  sourceSkill,
 } from './skill-install.mjs';
 
 const LEGACY_GITIGNORE_BODY = '.vibetether/state/';
@@ -212,6 +211,16 @@ async function verifySkillDirectory(root, relativePath, expectedFingerprints) {
   }
 }
 
+async function verifyVibeTetherDirectory(root, relativePath) {
+  try {
+    await rejectSymlinkPath(root, relativePath);
+    const identity = await inspectVibeTetherIdentity(path.join(root, ...relativePath.split('/')));
+    return identity.state === 'current' || identity.state === 'legacy';
+  } catch {
+    return false;
+  }
+}
+
 async function verifyLicense(root, source) {
   try {
     const content = await readRegularFile(root, portablePath(source.license_installation.path));
@@ -231,13 +240,11 @@ async function verifiedManagedState(root) {
     ));
     if (!lock) return null;
 
-    const canonicalFingerprint = await skillFingerprint(sourceSkill);
-    const vibeTetherFingerprints = new Set([canonicalFingerprint, ...LEGACY_VIBETETHER_FINGERPRINTS]);
     const allowedSkillDirectories = new Set();
     const allowedInstructionFiles = new Set();
     for (const harness of enabledHarnesses) {
       const adapter = ADAPTERS[harness];
-      if (!(await verifySkillDirectory(root, adapter.skillDirectory, vibeTetherFingerprints))) return null;
+      if (!(await verifyVibeTetherDirectory(root, adapter.skillDirectory))) return null;
       allowedSkillDirectories.add(portablePath(adapter.skillDirectory));
       allowedInstructionFiles.add(adapter.instructionFile);
     }
