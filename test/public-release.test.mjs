@@ -58,7 +58,7 @@ test('README gives beginners a 30-second phase-routing example', async () => {
 });
 
 test('README moves the feature overview directly after the quick tour and removes the duplicate Subagent section', async () => {
-  const readme = await text('README.md');
+  const readme = (await text('README.md')).replace(/\r\n/g, '\n');
   const quickTour = readme.indexOf('## See it in 30 seconds');
   const features = readme.indexOf('## Features');
   const controlPlane = readme.indexOf('## A project control plane, not another prompt');
