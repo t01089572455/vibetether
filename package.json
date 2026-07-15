@@ -1,6 +1,6 @@
 {
   "name": "vibetether",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "Direction control, guided readiness, Skill routing, and Proven Path recall for long-running coding agents.",
   "repository": {
     "type": "git",
@@ -20,7 +20,12 @@
     "skills",
     "registry",
     "adapters",
-    "docs",
+    "docs/operations",
+    "docs/installation.md",
+    "docs/routing.md",
+    "docs/proven-paths.md",
+    "docs/providers.md",
+    "docs/troubleshooting.md",
     "evals",
     "THIRD_PARTY_NOTICES.md"
   ],

@@ -181,8 +181,49 @@ test('package metadata points to the public repository', async () => {
   assert.equal(pkg.repository.url, 'git+https://github.com/t01089572455/vibetether.git');
   assert.equal(pkg.homepage, 'https://github.com/t01089572455/vibetether#readme');
   assert.equal(pkg.bugs.url, 'https://github.com/t01089572455/vibetether/issues');
-  assert.equal(pkg.version, '0.2.3');
-  assert.equal(pkg.files.includes('docs'), true);
+  assert.equal(pkg.version, '0.3.0');
+  for (const entry of [
+    'docs/operations',
+    'docs/installation.md',
+    'docs/routing.md',
+    'docs/proven-paths.md',
+    'docs/providers.md',
+    'docs/troubleshooting.md',
+  ]) assert.ok(pkg.files.includes(entry), `package files are missing ${entry}`);
+  assert.equal(pkg.files.includes('docs'), false);
+  const registry = JSON.parse(await text('registry/vibetether-releases.json'));
+  assert.ok(registry.history.some((entry) => (
+    entry.version === '0.2.3'
+    && entry.commit === '56ea83e8e0feb7a086eff8e792225b418b41137b'
+    && entry.fingerprint === '047f54c493f2ff17443f0c891f7b2f88e2bae67466a021bf30df321c5a7db5a2'
+  )));
+});
+
+test('the npm tarball contains new routing, recovery, and focused documentation files', () => {
+  const command = process.platform === 'win32' ? (process.env.ComSpec ?? 'cmd.exe') : 'npm';
+  const args = process.platform === 'win32'
+    ? ['/d', '/s', '/c', 'npm.cmd pack --dry-run --json']
+    : ['pack', '--dry-run', '--json'];
+  const result = spawnSync(command, args, {
+    cwd: root,
+    encoding: 'utf8',
+    shell: false,
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const [{ files }] = JSON.parse(result.stdout);
+  const packFiles = files.map(({ path: file }) => file.replaceAll('\\', '/'));
+  for (const file of [
+    'src/project-routes.mjs',
+    'src/customize.mjs',
+    'src/route-handshake.mjs',
+    'src/skill-upgrade-recovery.mjs',
+    'docs/installation.md',
+    'docs/routing.md',
+    'docs/proven-paths.md',
+    'docs/providers.md',
+    'docs/troubleshooting.md',
+  ]) assert.ok(packFiles.includes(file), `tarball is missing ${file}`);
+  assert.equal(packFiles.some((file) => file.startsWith('docs/superpowers/')), false);
 });
 
 test('public release documents contain no local path or non-English brand leakage', async () => {
@@ -230,5 +271,5 @@ test('release history reproduces every registered canonical fingerprint', () => 
     encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /release compatibility: valid \(5 historical identities\)/i);
+  assert.match(result.stdout, /release compatibility: valid \(6 historical identities\)/i);
 });
