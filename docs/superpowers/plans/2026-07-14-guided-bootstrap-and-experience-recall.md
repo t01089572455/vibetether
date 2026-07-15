@@ -1540,7 +1540,7 @@ Move existing advanced tables and recovery instructions under the later headings
 Document:
 
 ```sh
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init
 ```
 
 Then show a short transcript with three prompts, preview, and final confirmation. Explain that outer `npx --yes` authorizes npm acquisition, while VibeTether's own trailing `--yes` disables its interactive project questions. Show the generated project tree including `.vibetether/experience-index.yaml` and state that no fake PRD, ADR, or runbook is created.

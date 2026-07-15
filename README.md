@@ -47,10 +47,10 @@ The readiness gate checks whether the goal, scope, protected capabilities, succe
 For a new or existing project, start with the most reliable copy-paste command:
 
 ```sh
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init
 ```
 
-The explicit `--package=git+https://...` form keeps package acquisition on public HTTPS and does not depend on npm's GitHub shorthand or an SSH client. The outer `npx --yes` authorizes npm to acquire that package, and the following `vibetether` token selects its CLI. None of these answer VibeTether's own project questions. VibeTether's own `--yes` is a trailing CLI flag that bypasses its interactive questions for automation; use it only when explicit flags and discovered facts are enough.
+The explicit Codeload `--package=https://...tar.gz` form asks npm to download the public repository tarball over HTTPS; package acquisition does not invoke a local Git client or SSH. The outer `npx --yes` authorizes npm to acquire that package, and the following `vibetether` token selects its CLI. None of these answer VibeTether's own project questions. VibeTether's own `--yes` is a trailing CLI flag that bypasses its interactive questions for automation; use it only when explicit flags and discovered facts are enough.
 
 In an interactive greenfield folder, finite questions use explained numbered choices with one recommendation. Project-specific goal and success evidence remain user-owned text: VibeTether gives an example and repeats a blank question, but does not invent direction.
 
@@ -100,7 +100,7 @@ The goal and success answers make intent ready. A UI-direction choice appears on
 Use the same guided discovery later without reinstalling unchanged provider catalogs:
 
 ```sh
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether bootstrap --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether bootstrap --project .
 ```
 
 `bootstrap --dry-run` shows discovered truth, remaining questions, and planned changes without writing. `bootstrap --yes` refuses to invent required user-owned direction when answers are absent. A non-interactive `init --yes` leaves an unresolved Intent Contract at `DISCOVER` instead of guessing a product goal from the directory name.
@@ -158,13 +158,13 @@ Initialization gives the host four separate discovery surfaces so it knows a spe
 Run the human-readable dashboard at any time:
 
 ```sh
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether capabilities --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether capabilities --project .
 ```
 
 Its output includes the automatic readiness gate, an Installed Skill inventory, every capability's `When to use`, expected outputs and exit evidence, catalog-only alternatives, and live availability. A JSON request returns one deterministic route:
 
 ```sh
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether capabilities --project . --phase DISCOVER --capability requirements-clarification --signal goal-unclear --agent codex --json
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether capabilities --project . --phase DISCOVER --capability requirements-clarification --signal goal-unclear --agent codex --json
 ```
 
 ### Default `standard` provider map
@@ -228,7 +228,7 @@ Project instructions are a behavioral control layer, not a security sandbox. Vib
 Run this from the project you want VibeTether to control:
 
 ```sh
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
 ```
 
 This maximum reviewed installation adds the control Skill for Codex and Claude Code, then downloads and catalogs every curated source enabled by VibeTether: Matt Pocock, Superpowers, Karpathy, Anthropic, Vercel Web, and Addy Osmani Production. It does not expose every upstream Skill to every agent. It catalogs complete pinned inventories for provenance while exposing only approved compatible specialists, so competing routers and unrelated Skills remain outside host discovery.
@@ -236,8 +236,8 @@ This maximum reviewed installation adds the control Skill for Codex and Claude C
 Verify it:
 
 ```sh
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether doctor --project . --json
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether capabilities --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether doctor --project . --json
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether capabilities --project .
 ```
 
 ## Customize the installation
@@ -249,8 +249,8 @@ Use these options when the fastest path is not what you need.
 If provider networking is unavailable, start with the offline control loop and upgrade later:
 
 ```sh
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init --project . --agent both --profile core --no-auto-bundles --yes
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile core --no-auto-bundles --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
 ```
 
 The `core` step installs VibeTether, the managed instruction block, capability board, checkpoint state, and safe fallbacks without cloning a community repository. Re-running `init` with `extended` upgrades the same installation transactionally.
@@ -267,19 +267,19 @@ npx skills add t01089572455/vibetether --skill vibe-tether
 
 ```sh
 # Preview before writing
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init --agent both --profile standard --dry-run
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --agent both --profile standard --dry-run
 
 # Smaller standard profile
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init --agent both --profile standard --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --agent both --profile standard --yes
 
 # Human dashboard or a deterministic JSON route
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether capabilities --project .
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether capabilities --project . --phase DISCOVER --capability requirements-clarification --signal goal-unclear --agent codex --json
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether capabilities --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether capabilities --project . --phase DISCOVER --capability requirements-clarification --signal goal-unclear --agent codex --json
 
 # Safe removal preview and apply
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether uninstall --dry-run
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether uninstall --project . --dry-run
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether uninstall --project . --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether uninstall --dry-run
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether uninstall --project . --dry-run
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether uninstall --project . --yes
 ```
 
 The dry-run is network-free for provider content and writes nothing. Review planned project files, catalogs, exposures, and license operations first. Re-running `init` is also the update and repair path: an unchanged provider plan reuses its lock-and-fingerprint-verified local catalogs without a fetch, while modified managed copies stop for review. Uninstall removes only unchanged VibeTether-owned files and managed instruction blocks; it preserves user documents, the Intent Contract, runtime checkpoint, backups, and every Skill that existed before VibeTether.
@@ -300,10 +300,10 @@ Optional bundles add complete catalogs and expose only applicable specialists:
 | `production` | 24 Addy Osmani Skills | GitHub Actions or a recognized migration directory | Matching CI/CD or migration specialists; explicit selection exposes the approved seven |
 
 ```sh
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init --profile standard --bundle web --yes
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init --profile standard --bundle production --yes
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init --profile standard --bundle web --bundle production --yes
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init --profile standard --no-auto-bundles --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --profile standard --bundle web --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --profile standard --bundle production --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --profile standard --bundle web --bundle production --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --profile standard --no-auto-bundles --yes
 ```
 
 `standard` and `extended` scan repository evidence before installation. An explicit bundle is an install-time decision, not permission to deploy, migrate data, change secrets, or publish. Those actions keep their separate user gates. `core` rejects `--bundle` so its provider path remains offline.
@@ -398,7 +398,7 @@ node .claude/skills/vibe-tether/scripts/resolve-route.mjs --project . --phase VE
 Supported commands and flags are shown with:
 
 ```sh
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether --help
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether --help
 ```
 
 Stable exit codes are `2` for invalid CLI input, `3` for a project conflict, and `4` for a failed health check.
@@ -413,9 +413,9 @@ Exact registered canonical earlier releases, including the public 0.2.1 Skill, u
 
 ### npm exits 128 before VibeTether starts
 
-Use the documented `npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether ...` form. On some npm and Windows Git combinations, the shorter `github:t01089572455/vibetether` shorthand resolves through SSH or exits with code 128 before the VibeTether executable starts. VibeTether cannot retry an acquisition failure that occurs before its code is running. The explicit package form was chosen as the default because it uses the public HTTPS repository and works without an SSH client.
+Use the documented `npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether ...` form. It downloads a public tarball without requiring a local Git client or SSH. On some npm and Windows Git combinations, the shorter `github:t01089572455/vibetether` shorthand or a `git+https` package spec invokes Git and exits with code 128 before the VibeTether executable starts. VibeTether cannot retry an acquisition failure that occurs before its code is running.
 
-If the explicit form also fails, `git ls-remote https://github.com/t01089572455/vibetether.git refs/heads/main` distinguishes basic GitHub HTTPS reachability from npm acquisition. Continue with the TLS recovery below only when Git reports a transport error; an authentication, repository, or package-metadata error is not transient.
+If the tarball form also fails, `curl -I https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main` tests the package-download endpoint independently. After VibeTether starts, `git ls-remote https://github.com/mattpocock/skills.git HEAD` tests the separate provider Git path. Continue with the TLS recovery below only when provider Git reports a transport error; an authentication, repository, or package-metadata error is not transient.
 
 ### Provider TLS and Windows Schannel recovery
 
@@ -427,10 +427,10 @@ If all transient retries are exhausted, retry the same command when the connecti
 set "GIT_CONFIG_COUNT=1"
 set "GIT_CONFIG_KEY_0=http.sslBackend"
 set "GIT_CONFIG_VALUE_0=openssl"
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
 ```
 
-`GIT_SSL_BACKEND=openssl` does not configure Git's HTTP backend and is ignored. The three `GIT_CONFIG_*` variables are inherited by the provider Git subprocesses and are equivalent to configuring `http.sslBackend=openssl` for that command session. After a successful first installation, repeating the unchanged command uses the verified catalog without provider network access.
+`GIT_SSL_BACKEND=openssl` does not configure Git's HTTP backend and is ignored. The Codeload package download does not use Git. The three `GIT_CONFIG_*` variables are inherited by the later provider Git subprocesses and are equivalent to configuring `http.sslBackend=openssl` for that command session. After a successful first installation, repeating the unchanged command uses the verified catalog without provider network access.
 
 ### PowerShell blocks `npm.ps1`
 
@@ -496,7 +496,7 @@ For a manual provider tour in a disposable project, preview before applying:
 
 ```sh
 mkdir vibetether-smoke
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init --project ./vibetether-smoke --agent both --profile standard --bundle web --dry-run
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project ./vibetether-smoke --agent both --profile standard --bundle web --dry-run
 ```
 
 Replace `--dry-run` with VibeTether's trailing `--yes`, then run `doctor` and `capabilities`, inspect the board and lock, re-run the same `init`, and finish with `uninstall --dry-run`. Standard and bundle tours fetch pinned upstream repositories.

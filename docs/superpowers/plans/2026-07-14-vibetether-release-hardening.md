@@ -993,14 +993,14 @@ After local `RELEASE_READY`, merge the release branch into local `main` without 
 Against a clean temporary directory and then the repaired project when safe, run:
 
 ```powershell
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init --project . --agent both --profile extended --bundle web --bundle production --dry-run
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether doctor --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile extended --bundle web --bundle production --dry-run
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether doctor --project .
 ```
 
 Expected: the published commit is fetched; the old canonical installation is not reported as modified; the first provider fetch tolerates bounded transient TLS EOF; the unchanged second apply reuses verified local provider content without fetching.
 
-The explicit `--package=git+https://...` form is the published acceptance contract. The shorter npm `github:` shorthand can fail before the VibeTether binary starts when npm selects an unavailable SSH transport, so it is not the primary installation command.
+The explicit Codeload tarball `--package=https://...tar.gz` form is the published acceptance contract. It does not invoke local Git or SSH for package acquisition. The shorter npm `github:` shorthand and `git+https` package specs can fail before the VibeTether binary starts, so they are not the primary installation command.
 
 - [ ] **Step 10: Mark verified delivery only from remote evidence**
 

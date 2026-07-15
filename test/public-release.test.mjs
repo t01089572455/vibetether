@@ -17,7 +17,7 @@ test('README gives exact install, bootstrap, routing, health, and uninstall comm
   assert.match(readme, /npx skills add t01089572455\/vibetether --skill vibe-tether/);
   assert.match(
     readme,
-    /npx --yes --package=git\+https:\/\/github\.com\/t01089572455\/vibetether\.git vibetether init --agent both --profile standard --yes/,
+    /npx --yes --package=https:\/\/codeload\.github\.com\/t01089572455\/vibetether\/tar\.gz\/refs\/heads\/main vibetether init --agent both --profile standard --yes/,
   );
   assert.match(readme, /vibetether doctor/);
   assert.match(readme, /vibetether capabilities/);
@@ -38,7 +38,7 @@ test('README states the long-task control promise without a Token-savings claim'
   assert.match(readme, /stronger agents such as Claude Fable 5 and GPT-5\.6/i);
   assert.match(readme, /aims to reduce long-task drift and expensive rework/i);
   assert.doesNotMatch(readme, /net Token savings|saves? Tokens|reduce(?:s|d)? Token usage|lower Token cost/i);
-  assert.match(readme, /npx --yes --package=git\+https:\/\/github\.com\/t01089572455\/vibetether\.git vibetether init/);
+  assert.match(readme, /npx --yes --package=https:\/\/codeload\.github\.com\/t01089572455\/vibetether\/tar\.gz\/refs\/heads\/main vibetether init/);
   assert.match(readme, /outer `npx --yes`[\s\S]*VibeTether's own `--yes`/i);
   assert.match(readme, /vibetether bootstrap/);
   assert.match(readme, /experience-index\.yaml/);
@@ -151,7 +151,8 @@ test('README leads with one install-everything command before customization and 
   assert.match(readme, /GIT_CONFIG_VALUE_0=openssl/);
   assert.match(readme, /GIT_SSL_BACKEND[\s\S]*does not configure Git/i);
   assert.match(readme, /github:.*shorthand[\s\S]*(?:SSH|exit 128)|(?:SSH|exit 128)[\s\S]*github:.*shorthand/i);
-  assert.match(readme, /--package=git\+https:/i);
+  assert.match(readme, /--package=https:\/\/codeload\.github\.com/i);
+  assert.match(readme, /tarball[\s\S]*(?:without|does not require)[\s\S]*(?:Git client|SSH)/i);
 });
 
 test('the public GitHub publishing runbook preserves the first proven path without credentials', async () => {

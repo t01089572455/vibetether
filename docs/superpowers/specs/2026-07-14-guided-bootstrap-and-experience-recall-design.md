@@ -85,7 +85,7 @@ From [Karpathy-inspired guidelines](https://github.com/multica-ai/andrej-karpath
 The README leads with one command:
 
 ```sh
-npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init
 ```
 
 The outer `npx --yes` authorizes npm package acquisition. It does not answer VibeTether's own project questions.
@@ -100,7 +100,7 @@ When stdin and stdout are interactive, `vibetether init` without the VibeTether 
 6. requests final confirmation before any write or provider fetch;
 7. applies the existing transactional initialization path.
 
-Use the explicit `npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init` package form so npm does not depend on GitHub shorthand or an SSH client. Documentation must distinguish npm's confirmation flag from VibeTether's trailing `--yes` flag whenever both appear in one command.
+Use the explicit Codeload tarball package form `npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init`. Package acquisition must not depend on GitHub shorthand, a local Git client, or SSH. Documentation must distinguish npm's confirmation flag from VibeTether's trailing `--yes` flag whenever both appear in one command.
 
 ### 5.2 Minimum directional questions
 
