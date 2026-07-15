@@ -67,6 +67,7 @@ import {
   PROJECT_ROUTES_PATH,
   validateProjectRoutes,
 } from './project-routes.mjs';
+import { replaceCanonicalSkill } from './skill-upgrade-recovery.mjs';
 
 function instructionBody(adapter) {
   return ADAPTERS[adapter].managedBody;
@@ -147,6 +148,8 @@ export async function applyInitialization(root, textPlans, skillPlans, installSk
   const appliedTexts = [];
   const createdBackups = [];
   const installedSkills = [];
+  const transactionCleanupWarnings = [];
+  let installedAny = false;
   try {
     await mkdir(resolveInside(root, '.vibetether'), { recursive: true });
     for (const plan of textPlans) {
@@ -160,6 +163,18 @@ export async function applyInitialization(root, textPlans, skillPlans, installSk
     const transactionRoot = resolveInside(root, '.vibetether/transaction');
     for (const plan of skillPlans) {
       if (!plan.needsInstall) continue;
+      if (plan.kind === 'vibetether' && plan.replacesExisting) {
+        const result = await replaceCanonicalSkill({
+          root,
+          harness: plan.harness,
+          relativePath: plan.relativePath,
+          target: plan.target,
+          source: plan.source ?? sourceSkill,
+        }, plan.upgradeOperations);
+        installedAny = true;
+        transactionCleanupWarnings.push(...result.cleanupWarnings);
+        continue;
+      }
       let transactionBackup = null;
       try {
         if (plan.replacesExisting) {
@@ -168,6 +183,7 @@ export async function applyInitialization(root, textPlans, skillPlans, installSk
           await cp(plan.target, transactionBackup, { recursive: true, errorOnExist: true, force: false });
         }
         await (plan.install ?? installSkillOperation)(plan.target);
+        installedAny = true;
         installedSkills.push({ ...plan, transactionBackup });
       } catch (error) {
         if (transactionBackup) {
@@ -216,12 +232,16 @@ export async function applyInitialization(root, textPlans, skillPlans, installSk
       3,
     );
   }
-  const cleanupFailures = [];
+  const cleanupFailures = [...transactionCleanupWarnings];
   for (const plan of installedSkills) {
     if (!plan.transactionBackup) continue;
     await rm(plan.transactionBackup, { recursive: true, force: true }).catch((error) => cleanupFailures.push(error.message));
   }
-  return cleanupFailures;
+  return {
+    status: installedAny ? 'installed' : 'unchanged',
+    transactionPath: null,
+    cleanupWarnings: cleanupFailures,
+  };
 }
 
 export async function initialize(options, dependencies = {}) {
@@ -521,6 +541,7 @@ export async function initialize(options, dependencies = {}) {
   }
 
   const skillPlans = adapters.map((adapter) => ({
+    harness: adapter,
     relativePath: ADAPTERS[adapter].skillDirectory,
     target: resolveInside(root, ADAPTERS[adapter].skillDirectory),
     source: sourceSkill,
@@ -546,9 +567,9 @@ export async function initialize(options, dependencies = {}) {
     if (!options.yes) {
       throw new CliError('Refusing to change project truth without confirmation. Use --dry-run or --yes.');
     }
-    const cleanupFailures = await applyInitialization(root, textPlans, []);
-    if (cleanupFailures.length > 0) {
-      throw new CliError(`Bootstrap completed with unexpected cleanup failures (${cleanupFailures.join('; ')}).`, 3);
+    const applied = await applyInitialization(root, textPlans, []);
+    if (applied.cleanupWarnings.length > 0) {
+      throw new CliError(`Bootstrap completed with unexpected cleanup failures (${applied.cleanupWarnings.join('; ')}).`, 3);
     }
     return `VibeTether bootstrapped project truth in ${root} without changing provider installations.\n`;
   }
@@ -697,6 +718,9 @@ export async function initialize(options, dependencies = {}) {
     throw new CliError('Refusing to change the project without --yes. Use --dry-run to inspect the plan.');
   }
 
+  const coreSkillPlans = skillPlans.splice(0, skillPlans.length).filter((plan) => plan.kind === 'vibetether');
+  const coreApplied = await applyInitialization(root, [], coreSkillPlans);
+  const initializationCleanupWarnings = [...coreApplied.cleanupWarnings];
   let staged = null;
   try {
     if (providerSources.length > 0) {
@@ -823,13 +847,8 @@ export async function initialize(options, dependencies = {}) {
       content: YAML.stringify(lock, { lineWidth: 0 }),
     });
 
-    const cleanupFailures = await applyInitialization(root, textPlans, skillPlans);
-    if (cleanupFailures.length > 0) {
-      throw new CliError(
-        `Initialization completed, but legacy Skill backup cleanup failed (${cleanupFailures.join('; ')}). Remove stale entries under .vibetether/transaction after inspection.`,
-        3,
-      );
-    }
+    const applied = await applyInitialization(root, textPlans, skillPlans);
+    initializationCleanupWarnings.push(...applied.cleanupWarnings);
   } finally {
     await staged?.cleanup();
   }
@@ -837,6 +856,9 @@ export async function initialize(options, dependencies = {}) {
   const warningMessages = [...(staged?.warnings ?? [])];
   if (lockNeedsRepair) {
     warningMessages.unshift('The previous provider lock was invalid and was rebuilt from verified installed copies.');
+  }
+  if (initializationCleanupWarnings.length > 0) {
+    warningMessages.push('A verified Skill upgrade completed, but transaction cleanup remains. Close Codex and Claude, then rerun init.');
   }
   const warnings = warningMessages.map((warning) => `- ${warning}`).join('\n');
   return `VibeTether initialized ${root} for ${adapters.join(' + ')} using the ${options.profile} profile with ${providers.length} curated provider Skill(s).\n${warnings ? `Warnings:\n${warnings}\n` : ''}`;
