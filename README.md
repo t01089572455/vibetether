@@ -2,13 +2,14 @@
 
 > Even strong agents can drift during long-running work.
 
-VibeTether is a beginner-friendly control Skill for long-running Codex and Claude 
+VibeTether is a beginner-friendly control Skill for long-running Codex and Claude
 projects. It is designed for increasingly capable models—including GPT‑5.6 Sol,
-Fable 5, and the stronger agents that come next—helping them stay aligned during
-long, multi-stage work. At the moments that matter, it helps the Agent re-check
-the goal, reread project rules, assess whether the work is ready, choose the right
-installed Skill, keep both direct and delegated Subagent work within the smallest 
-verifiable slice, and recall workflows that have already succeeded.
+Claude Fable 5, and the models that come next—helping coding agents stay aligned
+during long, multi-stage work. At the moments that matter, it helps the Agent
+re-check the goal, reread project rules, assess whether the work is ready, select
+a suitable installed Skill, keep both direct work and work delegated to Subagents
+within the smallest verifiable slice, and recall workflows that have already
+succeeded.
 
 You do not need to memorize Skill names or manage a rigid workflow. VibeTether
 turns recurring lessons from experienced developers into a project-local
@@ -46,10 +47,10 @@ updates, and uninstall.
 
 ## Why I built this
 
-I did not build VibeTether because modern coding agents are weak. I built it 
-because even highly capable agents can lose alignment during long-running, 
-multi-stage work. As context grows and phases change, they can lose sight of 
-the original request, project rules, approved decisions, the right Skill for 
+I did not build VibeTether because modern coding agents are weak. I built it
+because even highly capable agents can lose alignment during long-running,
+multi-stage work. As context grows and phases change, they can lose sight of
+the original request, project rules, approved decisions, the right Skill for
 the moment, or workflows that have already succeeded.
 
 I kept seeing the same failures: a specification existed but stopped governing
@@ -59,7 +60,7 @@ direction was silently improvised; and a deployment or publishing path finally
 worked but was forgotten on the next run.
 
 VibeTether turns those lessons into a small project-local control layer. It is
-designed for stronger agents such as Claude Fable 5 and GPT-5.6 to reduce
+designed for stronger agents such as Claude Fable 5 and GPT-5.6 Sol to reduce
 long-task drift and expensive rework—not to replace their technical judgment.
 
 Under the hood, VibeTether provides a project-local control plane for intent,
@@ -84,10 +85,11 @@ You say: “Build me a customer portal.” You do not need to know any Skill nam
    Agent advances or proposes another slice. The route is closed with
    `vibetether route complete`.
 
-The same re-check happens at task entry, consequential phase changes, compaction,
-resume, handoff, repeated failure, the next slice, completion, merge, release,
-and publication. That phase re-entry is what keeps a long Goal-mode task from
-treating an old summary as current authority.
+The installed project instructions tell a cooperating host Agent to perform the
+same re-check at task entry, consequential phase changes, compaction, resume,
+handoff, repeated failure, the next slice, completion, merge, release, and
+publication. That phase re-entry helps keep a long Goal-mode task from treating
+an old summary as current authority.
 
 ## Powerful Agents, smaller finish lines
 
@@ -117,10 +119,12 @@ VibeTether gives a new or existing project a beginner-readable control surface:
 | `.vibetether/state/current.yaml` | Keeps the current phase and bounded slice resumable |
 | `.vibetether/experience-index.yaml` | Points to reusable workflows that have actually succeeded |
 
-Initialization creates a blank truth entry list. It does not scan or activate
-project documents, even when a file is named `PRD.md` or lives under `docs/adr/`.
-Existing projects can migrate previously active VibeTether sources, but newly
-discovered documents stay candidates until the user confirms them.
+Initialization creates a blank truth entry list. It may inspect repository
+evidence for setup recommendations, but it does not automatically activate
+project documents as confirmed truth, even when a file is named `PRD.md` or lives
+under `docs/adr/`. Existing projects can migrate previously active VibeTether
+sources, but newly discovered documents stay candidates until the user confirms
+them.
 
 The CLI maintains deterministic structure and validation. The Agent performs
 semantic discovery, selective reading, routing, and checkpoint updates. The user
@@ -182,8 +186,9 @@ awaiting confirmation` in `.vibetether/TRUTH.md`:
 Documents generated during a planning conversation can become candidates too.
 Candidates are non-authoritative. Active additions, removals, role or scope
 changes, or any move, delete, or supersede action require user confirmation. If
-confirmed truth and a previously successful workflow conflict, VibeTether stops the affected
-action, recommends a resolution, and asks the user instead of choosing silently.
+the host Agent detects a conflict between confirmed truth and a previously
+successful workflow, VibeTether's instructions require it to stop the affected
+action, recommend a resolution, and ask the user instead of choosing silently.
 
 See [Project truth and document lifecycle](docs/project-truth.md).
 
@@ -267,11 +272,12 @@ VibeTether names the problem and falls back to the curated route.
 
 ## Proven workflows do not disappear
 
-After every verified engineering- or user-level success, the Success Capture
-Gate decides whether the result is `captured`, `already-encoded`, or
-`not-reusable`. A reusable workflow that works for the first time is a
-`first-proven-path` even when it never failed first. The Agent proposes a
-sanitized candidate; it becomes active experience only after user confirmation.
+After every verified engineering- or user-level success, the installed
+instructions require the host Agent to run the Success Capture Gate and classify
+the result as `captured`, `already-encoded`, or `not-reusable`. A reusable
+workflow that works for the first time is a `first-proven-path` even when it never
+failed first. The Agent proposes a sanitized candidate; it becomes active
+experience only after user confirmation.
 
 Later, `applicable_experience` returns only matching metadata and safe artifact
 paths. The agent reads the selected runbook before improvising the same build,
