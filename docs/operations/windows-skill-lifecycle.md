@@ -88,6 +88,11 @@ same problem:
 - `unrecoverable-skill-state`: no safe exact candidate can reconstruct the
   missing managed Skill.
 
+`recoverable-missing-skill` recovery uses the candidate as identity authority
+and publishes the current canonical Skill activation-last before removing that
+candidate. This avoids restoring an old discoverable tree and immediately
+renaming it again while the host is opening it.
+
 For an older interrupted release without a transaction manifest, recovery uses
 only directly registered `.previous` candidates. One exact candidate can be
 restored. If both harnesses were enabled, an unchanged peer harness with the

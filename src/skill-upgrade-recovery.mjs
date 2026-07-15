@@ -8,7 +8,7 @@ import {
   resolveInside,
   writeAtomic,
 } from './files.mjs';
-import { inspectVibeTetherIdentity, sourceSkill } from './skill-install.mjs';
+import { inspectVibeTetherIdentity, installDirectory, sourceSkill } from './skill-install.mjs';
 
 const WINDOWS_LOCK_CODES = new Set(['EACCES', 'EBUSY', 'ENOTEMPTY', 'EPERM']);
 const SAFE_HARNESS = new Set(['codex', 'claude']);
@@ -478,20 +478,18 @@ export async function recoverSkillUpgrades({ root, adapters, operations = {} }) 
     }
     const activeOperations = operationsWith(harnessOperations);
     const target = resolveInside(root, ADAPTERS[harness].skillDirectory);
-    await activeOperations.mkdir(path.dirname(target), { recursive: true });
-    try {
-      await activeOperations.rename(plan.sourcePath, target);
-    } catch (error) {
-      if (isWindowsLock(error)) {
-        throw new CliError(`VibeTether could not restore the ${harness} Skill because Windows reports the destination is in use. Close Codex and Claude, then rerun init.`, 3);
-      }
-      throw error;
-    }
-    const restored = await inspectVibeTetherIdentity(target);
-    if (restored.installed !== plan.sourceIdentity) {
-      throw new CliError('Recovered Skill identity does not match the selected verified candidate.', 3);
-    }
-    reports.push({ ...plan, status: 'recovered' });
+    await rejectSymlinkPath(root, ADAPTERS[harness].skillDirectory);
+    await installDirectory(sourceSkill, target, activeOperations);
+    const restored = await verifyIdentity(target, 'current');
+    const cleanupWarnings = [];
+    await activeOperations.rm(plan.sourcePath, { recursive: true, force: true })
+      .catch((error) => cleanupWarnings.push(error.message));
+    reports.push({
+      ...plan,
+      status: 'recovered',
+      targetIdentity: restored.installed,
+      cleanupWarnings,
+    });
   }
   return reports;
 }

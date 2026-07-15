@@ -151,6 +151,7 @@ test('Windows recovery guide describes deferred replacement and deterministic re
   assert.match(runbook, /cannot replace.*active Skill|host.*active Skill.*replace/is);
   assert.match(runbook, /transaction manifest/i);
   assert.match(runbook, /SKILL\.md.*(?:last|activation)|activation marker.*last/is);
+  assert.match(runbook, /recoverable-missing-skill[^.]{0,240}activation-last/is);
   assert.match(runbook, /unknown|customized/i);
   assert.doesNotMatch(runbook, /Remove-Item.*-Recurse|rm\s+-rf/i);
 });

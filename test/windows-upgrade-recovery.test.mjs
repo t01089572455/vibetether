@@ -253,13 +253,39 @@ async function legacyCandidate(root, name, commit = public021) {
 test('a missing Skill restores the only verified registered transaction candidate', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-legacy-recovery-single-'));
   const candidate = await legacyCandidate(root, '11111111-1111-4111-8111-111111111111.previous');
+  const candidateIdentity = (await inspectVibeTetherIdentity(candidate)).installed;
 
   const [report] = await recoverSkillUpgrades({ root, adapters: ['codex'] });
 
   const target = path.join(root, '.agents', 'skills', 'vibe-tether');
   assert.equal(report.kind, 'recoverable-missing-skill');
   assert.equal(report.status, 'recovered');
-  assert.equal(report.sourceIdentity, (await inspectVibeTetherIdentity(target)).installed);
+  assert.equal(report.sourceIdentity, candidateIdentity);
+  assert.equal(report.targetIdentity, (await inspectVibeTetherIdentity(target)).installed);
+  assert.equal((await inspectVibeTetherIdentity(target)).state, 'current');
+  assert.equal(await missing(candidate), true);
+});
+
+test('missing-Skill recovery publishes current content without renaming a locked candidate', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-legacy-recovery-locked-destination-'));
+  const candidate = await legacyCandidate(root, '88888888-8888-4888-8888-888888888888.previous');
+  const target = path.join(root, '.agents', 'skills', 'vibe-tether');
+
+  const [report] = await recoverSkillUpgrades({
+    root,
+    adapters: ['codex'],
+    operations: {
+      async rename(from, to) {
+        if (from === candidate && to === target) throw windowsLockError();
+        return rename(from, to);
+      },
+    },
+  });
+
+  assert.equal(report.kind, 'recoverable-missing-skill');
+  assert.equal(report.status, 'recovered');
+  assert.equal(report.sourceState, 'legacy');
+  assert.equal((await inspectVibeTetherIdentity(target)).state, 'current');
   assert.equal(await missing(candidate), true);
 });
 
@@ -286,7 +312,8 @@ test('multiple legacy candidates select only the exact enabled peer-harness iden
 
   const target = path.join(root, '.agents', 'skills', 'vibe-tether');
   assert.equal(report.sourceIdentity, peerIdentity);
-  assert.equal((await inspectVibeTetherIdentity(target)).installed, peerIdentity);
+  assert.equal(report.targetIdentity, (await inspectVibeTetherIdentity(target)).installed);
+  assert.equal((await inspectVibeTetherIdentity(target)).state, 'current');
 });
 
 test('multiple candidates without one exact peer match stop as ambiguous instead of using timestamps', async () => {
