@@ -13,17 +13,19 @@ During an upgrade, VibeTether creates a separate transaction copy while leaving 
 Preview and then apply the same initialization profile already used by the project:
 
 ```powershell
-npx --yes github:t01089572455/vibetether init --project . --agent both --profile standard --dry-run
-npx --yes github:t01089572455/vibetether init --project . --agent both --profile standard --yes
+npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init --project . --agent both --profile standard --dry-run
+npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init --project . --agent both --profile standard --yes
 ```
+
+Keep the explicit `--package=git+https://...` form on Windows. The shorter npm `github:` shorthand can select SSH or exit with code 128 before VibeTether starts, especially when no SSH client is installed.
 
 ## Normal uninstall
 
 Always inspect the removal plan first:
 
 ```powershell
-npx --yes github:t01089572455/vibetether uninstall --project . --dry-run
-npx --yes github:t01089572455/vibetether uninstall --project . --yes
+npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether uninstall --project . --dry-run
+npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether uninstall --project . --yes
 ```
 
 The plan should name only VibeTether-managed instruction blocks, unchanged managed Skills, generated routing artifacts, and owned provider material. Intent, runtime checkpoint, first-change backups, pre-existing Skills, and user documents are preserved.

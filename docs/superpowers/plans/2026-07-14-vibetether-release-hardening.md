@@ -993,12 +993,14 @@ After local `RELEASE_READY`, merge the release branch into local `main` without 
 Against a clean temporary directory and then the repaired project when safe, run:
 
 ```powershell
-npx --yes github:t01089572455/vibetether init --project . --agent both --profile extended --bundle web --bundle production --dry-run
-npx --yes github:t01089572455/vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
-npx --yes github:t01089572455/vibetether doctor --project .
+npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init --project . --agent both --profile extended --bundle web --bundle production --dry-run
+npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+npx --yes --package=git+https://github.com/t01089572455/vibetether.git vibetether doctor --project .
 ```
 
 Expected: the published commit is fetched; the old canonical installation is not reported as modified; the first provider fetch tolerates bounded transient TLS EOF; the unchanged second apply reuses verified local provider content without fetching.
+
+The explicit `--package=git+https://...` form is the published acceptance contract. The shorter npm `github:` shorthand can fail before the VibeTether binary starts when npm selects an unavailable SSH transport, so it is not the primary installation command.
 
 - [ ] **Step 10: Mark verified delivery only from remote evidence**
 
