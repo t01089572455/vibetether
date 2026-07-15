@@ -1593,7 +1593,7 @@ git commit -m "docs: explain long-task control for stronger agents"
 
 **Files:**
 - Modify: `docs/superpowers/specs/2026-07-14-guided-bootstrap-and-experience-recall-design.md`
-- Modify outside the public repository: `D:/python_workspace/gyws/.scratch/vibetether-guided-bootstrap-experience-recall/AGENT_DELIVERY.md`
+- Modify outside the public repository: `<workspace-root>/.scratch/vibetether-guided-bootstrap-experience-recall/AGENT_DELIVERY.md`
 
 - [ ] **Step 1: Run the complete package check**
 
@@ -1638,10 +1638,10 @@ Do not change it if any applicable check fails.
 
 - [ ] **Step 6: Complete and validate the outer controlled-delivery packet**
 
-Record exact commands, exit codes, raw evidence paths, scope review, known limitations, and the Success Capture disposition in `D:/python_workspace/gyws/.scratch/vibetether-guided-bootstrap-experience-recall/AGENT_DELIVERY.md`. Set `Status: complete`, then run:
+Record exact commands, exit codes, raw evidence paths, scope review, known limitations, and the Success Capture disposition in `<workspace-root>/.scratch/vibetether-guided-bootstrap-experience-recall/AGENT_DELIVERY.md`. Set `Status: complete`, then run:
 
 ```powershell
-python D:/python_workspace/gyws/.agents/skills/gyws-controlled-delivery/scripts/validate_delivery_packet.py D:/python_workspace/gyws/.scratch/vibetether-guided-bootstrap-experience-recall/AGENT_DELIVERY.md
+python <workspace-root>/.agents/skills/gyws-controlled-delivery/scripts/validate_delivery_packet.py <workspace-root>/.scratch/vibetether-guided-bootstrap-experience-recall/AGENT_DELIVERY.md
 ```
 
 Expected: `VALID`.
@@ -1651,7 +1651,7 @@ Expected: `VALID`.
 Run:
 
 ```powershell
-node D:/python_workspace/gyws/.agents/skills/vibe-tether/scripts/validate-project.mjs --project D:/python_workspace/gyws
+node <workspace-root>/.agents/skills/vibe-tether/scripts/validate-project.mjs --project <workspace-root>
 ```
 
 Expected: valid. Also inspect `.vibetether/state/current.yaml` and record a non-pending Success Capture disposition before completion. Upgrading the containing workspace to the unreleased code is outside this implementation plan.
