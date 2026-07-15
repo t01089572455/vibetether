@@ -6,9 +6,8 @@ import { rejectSymlinkPath, resolveInside } from './files.mjs';
 import { validateProviderLock } from './managed-project-state.mjs';
 import { buildRoutingDocument, matchingRoutes } from './provider-registry.mjs';
 import {
-  LEGACY_VIBETETHER_FINGERPRINTS,
+  inspectVibeTetherIdentity,
   skillFingerprint,
-  sourceSkill,
 } from './skill-install.mjs';
 
 function sorted(values) {
@@ -139,18 +138,20 @@ export async function validateBootstrapAuthority({
     }
   }
 
-  const allowedVibeTetherFingerprints = new Set(LEGACY_VIBETETHER_FINGERPRINTS);
-  allowedVibeTetherFingerprints.add(await skillFingerprint(sourceSkill));
   for (const harness of enabledHarnesses) {
     const adapter = ADAPTERS[harness];
     if (!adapter) rejectAuthority(`persisted harness ${harness} is unsupported.`);
-    const actual = await actualSkillFingerprint(
-      root,
-      adapter.skillDirectory,
-      `${harness} VibeTether Skill`,
-    );
-    if (!allowedVibeTetherFingerprints.has(actual)) {
-      rejectAuthority(`${harness} VibeTether Skill at ${adapter.skillDirectory} is not a canonical or allowed legacy installation.`);
+    try {
+      await rejectSymlinkPath(root, adapter.skillDirectory);
+      const identity = await inspectVibeTetherIdentity(resolveInside(root, adapter.skillDirectory));
+      if (identity.state === 'unknown') {
+        rejectAuthority(`${harness} VibeTether Skill at ${adapter.skillDirectory} is not a canonical or registered legacy installation.`);
+      }
+    } catch (error) {
+      if (error instanceof CliError && error.message.startsWith('VibeTether bootstrap authority check failed:')) {
+        throw error;
+      }
+      throw authorityError(`${harness} VibeTether Skill at ${adapter.skillDirectory} cannot be verified: ${error.message}`);
     }
   }
 

@@ -14,7 +14,7 @@ import {
   resolveInside,
   writeAtomic,
 } from './files.mjs';
-import { LEGACY_VIBETETHER_FINGERPRINTS, skillFingerprint, sourceSkill } from './skill-install.mjs';
+import { inspectVibeTetherIdentity, skillFingerprint } from './skill-install.mjs';
 
 async function exists(target) {
   try {
@@ -123,7 +123,6 @@ export async function uninstall(options) {
     textPlans.push({ relativePath, target, original, content, removeFile: content === '' && !hasBackup });
   }
 
-  const canonicalFingerprint = await skillFingerprint(sourceSkill);
   await rejectSymlinkPath(root, '.vibetether/quarantine');
   const quarantineRoot = resolveInside(root, '.vibetether/quarantine');
   const skillPlans = [];
@@ -131,14 +130,14 @@ export async function uninstall(options) {
     await rejectSymlinkPath(root, adapter.skillDirectory);
     const target = resolveInside(root, adapter.skillDirectory);
     if (!(await exists(target))) continue;
-    let installedFingerprint;
     try {
-      installedFingerprint = await skillFingerprint(target);
+      const identity = await inspectVibeTetherIdentity(target);
+      if (identity.state === 'unknown') {
+        throw new CliError(`Refusing to remove modified installed Skill at ${adapter.skillDirectory}. Back up the customization first.`, 3);
+      }
     } catch (error) {
+      if (error instanceof CliError) throw error;
       throw new CliError(`Cannot verify installed Skill at ${adapter.skillDirectory}: ${error.message}`, 3);
-    }
-    if (installedFingerprint !== canonicalFingerprint && !LEGACY_VIBETETHER_FINGERPRINTS.has(installedFingerprint)) {
-      throw new CliError(`Refusing to remove modified installed Skill at ${adapter.skillDirectory}. Back up the customization first.`, 3);
     }
     skillPlans.push({ relativePath: adapter.skillDirectory, target, quarantineRoot });
   }
