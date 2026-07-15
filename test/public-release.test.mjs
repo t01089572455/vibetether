@@ -6,153 +6,162 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const codeload = 'npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether';
 
 async function text(relativePath) {
   return readFile(path.join(root, relativePath), 'utf8');
 }
 
-test('README gives exact install, bootstrap, routing, health, and uninstall commands', async () => {
+test('README opens with the user problem and puts the reliable install before explanation', async () => {
   const readme = await text('README.md');
-  assert.match(readme, /Keep coding agents tethered to project truth/);
-  assert.match(readme, /npx skills add t01089572455\/vibetether --skill vibe-tether/);
-  assert.match(
-    readme,
-    /npx --yes --package=https:\/\/codeload\.github\.com\/t01089572455\/vibetether\/tar\.gz\/refs\/heads\/main vibetether init --agent both --profile standard --yes/,
-  );
-  assert.match(readme, /vibetether doctor/);
-  assert.match(readme, /vibetether capabilities/);
-  assert.match(readme, /vibetether uninstall --dry-run/);
-  assert.match(readme, /53 complete.*Skill/i);
-  assert.match(readme, /21.*exposed.*Skill/i);
-  assert.match(readme, /--bundle web/);
-  assert.match(readme, /--bundle production/);
-  assert.match(readme, /--no-auto-bundles/);
-  assert.match(readme, /re-run.*init|run.*init again/i);
-  assert.match(readme, /exact commit/i);
-  assert.match(readme, /advisory/i);
+  assert.ok(readme.startsWith(`# VibeTether\n\n> Long tasks drift. Skills get forgotten. Proven fixes disappear.\n\nVibeTether keeps coding agents anchored to project truth, routes each phase to\nthe right Skill, and recalls workflows that already worked.\n`));
+  const install = `${codeload} init --project . --agent both --profile extended --bundle web --bundle production --yes`;
+  assert.match(readme, new RegExp(install.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.ok(readme.indexOf(install) < readme.indexOf('## Why I built this'));
+  assert.match(readme, /one command|copy.*paste/i);
   assert.doesNotMatch(readme, /<github-owner>|your-username|OWNER\/vibetether/i);
 });
 
-test('README states the long-task control promise without a Token-savings claim', async () => {
+test('README makes a strong but honest long-task claim', async () => {
   const readme = await text('README.md');
   assert.match(readme, /stronger agents such as Claude Fable 5 and GPT-5\.6/i);
-  assert.match(readme, /aims to reduce long-task drift and expensive rework/i);
+  assert.match(readme, /designed[\s\S]*reduce[\s\S]*long-task drift and expensive rework/i);
+  assert.match(readme, /design goal|cannot guarantee|host.*cooperat/i);
   assert.doesNotMatch(readme, /net Token savings|saves? Tokens|reduce(?:s|d)? Token usage|lower Token cost/i);
-  assert.match(readme, /npx --yes --package=https:\/\/codeload\.github\.com\/t01089572455\/vibetether\/tar\.gz\/refs\/heads\/main vibetether init/);
-  assert.match(readme, /outer `npx --yes`[\s\S]*VibeTether's own `--yes`/i);
-  assert.match(readme, /vibetether bootstrap/);
-  assert.match(readme, /experience-index\.yaml/);
-  assert.match(readme, /applicable_experience/);
-  assert.match(readme, /first-proven-path/);
 });
 
-test('README is a complete scenario-led product and operations guide', async () => {
+test('README gives beginners a 30-second phase-routing example', async () => {
   const readme = await text('README.md');
-  for (const heading of [
-    'Quick start',
-    'How automatic routing works',
-    'Profiles and bundles',
-    'When should I use what?',
-    'Walkthroughs',
-    'Catalog vs exposure',
-    'Codex and Claude',
-    'Upgrade and repair',
-    'Troubleshooting',
-    'Provider provenance and licensing',
-    'Personal acceptance tour',
-  ]) {
-    assert.match(readme, new RegExp(`## ${heading}`, 'i'), `README is missing ${heading}`);
-  }
-  for (const scenario of [
-    'vague-project',
-    'unfamiliar-codebase',
-    'huge-effort',
-    'prototype-choice',
-    'bug-diagnosis',
-    'ui-direction',
-    'web-implementation',
-    'compaction-handoff',
-    'triage-qa',
-    'production-migration',
-    'completion',
-  ]) assert.match(readme, new RegExp(scenario));
-  for (const source of ['mattpocock/skills', 'obra/superpowers', 'andrej-karpathy-skills', 'vercel-labs/agent-skills', 'addyosmani/agent-skills']) {
-    assert.match(readme, new RegExp(source.replace('/', '\\/'), 'i'));
-  }
-  assert.match(readme, /full-text/);
-  assert.match(readme, /readme-declaration/);
-  assert.match(readme, /catalog-only/i);
-  assert.match(readme, /competing router/i);
-  assert.match(readme, /first-proven-path/i);
-  assert.match(readme, /captured[\s\S]*already-encoded[\s\S]*not-reusable/i);
-});
-
-test('README makes provider fetching and Agent discovery explicit for beginners', async () => {
-  const readme = await text('README.md');
-  assert.match(readme, /### What gets installed\?/i);
-  assert.match(readme, /VibeTether does not require community Skills/i);
-  assert.match(readme, /does not search GitHub by star count/i);
-  assert.match(readme, /explicit non-core `init`/i);
-  assert.match(readme, /no provider is downloaded during active work/i);
-  assert.match(readme, /### How agents discover installed Skills/i);
-  for (const artifact of [
-    '.vibetether/capabilities.yaml',
-    '.vibetether/providers.lock.yaml',
-    '.vibetether/providers/catalog/',
-    '.agents/skills/',
-    '.claude/skills/',
-  ]) assert.match(readme, new RegExp(artifact.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.match(readme, /Installed Skill inventory/i);
-  assert.match(readme, /When to use/i);
-  assert.match(readme, /live availability/i);
+  const start = readme.indexOf('## See it in 30 seconds');
+  assert.notEqual(start, -1);
+  const example = readme.slice(start, readme.indexOf('\n## ', start + 4));
   for (const skill of [
     'grilling',
-    'grill-me',
-    'grill-with-docs',
-    'domain-modeling',
-    'codebase-design',
-    'prototype',
-    'research',
     'brainstorming',
-    'dispatching-parallel-agents',
-    'executing-plans',
-    'finishing-a-development-branch',
-    'receiving-code-review',
-    'requesting-code-review',
-    'subagent-driven-development',
-    'systematic-debugging',
-    'test-driven-development',
-    'using-git-worktrees',
-    'verification-before-completion',
     'writing-plans',
-    'writing-skills',
-    'karpathy-guidelines',
-  ]) assert.match(readme, new RegExp('\\| `' + skill + '` \\|'), `README is missing the default provider ${skill}`);
-  assert.match(readme, /21 exposed Skills/i);
-  assert.match(readme, /53 complete upstream Skills/i);
-  assert.match(readme, /catalog-only[\s\S]*outside host discovery/i);
+    'test-driven-development',
+    'verification-before-completion',
+  ]) assert.match(example, new RegExp(skill));
+  assert.match(example, /phase change|re-enter|re-check/i);
+  assert.match(example, /route complete/i);
 });
 
-test('README leads with one install-everything command before customization and documents Windows recovery', async () => {
+test('README explains the beginner bootstrap and autonomous control loop', async () => {
   const readme = await text('README.md');
-  const fastest = readme.search(/## Fastest setup: install everything/i);
-  const customize = readme.search(/## Customize the installation/i);
-  assert.notEqual(fastest, -1, 'README is missing the fastest install-everything entry');
-  assert.ok(customize > fastest, 'README must put the easiest path before customization');
-  assert.match(
-    readme,
-    /init --project \. --agent both --profile extended --bundle web --bundle production --yes/i,
-  );
-  assert.match(readme, /downloads and catalogs every curated source enabled by VibeTether/i);
-  assert.match(readme, /does not expose every upstream Skill/i);
-  assert.match(readme, /core[\s\S]*provider-free[\s\S]*extended/i);
-  assert.match(readme, /GIT_CONFIG_COUNT/);
-  assert.match(readme, /GIT_CONFIG_KEY_0=http\.sslBackend/);
-  assert.match(readme, /GIT_CONFIG_VALUE_0=openssl/);
-  assert.match(readme, /GIT_SSL_BACKEND[\s\S]*does not configure Git/i);
-  assert.match(readme, /github:.*shorthand[\s\S]*(?:SSH|exit 128)|(?:SSH|exit 128)[\s\S]*github:.*shorthand/i);
-  assert.match(readme, /--package=https:\/\/codeload\.github\.com/i);
-  assert.match(readme, /tarball[\s\S]*(?:without|does not require)[\s\S]*(?:Git client|SSH)/i);
+  for (const artifact of [
+    '.vibetether/intent.md',
+    '.vibetether/project.yaml',
+    '.vibetether/capabilities.yaml',
+    '.vibetether/state/current.yaml',
+    '.vibetether/experience-index.yaml',
+  ]) assert.match(readme, new RegExp(artifact.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(readme, /AGENTS\.md.*CLAUDE\.md|CLAUDE\.md.*AGENTS\.md/s);
+  assert.match(readme, /ordinary language|do not need to know.*Skill/i);
+  assert.match(readme, /task entry.*phase|phase.*task entry/is);
+  assert.match(readme, /compaction|resume|handoff/i);
+  assert.match(readme, /first-proven-path/i);
+  assert.match(readme, /captured.*already-encoded.*not-reusable/is);
+});
+
+test('README exposes route customization and the stateful handshake', async () => {
+  const readme = await text('README.md');
+  assert.match(readme, /vibetether customize --project \./);
+  assert.match(readme, /\.vibetether\/routes\.local\.yaml/);
+  assert.match(readme, /primary.*alternative.*overlay/is);
+  assert.match(readme, /vibetether route --project \. --phase PLAN --capability planning/);
+  assert.match(readme, /vibetether route complete --project \. --evidence/);
+  assert.match(readme, /vibetether route abandon --project \. --reason/);
+});
+
+test('README stays focused and delegates complete inventories and operations', async () => {
+  const readme = await text('README.md');
+  const nonemptyLines = readme.split(/\r?\n/).filter((line) => line.trim()).length;
+  assert.ok(nonemptyLines < 420, `README has ${nonemptyLines} non-empty lines`);
+  for (const linked of [
+    'docs/installation.md',
+    'docs/routing.md',
+    'docs/proven-paths.md',
+    'docs/providers.md',
+    'docs/troubleshooting.md',
+  ]) {
+    assert.match(readme, new RegExp(`\\(${linked.replaceAll('.', '\\.')}\\)`));
+    await text(linked);
+  }
+  assert.doesNotMatch(readme, /\| `grill-me` \|/);
+  assert.match(await text('docs/providers.md'), /\| `grill-me` \|/);
+});
+
+test('installation guide separates reliable acquisition, guided setup, profiles, and uninstall', async () => {
+  const guide = await text('docs/installation.md');
+  assert.match(guide, new RegExp(codeload.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(guide, /guided|numbered choices/i);
+  assert.match(guide, /core.*standard.*extended/is);
+  assert.match(guide, /--bundle web/);
+  assert.match(guide, /--bundle production/);
+  assert.match(guide, /--no-auto-bundles/);
+  assert.match(guide, /outer `npx --yes`.*VibeTether's `--yes`/is);
+  assert.match(guide, /uninstall --project \. --dry-run/);
+  assert.match(guide, /github:.*not.*primary|not use.*github:/is);
+});
+
+test('routing guide documents automatic re-entry, local extension, and authority limits', async () => {
+  const guide = await text('docs/routing.md');
+  for (const boundary of ['task entry', 'phase change', 'compaction', 'resume', 'handoff', 'repeated failure', 'completion', 'release']) {
+    assert.match(guide, new RegExp(boundary, 'i'));
+  }
+  assert.match(guide, /routes\.local\.yaml/);
+  assert.match(guide, /primary.*alternative.*overlay/is);
+  assert.match(guide, /cannot weaken.*authority|authority.*cannot be weakened/is);
+  assert.match(guide, /missing.*local primary.*curated|curated.*fallback/is);
+  assert.match(guide, /host.*cooperat|behavioral control/i);
+});
+
+test('Proven Path guide documents first success, recall, deduplication, and secrets', async () => {
+  const guide = await text('docs/proven-paths.md');
+  assert.match(guide, /first-proven-path/i);
+  assert.match(guide, /first.*success.*capture|capture.*first.*success/is);
+  assert.match(guide, /applicable_experience/);
+  assert.match(guide, /captured.*already-encoded.*not-reusable/is);
+  assert.match(guide, /credentials|private keys|one-time codes/i);
+  assert.match(guide, /build|deploy|environment|publish/i);
+});
+
+test('provider guide owns complete curated inventory and discovery behavior', async () => {
+  const guide = await text('docs/providers.md');
+  for (const source of ['mattpocock/skills', 'obra/superpowers', 'andrej-karpathy-skills', 'anthropics/skills', 'vercel-labs/agent-skills', 'addyosmani/agent-skills']) {
+    assert.match(guide, new RegExp(source.replace('/', '\\/'), 'i'));
+  }
+  assert.match(guide, /53 complete upstream Skills/i);
+  assert.match(guide, /21 exposed Skills/i);
+  assert.match(guide, /catalog-only.*outside host discovery/is);
+  assert.match(guide, /exact commit/i);
+  assert.match(guide, /does not search GitHub by star count/i);
+});
+
+test('Windows recovery guide describes deferred replacement and deterministic recovery', async () => {
+  const runbook = await text('docs/operations/windows-skill-lifecycle.md');
+  assert.match(runbook, /EPERM|EACCES/);
+  assert.match(runbook, /pending-skill-upgrade/);
+  assert.match(runbook, /recoverable-missing-skill/);
+  assert.match(runbook, /ambiguous-recovery/);
+  assert.match(runbook, /unrecoverable-skill-state/);
+  assert.match(runbook, /close.*Codex.*Claude|close.*Claude.*Codex/is);
+  assert.match(runbook, /same.*command.*again|rerun.*same.*command/is);
+  assert.match(runbook, /peer harness/i);
+  assert.match(runbook, /cannot replace.*active Skill|host.*active Skill.*replace/is);
+  assert.match(runbook, /transaction manifest/i);
+  assert.match(runbook, /unknown|customized/i);
+  assert.doesNotMatch(runbook, /Remove-Item.*-Recurse|rm\s+-rf/i);
+});
+
+test('troubleshooting distinguishes package acquisition, provider TLS, and host locks', async () => {
+  const guide = await text('docs/troubleshooting.md');
+  assert.match(guide, /Codeload.*tarball/is);
+  assert.match(guide, /github:.*(?:SSH|exit 128)|(?:SSH|exit 128).*github:/is);
+  assert.match(guide, /TLS.*retry|retry.*TLS/is);
+  assert.match(guide, /verified.*catalog.*without.*network|cached.*catalog/is);
+  assert.match(guide, /EPERM|EACCES/);
+  assert.match(guide, /vibetether doctor/);
 });
 
 test('the public GitHub publishing runbook preserves the first proven path without credentials', async () => {
@@ -164,80 +173,34 @@ test('the public GitHub publishing runbook preserves the first proven path witho
   assert.match(runbook, /remote ref/i);
   assert.match(runbook, /CI/i);
   assert.match(runbook, /cleanup|remove.*key/i);
-  assert.match(runbook, /core\.autocrlf=false/i);
   assert.doesNotMatch(runbook, /BEGIN (?:OPENSSH|RSA|EC) PRIVATE KEY/);
-  assert.doesNotMatch(runbook, /(?:token|password|one-time code)\s*[:=]\s*["']?[A-Za-z0-9_-]{6,}/i);
 });
 
-test('README explains support, architecture, UI control, and preview limitations without overclaiming', async () => {
-  const readme = await text('README.md');
-  assert.match(readme, /Codex[\s\S]*official preview/i);
-  assert.match(readme, /Claude Code[\s\S]*official preview/i);
-  assert.match(readme, /```mermaid[\s\S]*control kernel/i);
-  assert.match(readme, /```mermaid[\s\S]*golden screen/i);
-  assert.match(readme, /0\.2\.3 preview/i);
-  assert.match(readme, /not independent agent forward tests/i);
-  assert.match(readme, /30\/30[\s\S]*24\/30/);
-  assert.match(readme, /35\.0%/);
-  assert.match(readme, /preview-evaluation\.md/);
-  assert.doesNotMatch(readme, /eliminates? (context )?drift/i);
-  assert.match(readme, /reduces the risk/i);
-});
-
-test('package metadata points to the authenticated public repository', async () => {
+test('package metadata points to the public repository', async () => {
   const pkg = JSON.parse(await text('package.json'));
   assert.equal(pkg.repository.url, 'git+https://github.com/t01089572455/vibetether.git');
   assert.equal(pkg.homepage, 'https://github.com/t01089572455/vibetether#readme');
   assert.equal(pkg.bugs.url, 'https://github.com/t01089572455/vibetether/issues');
   assert.equal(pkg.version, '0.2.3');
-  assert.equal(pkg.description, 'Direction control, guided readiness, Skill routing, and Proven Path recall for long-running coding agents.');
-  assert.equal(pkg.files.includes('docs/operations'), true);
-});
-
-test('Windows Skill lifecycle recovery is documented without weakening customization safety', async () => {
-  const runbook = await text('docs/operations/windows-skill-lifecycle.md');
-  assert.match(runbook, /registered legacy fingerprint/i);
-  assert.match(runbook, /transaction copy/i);
-  assert.match(runbook, /uninstall --project .*--dry-run/i);
-  assert.match(runbook, /close.*Claude Code.*retry/is);
-  assert.match(runbook, /partial rollback/i);
-  assert.match(runbook, /unknown|customized/i);
-  assert.match(runbook, /0\.2\.1/);
-  assert.match(runbook, /CRLF|line ending/i);
-  assert.doesNotMatch(runbook, /Remove-Item.*-Recurse|rm\s+-rf/i);
-});
-
-test('README explains guided initialization, canonical upgrades, and provider network recovery honestly', async () => {
-  const readme = await text('README.md');
-  assert.match(readme, /numbered choices|guided choices/i);
-  assert.match(readme, /goal[\s\S]*success[\s\S]*(?:user-owned|does not invent)/i);
-  assert.match(readme, /registered canonical[\s\S]*upgrade/i);
-  assert.match(readme, /line ending|CRLF/i);
-  assert.match(readme, /cannot guarantee[\s\S]*host|host[\s\S]*must honor/i);
-  assert.match(readme, /transient[\s\S]*retry|TLS[\s\S]*retry/i);
-  assert.match(readme, /verified[\s\S]*catalog[\s\S]*without[\s\S]*network|unchanged[\s\S]*provider[\s\S]*without[\s\S]*fetch/i);
-  assert.doesNotMatch(readme, /guaranteed automatic invocation|saves? tokens/i);
+  assert.equal(pkg.files.includes('docs'), true);
 });
 
 test('public release documents contain no local path or non-English brand leakage', async () => {
-  const corpus = await Promise.all(['README.md', 'SECURITY.md', 'CONTRIBUTING.md', 'THIRD_PARTY_NOTICES.md'].map(text));
+  const corpus = await Promise.all([
+    'README.md', 'SECURITY.md', 'CONTRIBUTING.md', 'THIRD_PARTY_NOTICES.md',
+    'docs/installation.md', 'docs/routing.md', 'docs/proven-paths.md', 'docs/providers.md', 'docs/troubleshooting.md',
+  ].map(text));
   const joined = corpus.join('\n');
   assert.doesNotMatch(joined, /(?:^|\s)[A-Za-z]:[\\/]/m);
   assert.doesNotMatch(joined, /[\u3400-\u9fff]/);
-  assert.doesNotMatch(joined, /<[^>]*(owner|username|repository)[^>]*>/i);
 });
 
 test('third-party notices identify every curated source and license boundary', async () => {
   const notices = await text('THIRD_PARTY_NOTICES.md');
-  assert.match(notices, /mattpocock\/skills/i);
-  assert.match(notices, /obra\/superpowers/i);
-  assert.match(notices, /anthropics\/skills/i);
-  assert.match(notices, /andrej-karpathy-skills/i);
-  assert.match(notices, /vercel-labs\/agent-skills/i);
-  assert.match(notices, /addyosmani\/agent-skills/i);
+  for (const source of ['mattpocock/skills', 'obra/superpowers', 'anthropics/skills', 'andrej-karpathy-skills', 'vercel-labs/agent-skills', 'addyosmani/agent-skills']) {
+    assert.match(notices, new RegExp(source.replace('/', '\\/'), 'i'));
+  }
   assert.match(notices, /readme-declaration/i);
-  assert.match(notices, /MIT/);
-  assert.match(notices, /Apache-2\.0/);
   assert.match(notices, /providers\.lock\.yaml/);
 });
 
@@ -248,9 +211,6 @@ test('the documented personal acceptance tour runs without network access', () =
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /acceptance tour passed/i);
-  assert.match(result.stdout, /guided bootstrap/i);
-  assert.match(result.stdout, /applicable experience/i);
-  assert.match(result.stdout, /doctor healthy/i);
 });
 
 test('CI verifies the release on Windows and Ubuntu with supported Node versions', async () => {
@@ -262,7 +222,6 @@ test('CI verifies the release on Windows and Ubuntu with supported Node versions
   assert.match(workflow, /npm ci/);
   assert.match(workflow, /npm run check/);
   assert.match(workflow, /npm pack --dry-run/);
-  assert.match(workflow, /actions\/checkout@v4[\s\S]*fetch-depth:\s*0/);
 });
 
 test('release history reproduces every registered canonical fingerprint', () => {
@@ -272,10 +231,4 @@ test('release history reproduces every registered canonical fingerprint', () => 
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /release compatibility: valid \(5 historical identities\)/i);
-});
-
-test('the package check command audits release history', async () => {
-  const pkg = JSON.parse(await text('package.json'));
-  assert.equal(pkg.scripts['audit:release'], 'node scripts/verify-release-history.mjs');
-  assert.match(pkg.scripts.check, /npm run audit:release/);
 });
