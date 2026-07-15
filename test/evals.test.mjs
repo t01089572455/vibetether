@@ -25,6 +25,7 @@ test('preview scenarios cover the approved drift-pressure classes with complete 
     'first-proven-path',
     'greenfield-bootstrap',
     'huge-effort',
+    'long-task-route-controls',
     'production-migration',
     'prototype-choice',
     'proven-path-recall',
@@ -81,6 +82,27 @@ test('preview scenarios cover the approved drift-pressure classes with complete 
       must_precede: 'invent-new-publication-command',
     },
   });
+
+  const controls = values.find((scenario) => scenario.id === 'long-task-route-controls');
+  const controlIds = controls.cases.map((entry) => entry.id);
+  assert.deepEqual(controlIds, [
+    'active-plan-blocks-execute',
+    'compaction-forces-reentry',
+    'first-proven-deployment-captures',
+    'local-primary-absent-falls-back',
+    'missing-skill-peer-identity-recovers',
+    'phase-plan-after-approved-design',
+    'prd-local-to-issues',
+    'release-ambiguity-asks-user',
+    'repeat-proven-path-does-not-duplicate',
+    'satisfied-verify-permits-review',
+    'vague-greenfield-clarifies',
+    'windows-lock-defers',
+  ]);
+  for (const entry of controls.cases) {
+    assert.ok(Object.keys(entry.observed).length > 0, entry.id);
+    assert.equal(Object.hasOwn(entry, 'reasoning'), false, entry.id);
+  }
 });
 
 test('static runner validates every scenario and states the preview honesty boundary', () => {
@@ -90,7 +112,8 @@ test('static runner validates every scenario and states the preview honesty boun
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /16\/16 static scenario contracts passed/);
+  assert.match(result.stdout, /17\/17 static scenario contracts passed/);
+  assert.match(result.stdout, /long-task-route-controls: PASS/);
   assert.match(result.stdout, /greenfield-bootstrap: PASS/);
   assert.match(result.stdout, /proven-path-recall: PASS/);
   assert.match(result.stdout, /not independent agent forward tests/i);

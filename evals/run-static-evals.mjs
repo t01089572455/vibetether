@@ -38,6 +38,103 @@ const REQUIRED_FIELDS = [
   'required_evidence',
 ];
 
+const INSPECTABLE_CONTROL_FIELDS = new Set([
+  'phase',
+  'capability',
+  'selected_skill',
+  'selection_source',
+  'readiness_verdict',
+  'confirmation_required',
+  'handshake_state',
+  'transition',
+  'required_outputs',
+  'exit_evidence',
+  'experience_disposition',
+  'recovery_class',
+  'recovery_status',
+  'reanchor_required',
+  'must',
+  'must_not',
+]);
+
+const LONG_TASK_CONTRACTS = {
+  'active-plan-blocks-execute': {
+    phase: 'EXECUTE_ONE', capability: 'implementation', selected_skill: 'writing-plans',
+    selection_source: 'recommended', handshake_state: 'active', transition: 'blocked',
+  },
+  'compaction-forces-reentry': {
+    phase: 'ALIGN', capability: 'handoff-recovery', selected_skill: 'vibe-tether',
+    selection_source: 'built-in-fallback', handshake_state: 'active', reanchor_required: true,
+  },
+  'first-proven-deployment-captures': {
+    phase: 'VERIFY', capability: 'success-capture', experience_disposition: 'captured',
+    required_outputs: ['trigger_class', 'experience_disposition', 'durable_artifacts', 'redaction_check'],
+  },
+  'local-primary-absent-falls-back': {
+    phase: 'PLAN', capability: 'planning', selected_skill: 'writing-plans',
+    selection_source: 'curated-fallback', handshake_state: 'active',
+  },
+  'missing-skill-peer-identity-recovers': {
+    recovery_class: 'recoverable-missing-skill', recovery_status: 'recovered',
+  },
+  'phase-plan-after-approved-design': {
+    phase: 'PLAN', capability: 'planning', selected_skill: 'writing-plans',
+    selection_source: 'recommended', handshake_state: 'active',
+    required_outputs: ['ordered_slices', 'verification_commands', 'risk_gates'],
+  },
+  'prd-local-to-issues': {
+    phase: 'PLAN', capability: 'planning', selected_skill: 'to-issues',
+    selection_source: 'project-local', handshake_state: 'active',
+    required_outputs: ['ordered_slices', 'verification_commands', 'risk_gates', 'scoped-issues'],
+  },
+  'release-ambiguity-asks-user': {
+    phase: 'SHIP', capability: 'release-verification', readiness_verdict: 'ASK_USER_DECISION',
+    confirmation_required: true, transition: 'blocked', must: ['ask-user'],
+  },
+  'repeat-proven-path-does-not-duplicate': {
+    phase: 'REVIEW', capability: 'success-capture', experience_disposition: 'already-encoded',
+    must_not: ['duplicate-documentation'],
+  },
+  'satisfied-verify-permits-review': {
+    phase: 'REVIEW', capability: 'code-review', handshake_state: 'satisfied', transition: 'allowed',
+  },
+  'vague-greenfield-clarifies': {
+    phase: 'DISCOVER', capability: 'requirements-clarification', selected_skill: 'grilling',
+    selection_source: 'recommended', readiness_verdict: 'ASK_USER_DECISION', handshake_state: 'active',
+    must_not: ['start-implementation', 'invent-requirements'],
+  },
+  'windows-lock-defers': {
+    recovery_class: 'pending-skill-upgrade', recovery_status: 'waiting-for-host-release',
+  },
+};
+
+function sameInspectableValue(actual, expected) {
+  return JSON.stringify(actual) === JSON.stringify(expected);
+}
+
+function evaluateLongTaskControls(scenario) {
+  const errors = [];
+  if (!Array.isArray(scenario.cases)) return ['cases must be an array'];
+  const actualIds = scenario.cases.map(({ id }) => id);
+  const expectedIds = Object.keys(LONG_TASK_CONTRACTS).sort();
+  if (!sameInspectableValue(actualIds, expectedIds)) {
+    errors.push('long-task case ids do not match the deterministic contract');
+  }
+  for (const entry of scenario.cases) {
+    const expected = LONG_TASK_CONTRACTS[entry.id];
+    if (!expected || !entry.observed || typeof entry.observed !== 'object' || Array.isArray(entry.observed)) {
+      errors.push(`${entry.id ?? 'unknown'} is missing an inspectable observation`);
+      continue;
+    }
+    const unknown = Object.keys(entry.observed).find((field) => !INSPECTABLE_CONTROL_FIELDS.has(field));
+    if (unknown) errors.push(`${entry.id} contains non-inspectable field ${unknown}`);
+    if (!sameInspectableValue(entry.observed, expected)) {
+      errors.push(`${entry.id} does not match the deterministic control contract`);
+    }
+  }
+  return errors;
+}
+
 export function evaluateScenario(scenario) {
   const errors = [];
   for (const field of REQUIRED_FIELDS) {
@@ -93,6 +190,10 @@ function requiresExactValues(actual, expected, label, errors) {
 export async function evaluateBehavioralScenario(scenario, registry = null) {
   if (!registry) registry = await loadControlRegistry();
   const errors = [];
+  if (scenario.id === 'long-task-route-controls') {
+    errors.push(...evaluateLongTaskControls(scenario));
+    return { id: scenario.id, ok: errors.length === 0, errors };
+  }
   const expected = scenario.expected;
   if (!expected || typeof expected !== 'object') {
     return { id: scenario.id, ok: false, errors: ['missing expected behavior contract'] };

@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { resolveBoardRoute } from '../src/capabilities.mjs';
+import { mergeProjectRoutes } from '../src/project-routes.mjs';
 import { createCapabilityBoard } from '../src/provider-plan.mjs';
 import { loadProviderRegistry, resolveExposurePlan } from '../src/provider-registry.mjs';
 
@@ -117,4 +119,43 @@ test('the agent-facing scenario guide is contract-linked to the registry scenari
   assert.equal(firstProven.capability, 'success-capture');
   assert.deepEqual(firstProven.signals, ['first-proven-path']);
   assert.match(firstProven.expected_path, /captur.*durable|durable.*captur/i);
+});
+
+test('long-task evaluation local-route observations match the executable resolver', async () => {
+  const scenario = JSON.parse(await readFile(path.join(root, 'evals', 'scenarios', 'long-task-route-controls.json'), 'utf8'));
+  const localCase = scenario.cases.find(({ id }) => id === 'prd-local-to-issues');
+  const fallbackCase = scenario.cases.find(({ id }) => id === 'local-primary-absent-falls-back');
+  const project = await mkdtemp(path.join(os.tmpdir(), 'vibetether-eval-local-route-'));
+  const skill = path.join(project, '.agents', 'skills', 'to-issues');
+  await mkdir(skill, { recursive: true });
+  await writeFile(path.join(skill, 'SKILL.md'), '# to-issues\n', 'utf8');
+  const board = await completeBoard();
+  const document = {
+    schema_version: 1,
+    routes: [{
+      id: 'project-to-issues',
+      phases: ['PLAN'],
+      capability: 'planning',
+      when_any: ['prd-approved'],
+      skill: 'to-issues',
+      role: 'primary',
+      use_when: ['A reviewed PRD needs actionable issues.'],
+      expected_outputs: ['scoped-issues'],
+      exit_evidence: ['Every approved requirement is mapped to an issue.'],
+    }],
+  };
+
+  const available = await mergeProjectRoutes({ root: project, board, document, harnesses: ['codex'] });
+  const local = resolveBoardRoute(available, {
+    phase: 'PLAN', capability: 'planning', signals: ['prd-approved'], harness: 'codex',
+  });
+  assert.equal(local.selection.skill, localCase.observed.selected_skill);
+  assert.equal(local.selection.source, localCase.observed.selection_source);
+
+  const unavailable = await mergeProjectRoutes({ root: project, board, document, harnesses: ['claude'] });
+  const fallback = resolveBoardRoute(unavailable, {
+    phase: 'PLAN', capability: 'planning', signals: ['prd-approved'], harness: 'codex',
+  });
+  assert.equal(fallback.selection.skill, fallbackCase.observed.selected_skill);
+  assert.equal(fallback.selection.source, fallbackCase.observed.selection_source);
 });

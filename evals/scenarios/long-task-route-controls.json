@@ -1,0 +1,123 @@
+{
+  "id": "long-task-route-controls",
+  "cases": [
+    {
+      "id": "active-plan-blocks-execute",
+      "observed": {
+        "phase": "EXECUTE_ONE",
+        "capability": "implementation",
+        "selected_skill": "writing-plans",
+        "selection_source": "recommended",
+        "handshake_state": "active",
+        "transition": "blocked"
+      }
+    },
+    {
+      "id": "compaction-forces-reentry",
+      "observed": {
+        "phase": "ALIGN",
+        "capability": "handoff-recovery",
+        "selected_skill": "vibe-tether",
+        "selection_source": "built-in-fallback",
+        "handshake_state": "active",
+        "reanchor_required": true
+      }
+    },
+    {
+      "id": "first-proven-deployment-captures",
+      "observed": {
+        "phase": "VERIFY",
+        "capability": "success-capture",
+        "experience_disposition": "captured",
+        "required_outputs": ["trigger_class", "experience_disposition", "durable_artifacts", "redaction_check"]
+      }
+    },
+    {
+      "id": "local-primary-absent-falls-back",
+      "observed": {
+        "phase": "PLAN",
+        "capability": "planning",
+        "selected_skill": "writing-plans",
+        "selection_source": "curated-fallback",
+        "handshake_state": "active"
+      }
+    },
+    {
+      "id": "missing-skill-peer-identity-recovers",
+      "observed": {
+        "recovery_class": "recoverable-missing-skill",
+        "recovery_status": "recovered"
+      }
+    },
+    {
+      "id": "phase-plan-after-approved-design",
+      "observed": {
+        "phase": "PLAN",
+        "capability": "planning",
+        "selected_skill": "writing-plans",
+        "selection_source": "recommended",
+        "handshake_state": "active",
+        "required_outputs": ["ordered_slices", "verification_commands", "risk_gates"]
+      }
+    },
+    {
+      "id": "prd-local-to-issues",
+      "observed": {
+        "phase": "PLAN",
+        "capability": "planning",
+        "selected_skill": "to-issues",
+        "selection_source": "project-local",
+        "handshake_state": "active",
+        "required_outputs": ["ordered_slices", "verification_commands", "risk_gates", "scoped-issues"]
+      }
+    },
+    {
+      "id": "release-ambiguity-asks-user",
+      "observed": {
+        "phase": "SHIP",
+        "capability": "release-verification",
+        "readiness_verdict": "ASK_USER_DECISION",
+        "confirmation_required": true,
+        "transition": "blocked",
+        "must": ["ask-user"]
+      }
+    },
+    {
+      "id": "repeat-proven-path-does-not-duplicate",
+      "observed": {
+        "phase": "REVIEW",
+        "capability": "success-capture",
+        "experience_disposition": "already-encoded",
+        "must_not": ["duplicate-documentation"]
+      }
+    },
+    {
+      "id": "satisfied-verify-permits-review",
+      "observed": {
+        "phase": "REVIEW",
+        "capability": "code-review",
+        "handshake_state": "satisfied",
+        "transition": "allowed"
+      }
+    },
+    {
+      "id": "vague-greenfield-clarifies",
+      "observed": {
+        "phase": "DISCOVER",
+        "capability": "requirements-clarification",
+        "selected_skill": "grilling",
+        "selection_source": "recommended",
+        "readiness_verdict": "ASK_USER_DECISION",
+        "handshake_state": "active",
+        "must_not": ["start-implementation", "invent-requirements"]
+      }
+    },
+    {
+      "id": "windows-lock-defers",
+      "observed": {
+        "recovery_class": "pending-skill-upgrade",
+        "recovery_status": "waiting-for-host-release"
+      }
+    }
+  ]
+}
