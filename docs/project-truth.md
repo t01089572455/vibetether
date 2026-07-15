@@ -86,7 +86,7 @@ activation decisions.
 This is behavioral control, not a background daemon or security sandbox. Run:
 
 ```sh
-vibetether doctor --project . --json
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether doctor --project . --json
 ```
 
 Doctor validates structure, contained paths, control state, and pending

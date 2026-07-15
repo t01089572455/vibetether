@@ -3,7 +3,7 @@
 Start with:
 
 ```sh
-vibetether doctor --project . --json
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether doctor --project . --json
 ```
 
 ## npm exits 128 before VibeTether starts
@@ -67,9 +67,10 @@ and portable LF/CRLF differences are handled separately from custom content.
 
 ## A provider is unavailable during a task
 
-Run `vibetether capabilities --project .` to refresh live availability. Optional
+Run the portable `capabilities` command to refresh live availability. Optional
 providers use their declared fallback. Do not download a provider in the middle
-of active work; change the profile or bundle through a reviewed `init`.
+of active work; change the profile or bundle through a reviewed portable `init`
+command.
 
 ## The expected Web or production Skill is absent
 

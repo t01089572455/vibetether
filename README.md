@@ -5,8 +5,8 @@
 VibeTether is a beginner-friendly control Skill for long-running Codex and Claude
 projects. It is designed for increasingly capable models—including GPT‑5.6 Sol,
 Claude Fable 5, and the models that come next—helping coding agents stay aligned
-during long, multi-stage work. At the moments that matter, it helps the Agent
-re-check the goal, reread project rules, assess whether the work is ready, select
+during long, multi-stage work. At the moments that matter, it helps a cooperating
+Agent re-check the goal, reread project rules, assess whether the work is ready, select
 a suitable installed Skill, keep both direct work and work delegated to Subagents
 within the smallest verifiable slice, and recall workflows that have already
 succeeded.
@@ -30,9 +30,17 @@ Copy and paste this inside the project you want to control:
 npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
 ```
 
-That is the **easiest reviewed installation**: VibeTether for Codex and Claude Code,
+That is the **full reviewed setup**: VibeTether for Codex and Claude Code,
 plus its curated product, planning, debugging, testing, UI, Web, and production
 specialists. The reliable Codeload form avoids npm's Git/SSH package path.
+It does not install a global `vibetether` executable, so copy each complete
+portable command below.
+
+Using Codex only? Use the same reviewed setup with `--agent codex`:
+
+```sh
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent codex --profile extended --bundle web --bundle production --yes
+```
 
 Prefer prompts over flags? Run the guided setup:
 
@@ -82,8 +90,8 @@ You say: “Build me a customer portal.” You do not need to know any Skill nam
    all direct or delegated work inside the same approved slice.
 5. **Verify before advancing.** `test-driven-development` owns behavior changes,
    and `verification-before-completion` requires fresh slice evidence before
-   the Agent advances or proposes another slice. The route is closed with
-   `vibetether route complete`.
+   the Agent advances or proposes another slice. The route is closed with a
+   recorded `route complete` event through the portable command shown below.
 
 The installed project instructions tell a cooperating host Agent to perform the
 same re-check at task entry, consequential phase changes, compaction, resume,
@@ -97,17 +105,17 @@ an old summary as current authority.
 
 |  | Capability | What it gives you |
 | :---: | --- | --- |
-| 🧭 | **Readiness gate** | Stops product work from starting on guessed direction |
+| 🧭 | **Readiness gate** | Helps a cooperating Agent avoid starting product work from guessed direction |
 | 🗺️ | **User-owned truth map** | Keeps confirmed, candidate, and declined documents visible without silently activating them |
-| ⚓ | **Project-truth re-anchor** | Re-reads only the applicable confirmed rules before consequential actions |
-| 🧩 | **Automatic Skill routing** | Maps observable task signals to one suitable installed Skill or a declared fallback |
+| ⚓ | **Project-truth re-anchor** | Guides a cooperating Agent to re-read applicable confirmed rules before consequential actions |
+| 🧩 | **Automatic, inspectable Skill routing** | Maps observable task signals to one curated installed recommendation or declared fallback; selection remains advisory |
 | 🤝 | **Stateful phase handshake** | Records route selection, required output, evidence, completion, or abandonment |
 | 📍 | **Long-task checkpoints** | Carries the current objective and slice through compaction, resume, and handoff |
 | 🎯 | **Smallest Verifiable Slice** | Defines the smallest verifiable outcome that advances the approved goal and keeps direct or delegated work inside it—without limiting Subagent use |
 | 🔁 | **Proven Path recall** | Reads a matching successful runbook before rediscovering an operational workflow |
 | ✨ | **First-success capture** | Proposes a reusable workflow the first verified time it works; active indexing still needs confirmation |
 | 📦 | **Curated providers** | Pins exact commits, fingerprints content, and keeps competing routers out of host discovery |
-| 🪟 | **Safe Windows upgrades** | Defers replacement of a locked active Skill and resumes it on the next run |
+| 🪟 | **Safe Windows upgrades** | Preserves a verified replacement and attempts recovery after the host releases the lock |
 | 🛠️ | **Project-local extension** | Lets each project add its own primary, alternative, or overlay routes |
 
 ## A project control plane, not another prompt
@@ -146,26 +154,26 @@ confirmation.
 | Artifact | How to manage it |
 | --- | --- |
 | `.vibetether/TRUTH.md` | Edit directly or ask the Agent to propose candidates and confirm them one at a time |
-| `.vibetether/intent.md` | Use `vibetether bootstrap --project .` or ask the Agent to propose a directional update |
-| `.vibetether/routes.local.yaml` | Use `vibetether customize --project .` or edit validated YAML directly |
+| `.vibetether/intent.md` | Use the portable `bootstrap` command below or ask the Agent to propose a directional update |
+| `.vibetether/routes.local.yaml` | Use the portable `customize` command below or edit validated YAML directly |
 | Proven Path documents | Edit the referenced sanitized runbook; confirm before active indexing |
-| `.vibetether/project.yaml` | CLI-maintained topology; inspect it and normally repair it with `vibetether init` |
-| `.vibetether/capabilities.yaml` | Generated board; inspect it with `vibetether capabilities` |
+| `.vibetether/project.yaml` | CLI-maintained topology; inspect it and normally repair it with the portable `init` command |
+| `.vibetether/capabilities.yaml` | Generated board; inspect it with the portable `capabilities` command |
 | `.vibetether/state/current.yaml` | Runtime checkpoint; inspect it for diagnosis and normally let VibeTether maintain it |
 
 Common guided operations:
 
 ```sh
-vibetether bootstrap --project .
-vibetether customize --project .
-vibetether doctor --project . --json
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether bootstrap --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether customize --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether doctor --project . --json
 ```
 
 Edit project prose outside VibeTether's markers in `AGENTS.md` or `CLAUDE.md`.
-Rerun `vibetether init` to repair the CLI-maintained block. Do not hand-edit the
+Rerun the portable `init` command to repair the CLI-maintained block. Do not hand-edit the
 generated capability board, canonical Intent metadata, or runtime route state.
 
-## Add project truth in 60 seconds
+## Add project truth: a 3-step quickstart
 
 `.vibetether/TRUTH.md` is the entry list for documents that may govern the
 project. A new installation starts with an empty list. You can manage it without
@@ -208,7 +216,7 @@ not activate or use it for implementation until I confirm it.
 Ask the Agent to validate the result:
 
 ```text
-Run `vibetether doctor --project . --json`. If the truth map is invalid or a
+Run the project's VibeTether doctor check. If the truth map is invalid or a
 confirmed source is missing, explain the exact problem and propose a safe fix.
 ```
 
@@ -255,20 +263,20 @@ still require the appropriate user decision.
 See the capability board:
 
 ```sh
-vibetether capabilities --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether capabilities --project .
 ```
 
 Start and close one phase route explicitly:
 
 ```sh
-vibetether route --project . --phase PLAN --capability planning --signal multi-step-change --agent codex
-vibetether route complete --project . --evidence "The approved plan names bounded slices and verification."
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether route --project . --phase PLAN --capability planning --signal multi-step-change --agent codex
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether route complete --project . --evidence "The approved plan names bounded slices and verification."
 ```
 
 If the route no longer fits:
 
 ```sh
-vibetether route abandon --project . --reason "The governing product decision changed."
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether route abandon --project . --reason "The governing product decision changed."
 ```
 
 The installed `AGENTS.md`/`CLAUDE.md` block tells the host agent to perform this
@@ -281,7 +289,7 @@ correctness. Read the [routing guide](docs/routing.md) for the complete model.
 Install a project Skill under `.agents/skills/` or `.claude/skills/`, then run:
 
 ```sh
-vibetether customize --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether customize --project .
 ```
 
 The guided editor writes `.vibetether/routes.local.yaml`. A local route can be a
@@ -290,7 +298,7 @@ the reviewed board; it cannot weaken authority, readiness, evidence, security,
 permission, destructive-data, or release gates. If a local primary is missing,
 VibeTether names the problem and falls back to the curated route.
 
-## Proven workflows do not disappear
+## Preserve proven workflows
 
 After every verified engineering- or user-level success, the installed
 instructions require the host Agent to run the Success Capture Gate and classify
@@ -329,14 +337,14 @@ inventories and exposure rules live in [Providers and Skills](docs/providers.md)
 | Codex | `AGENTS.md` | `.agents/skills/vibe-tether/` | `.agents/skills/` |
 | Claude Code | `CLAUDE.md` | `.claude/skills/vibe-tether/` | `.claude/skills/` |
 
-Both are official preview targets. Other Agent Skills hosts can use the portable
+Both are VibeTether preview targets. Other Agent Skills hosts can use the portable
 Skill, but project instruction discovery and phase re-entry are host-dependent.
 
 ## Verify the installation
 
 ```sh
-vibetether doctor --project . --json
-vibetether capabilities --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether doctor --project . --json
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether capabilities --project .
 ```
 
 For repository contributors, the offline acceptance tour is:
@@ -352,6 +360,9 @@ VibeTether is a behavioral control layer, not a security sandbox or a guaranteed
 workflow engine. Its automatic behavior requires the host agent to cooperate
 with project instructions. It cannot guarantee zero drift, correct user choices,
 perfect Skill quality, or successful external services.
+
+Mentions of model names describe intended use, not compatibility or compliance
+guarantees.
 
 Reducing drift and expensive rework is the design goal. VibeTether makes no
 measured Token-savings claim. Its deterministic tests verify routing contracts,

@@ -15,7 +15,8 @@ and Windows Git combinations it exits 128 before VibeTether starts.
 
 The outer `npx --yes` lets npm acquire the package. VibeTether's `--yes` is the
 final flag and accepts the fully specified project plan. They answer different
-questions.
+questions. `init` does not install a global `vibetether` command, so copy the
+complete portable command in each example below.
 
 ## Guided initialization
 
@@ -33,7 +34,7 @@ Before writing or provider fetching, it prints a preview and asks for confirmati
 Use guided discovery again without rebuilding unchanged provider catalogs:
 
 ```sh
-vibetether bootstrap --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether bootstrap --project .
 ```
 
 `bootstrap --dry-run` previews Intent Contract changes without writing.
@@ -59,15 +60,15 @@ An offline-first two-stage installation is safe:
 
 ```sh
 npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile core --no-auto-bundles --yes
-vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
 ```
 
 ## Preview and inspect
 
 ```sh
-vibetether init --project . --agent both --profile standard --dry-run
-vibetether doctor --project . --json
-vibetether capabilities --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile standard --dry-run
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether doctor --project . --json
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether capabilities --project .
 ```
 
 The dry-run writes nothing. Re-running `init` is the supported update and repair
@@ -97,8 +98,8 @@ then recorded as pending; close the host and rerun the same command. See the
 Always preview first:
 
 ```sh
-vibetether uninstall --project . --dry-run
-vibetether uninstall --project . --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether uninstall --project . --dry-run
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether uninstall --project . --yes
 ```
 
 Only unchanged VibeTether-owned files and managed blocks are removed. Intent,

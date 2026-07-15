@@ -8,6 +8,13 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const codeload = 'npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether';
+const publicCliDocs = [
+  'README.md',
+  'docs/installation.md',
+  'docs/project-truth.md',
+  'docs/routing.md',
+  'docs/troubleshooting.md',
+];
 
 async function text(relativePath) {
   return readFile(path.join(root, relativePath), 'utf8');
@@ -126,7 +133,7 @@ test('README teaches project truth control in ordinary language and links the vi
 
 test('README gives beginners a copy-paste project-truth quickstart', async () => {
   const readme = (await text('README.md')).replace(/\r\n/g, '\n');
-  const start = readme.indexOf('## Add project truth in 60 seconds');
+  const start = readme.indexOf('## Add project truth: a 3-step quickstart');
   assert.notEqual(start, -1);
   const tutorial = readme.slice(start, readme.indexOf('\n## ', start + 4));
   assert.match(tutorial, /1\. Ask the Agent to search/i);
@@ -135,8 +142,27 @@ test('README gives beginners a copy-paste project-truth quickstart', async () =>
   assert.match(tutorial, /do not activate.*confirm/is);
   assert.match(tutorial, /role.*scope.*conflict/is);
   assert.match(tutorial, /show me the diff/i);
-  assert.match(tutorial, /vibetether doctor --project \. --json/);
+  assert.match(tutorial, /VibeTether doctor check/i);
   assert.match(tutorial, /move|supersede|remove/i);
+});
+
+test('public command documentation keeps the portable CLI runnable after setup', async () => {
+  const documents = await Promise.all(publicCliDocs.map(async (file) => [file, await text(file)]));
+  for (const [file, document] of documents) {
+    assert.doesNotMatch(
+      document,
+      /^\s*vibetether\s+(?:bootstrap|capabilities|customize|doctor|route|uninstall|init)\b/m,
+      `${file} must not assume a globally installed vibetether command`,
+    );
+  }
+
+  const readme = await text('README.md');
+  assert.match(readme, new RegExp(`${codeload.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} init --project \\. --agent codex`));
+  assert.match(readme, /cooperating Agent/i);
+  assert.match(readme, /model names.*not.*compatibility/i);
+  assert.match(readme, /attempts recovery after the host releases/i);
+  assert.doesNotMatch(readme, /Add project truth in 60 seconds/i);
+  assert.doesNotMatch(readme, /Proven workflows do not disappear/i);
 });
 
 test('README exposes route customization and the stateful handshake', async () => {

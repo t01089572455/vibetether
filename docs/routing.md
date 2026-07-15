@@ -27,13 +27,13 @@ first prompt or an old conversation summary is still complete.
 Inspect the dashboard:
 
 ```sh
-vibetether capabilities --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether capabilities --project .
 ```
 
 Start an inspectable route handshake:
 
 ```sh
-vibetether route --project . --phase PLAN --capability planning --signal multi-step-change --agent codex
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether route --project . --phase PLAN --capability planning --signal multi-step-change --agent codex
 ```
 
 The result names the recommendation, selected Skill or built-in fallback,
@@ -41,19 +41,19 @@ selection source, detected signals, required outputs, and exit evidence. An
 alternative can be selected only with a material reason:
 
 ```sh
-vibetether route --project . --phase PLAN --capability planning --signal approved-refactor --select request-refactor-plan --reason "The approved task is specifically a staged refactor."
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether route --project . --phase PLAN --capability planning --signal approved-refactor --select request-refactor-plan --reason "The approved task is specifically a staged refactor."
 ```
 
 Close it with bounded evidence and optional safe project-relative artifacts:
 
 ```sh
-vibetether route complete --project . --evidence "The plan has bounded slices and verification commands." --artifact docs/plan.md
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether route complete --project . --evidence "The plan has bounded slices and verification commands." --artifact docs/plan.md
 ```
 
 Or abandon it honestly:
 
 ```sh
-vibetether route abandon --project . --reason "A new product decision invalidated the plan."
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether route abandon --project . --reason "A new product decision invalidated the plan."
 ```
 
 The handshake prevents silently entering a different phase while the old route
@@ -79,7 +79,7 @@ does not score hidden reasoning or claim a probability that a model will comply.
 Run the guided editor after installing a project Skill:
 
 ```sh
-vibetether customize --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether customize --project .
 ```
 
 It writes the project-owned `.vibetether/routes.local.yaml` and registers it in
