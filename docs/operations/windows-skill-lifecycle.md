@@ -32,7 +32,15 @@ The plan should name only VibeTether-managed instruction blocks, unchanged manag
 
 A message about a modified installed Skill can come from an older VibeTether release. A current release accepts only fingerprints explicitly registered in its source as old canonical releases. It does not treat arbitrary differences as legacy content.
 
-Use the current pinned release for both preview and application. If the fingerprint is not registered, stop and compare the Skill instead of bypassing the guard.
+The unchanged public 0.2.1 Skill is a registered canonical release and upgrades through the normal `init --dry-run` and `init --yes` path. Core Skill text copied with CRLF instead of LF line endings has the same portable identity. File names, directory structure, binary bytes, added files, removed files, and all other content remain significant.
+
+Use the current pinned release for both preview and application. If the portable fingerprint is not registered, stop and compare the Skill instead of bypassing the guard.
+
+## Provider transport and verified cache
+
+A first non-core installation fetches exact pinned commits. Recognized transient TLS transport failures receive at most three total attempts; Schannel-specific failures switch later attempts to OpenSSL. Authentication, repository, commit, fingerprint, and license failures are not retried as transient.
+
+After provider content succeeds once, the valid lock, canonical catalog path, exact raw Skill fingerprint, source commit, and license evidence form the local cache authority. Repeating an unchanged initialization or upgrading only the VibeTether core Skill reuses that verified catalog without provider network access. Missing or changed evidence returns only the unresolved source to the pinned fetch-and-verify path.
 
 ## Locked Skill on Windows
 

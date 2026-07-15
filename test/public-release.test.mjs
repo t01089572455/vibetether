@@ -169,7 +169,7 @@ test('README explains support, architecture, UI control, and preview limitations
   assert.match(readme, /Claude Code[\s\S]*official preview/i);
   assert.match(readme, /```mermaid[\s\S]*control kernel/i);
   assert.match(readme, /```mermaid[\s\S]*golden screen/i);
-  assert.match(readme, /0\.2\.2 preview/i);
+  assert.match(readme, /0\.2\.3 preview/i);
   assert.match(readme, /not independent agent forward tests/i);
   assert.match(readme, /30\/30[\s\S]*24\/30/);
   assert.match(readme, /35\.0%/);
@@ -196,7 +196,21 @@ test('Windows Skill lifecycle recovery is documented without weakening customiza
   assert.match(runbook, /close.*Claude Code.*retry/is);
   assert.match(runbook, /partial rollback/i);
   assert.match(runbook, /unknown|customized/i);
+  assert.match(runbook, /0\.2\.1/);
+  assert.match(runbook, /CRLF|line ending/i);
   assert.doesNotMatch(runbook, /Remove-Item.*-Recurse|rm\s+-rf/i);
+});
+
+test('README explains guided initialization, canonical upgrades, and provider network recovery honestly', async () => {
+  const readme = await text('README.md');
+  assert.match(readme, /numbered choices|guided choices/i);
+  assert.match(readme, /goal[\s\S]*success[\s\S]*(?:user-owned|does not invent)/i);
+  assert.match(readme, /registered canonical[\s\S]*upgrade/i);
+  assert.match(readme, /line ending|CRLF/i);
+  assert.match(readme, /cannot guarantee[\s\S]*host|host[\s\S]*must honor/i);
+  assert.match(readme, /transient[\s\S]*retry|TLS[\s\S]*retry/i);
+  assert.match(readme, /verified[\s\S]*catalog[\s\S]*without[\s\S]*network|unchanged[\s\S]*provider[\s\S]*without[\s\S]*fetch/i);
+  assert.doesNotMatch(readme, /guaranteed automatic invocation|saves? tokens/i);
 });
 
 test('public release documents contain no local path or non-English brand leakage', async () => {

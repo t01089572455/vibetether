@@ -6,7 +6,7 @@ Direction control for long-running AI coding work.
 
 [![CI](https://github.com/t01089572455/vibetether/actions/workflows/ci.yml/badge.svg)](https://github.com/t01089572455/vibetether/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Preview](https://img.shields.io/badge/release-0.2.2%20preview-orange.svg)](#evidence-and-current-limits)
+[![Preview](https://img.shields.io/badge/release-0.2.3%20preview-orange.svg)](#evidence-and-current-limits)
 
 Designed for stronger agents such as Claude Fable 5 and GPT-5.6, VibeTether aims to reduce long-task drift and expensive rework. It keeps project truth, readiness, Skill routing, checkpoints, verification, and reusable success visible across long tasks, Goal mode, compaction, resume, and handoff.
 
@@ -52,28 +52,48 @@ npx --yes github:t01089572455/vibetether init
 
 The outer `npx --yes` authorizes npm to acquire the VibeTether package. It does **not** answer VibeTether's own project questions. VibeTether's own `--yes` is a trailing CLI flag that bypasses its interactive questions for automation; use it only when explicit flags and discovered facts are enough.
 
-In an interactive greenfield folder, the guided flow is deliberately short:
+In an interactive greenfield folder, finite questions use explained numbered choices with one recommendation. Project-specific goal and success evidence remain user-owned text: VibeTether gives an example and repeats a blank question, but does not invent direction.
 
 ```text
-? Who should this project help, and what outcome should they achieve?
-  A small-team operator who can reconcile monthly inventory in one guided workspace.
+Which agent harness should VibeTether configure?
+1) Codex + Claude (Recommended)
+2) Codex only
+3) Claude only
+> 1
 
-? What fresh evidence would make the first milestone successful?
-  A user can import one sample file and verify the reconciled total.
+Which VibeTether control profile should this project use?
+1) Standard (Recommended)
+2) Core
+3) Extended
+> 1
 
-? What is explicitly out of scope or must not be weakened?
-  Do not publish, send data externally, or replace existing access controls.
+Who should this project help, and what outcome should they achieve?
+Example: Help a small operations team deploy its reporting service safely.
+> Help a small-team operator reconcile monthly inventory in one guided workspace.
+
+What fresh evidence would make the first milestone successful?
+Example: A new user completes setup and the focused acceptance tests pass.
+> A user can import one sample file and verify the reconciled total.
+
+What is explicitly out of scope or must not be weakened?
+1) Use the safe default (Recommended)
+2) Enter a custom boundary
+3) No additional boundary
+> 2
+> Do not publish, send data externally, or replace existing access controls.
 
 VibeTether preview
   - write .vibetether/intent.md and project control files
   - install the recommended Codex or Claude control surface
   - no provider fetch until the chosen profile needs one
 
-? Apply this plan? (y/N) y
+1) Apply these changes
+2) Cancel (Default)
+> 1
 Initialized. Start with the first bounded, verifiable slice.
 ```
 
-The first two answers make intent ready. A UI-direction question appears only when repository evidence makes it relevant. The final confirmation happens before project writes or provider fetching.
+The goal and success answers make intent ready. A UI-direction choice appears only when repository evidence makes it relevant. Invalid choices are explained and asked again. The final confirmation happens before project writes or provider fetching, and blank confirmation cancels.
 
 ## Guided project bootstrap
 
@@ -119,10 +139,10 @@ VibeTether does not search GitHub by star count, install arbitrary repositories,
 | --- | --- | --- |
 | `npx skills add ... --skill vibe-tether` | Fetches the VibeTether package only | Installs the portable entry Skill; it does not initialize project instructions or community providers |
 | `init --profile core` | No provider fetch | Installs VibeTether, managed project instructions, a built-in capability board, checkpoint state, and provider-free fallbacks |
-| `init --profile standard` | Fetches pinned Matt Pocock, Superpowers, and Karpathy sources | Base inventory: 53 complete upstream Skills cataloged and 21 exposed Skills; repository evidence can also select bundles |
-| `init --profile extended` | Standard sources plus pinned Anthropic source | Adds `frontend-design` without replacing the primary product-design workflow |
-| `init --bundle web` | Fetches the pinned Vercel catalog | Catalogs all 9 Vercel Skills and exposes only signal-matched Web specialists |
-| `init --bundle production` | Fetches the pinned Addy Osmani catalog | Catalogs all 24 Skills and exposes only approved production specialists |
+| `init --profile standard` | Fetches only missing pinned Matt Pocock, Superpowers, and Karpathy sources | Base inventory: 53 complete upstream Skills cataloged and 21 exposed Skills; unchanged verified catalogs are reused without network access |
+| `init --profile extended` | Standard sources plus the missing pinned Anthropic source | Adds `frontend-design` without replacing the primary product-design workflow |
+| `init --bundle web` | Fetches the pinned Vercel catalog only when its verified catalog is absent or changed | Catalogs all 9 Vercel Skills and exposes only signal-matched Web specialists |
+| `init --bundle production` | Fetches the pinned Addy Osmani catalog only when its verified catalog is absent or changed | Catalogs all 24 Skills and exposes only approved production specialists |
 
 ### How agents discover installed Skills
 
@@ -195,7 +215,7 @@ For repeatable build, environment, CI, deployment, publication, migration, authe
 
 ## Evidence and current limits
 
-This is a **0.2.2 preview**. The repository includes deterministic contract, lifecycle, catalog, license, routing, rollback, and scenario-matrix tests plus 14 static drift-pressure scenarios. Those static checks are **not independent agent forward tests** and cannot justify a stable `1.0.0` effectiveness claim.
+This is a **0.2.3 preview**. The repository includes deterministic contract, lifecycle, catalog, license, routing, rollback, compatibility-history, and scenario-matrix tests plus 16 static drift-pressure scenarios. Those static checks are **not independent agent forward tests** and cannot justify a stable `1.0.0` effectiveness claim.
 
 A three-role comparative adjudication in development scored synthetic next-action responses at **30/30** with VibeTether and **24/30** for an already strong baseline, with **35.0%** more words. The observed difference was explicit re-anchor, checkpoint, authority, and functional-versus-visual acceptance discipline. Read the [evaluation report](evals/results/preview-evaluation.md), [run metadata](evals/results/run-metadata.json), and [honesty boundary](evals/README.md).
 
@@ -262,15 +282,15 @@ npx --yes github:t01089572455/vibetether uninstall --project . --dry-run
 npx --yes github:t01089572455/vibetether uninstall --project . --yes
 ```
 
-The dry-run is network-free for provider content and writes nothing. Review planned project files, catalogs, exposures, and license operations first. Re-running `init` is also the update and repair path: unchanged installations are idempotent, while modified managed copies stop for review. Uninstall removes only unchanged VibeTether-owned files and managed instruction blocks; it preserves user documents, the Intent Contract, runtime checkpoint, backups, and every Skill that existed before VibeTether.
+The dry-run is network-free for provider content and writes nothing. Review planned project files, catalogs, exposures, and license operations first. Re-running `init` is also the update and repair path: an unchanged provider plan reuses its lock-and-fingerprint-verified local catalogs without a fetch, while modified managed copies stop for review. Uninstall removes only unchanged VibeTether-owned files and managed instruction blocks; it preserves user documents, the Intent Contract, runtime checkpoint, backups, and every Skill that existed before VibeTether.
 
 ## Profiles and bundles
 
 | Profile | Catalog and exposure behavior | Network boundary |
 | --- | --- | --- |
 | `core` | VibeTether plus the full built-in capability board; no community catalog or provider exposure | No provider network access |
-| `standard` | Complete Matt Pocock, Superpowers, and Karpathy catalogs; 21 exposed Skills | Fetches pinned sources during explicit `init` |
-| `extended` | Standard plus Anthropic `frontend-design` | Fetches the additional pinned Anthropic source |
+| `standard` | Complete Matt Pocock, Superpowers, and Karpathy catalogs; 21 exposed Skills | Fetches a pinned source only when its exact verified local catalog is unavailable |
+| `extended` | Standard plus Anthropic `frontend-design` | Fetches only the missing pinned Anthropic source; unchanged catalogs stay local |
 
 Optional bundles add complete catalogs and expose only applicable specialists:
 
@@ -385,15 +405,17 @@ Stable exit codes are `2` for invalid CLI input, `3` for a project conflict, and
 
 ## Upgrade and repair
 
-Run `init` again with the desired profile, harnesses, and bundles. The installer scans repository evidence, resolves the catalog and exposure plan, fetches exact commits only for non-core operations, verifies Skill directories, fingerprints, and license evidence in staging, then applies catalog, exposures, lock, board, licenses, and managed instructions atomically.
+Run `init` again with the desired profile, harnesses, and bundles. The installer scans repository evidence and resolves the catalog and exposure plan. It reuses a local source only when the valid lock, repository, ref, exact commit, canonical catalog paths, raw Skill fingerprints, and license evidence all agree. It fetches only unresolved pinned sources, verifies them in staging, then applies catalog, exposures, lock, board, licenses, and managed instructions atomically.
 
-Use `--dry-run` before changing profiles or bundles. A profile downgrade keeps inactive ownership records so a later uninstall can still remove unchanged VibeTether-owned copies safely. A changed managed Skill or conflicting managed block remains a stop condition rather than an automatic overwrite.
+Exact registered canonical earlier releases, including the public 0.2.1 Skill, upgrade automatically. LF-to-CRLF line-ending conversion is portable for the VibeTether core Skill, but added, removed, or materially changed content remains protected as a customization. Use `--dry-run` before changing profiles or bundles. A profile downgrade keeps inactive ownership records so a later uninstall can still remove unchanged VibeTether-owned copies safely.
 
 ## Troubleshooting
 
-### Windows Schannel recovery
+### Provider TLS and Windows Schannel recovery
 
-If a provider download fails with `schannel`, `SEC_E_NO_CREDENTIALS`, or `failed to receive handshake`, run the installation in Command Prompt with Git's documented environment-config channel:
+VibeTether automatically retries recognized transient provider fetch failures, including `TLS connect error` and `unexpected eof while reading`, up to three total attempts with bounded backoff. A Windows Schannel credential or handshake failure switches later attempts to OpenSSL. Repository-not-found, authentication, commit, fingerprint, and license failures are not misclassified or repeatedly retried. No retry changes the pinned repository or commit.
+
+If all transient retries are exhausted, retry the same command when the connection is stable. If Git still reports `schannel`, `SEC_E_NO_CREDENTIALS`, or `failed to receive handshake`, run the installation in Command Prompt with Git's documented environment-config channel:
 
 ```bat
 set "GIT_CONFIG_COUNT=1"
@@ -402,7 +424,7 @@ set "GIT_CONFIG_VALUE_0=openssl"
 npx --yes github:t01089572455/vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
 ```
 
-`GIT_SSL_BACKEND=openssl` does not configure Git's HTTP backend and is ignored. The three `GIT_CONFIG_*` variables are inherited by the provider Git subprocesses and are equivalent to configuring `http.sslBackend=openssl` for that command session.
+`GIT_SSL_BACKEND=openssl` does not configure Git's HTTP backend and is ignored. The three `GIT_CONFIG_*` variables are inherited by the provider Git subprocesses and are equivalent to configuring `http.sslBackend=openssl` for that command session. After a successful first installation, repeating the unchanged command uses the verified catalog without provider network access.
 
 ### PowerShell blocks `npm.ps1`
 
@@ -483,6 +505,7 @@ Node.js 20 or newer is required for development:
 npm ci
 npm test
 npm run eval
+npm run audit:release
 npm run acceptance:tour
 npm run check
 npm pack --dry-run
