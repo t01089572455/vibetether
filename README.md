@@ -1,6 +1,6 @@
 # VibeTether
 
-> Strong agents can build fast. Long tasks still drift.
+> Even strong agents can drift during long-running work.
 
 VibeTether is a beginner-friendly entry Skill for long-running Codex and
 Claude projects.
