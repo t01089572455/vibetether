@@ -24,7 +24,9 @@ expensive rework.
 
 ## One-command setup
 
-Copy and paste this inside the project you want to control:
+Copy and paste this inside the project you want to control. Use it for a
+**first install** or to **upgrade an existing VibeTether project to the current
+`main`**:
 
 ```sh
 npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
@@ -36,21 +38,9 @@ specialists. The reliable Codeload form avoids npm's Git/SSH package path.
 It does not install a global `vibetether` executable. Initialization creates the
 project-local launcher used by the shorter commands below.
 
-This first command follows the current `main`. For an existing installation,
-recovery, or a reproducible setup, pin the target release:
-
-```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.0 vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
-```
-
-npm may cache the moving `main` package URL and start an older package. The fixed
-tag makes the intended update version explicit.
-
-It also installs the reviewed motion set: `motion-design` from the `extended`
-profile plus eight official `gsap-*` Skills from the Web bundle. Initialization
-caches their pinned sources, exposes them to the selected host, and renders their
-availability and routes in `.vibetether/capabilities.yaml`—they are not merely
-copied folders that the router cannot see.
+Re-run the same command whenever you want to apply the current `main`.
+VibeTether treats a compatible existing setup as an upgrade, preserves
+project-owned truth and routing files, and refuses unsafe Skill overwrites.
 
 Using Codex only? Use the same reviewed setup with `--agent codex`:
 
@@ -66,8 +56,8 @@ npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/r
 
 It explains each finite choice, recommends a safe default, and asks you to supply
 the project goal and success evidence instead of letting the agent invent them.
-See the [installation guide](docs/installation.md) for smaller profiles, previews,
-updates, and uninstall.
+See the [installation guide](docs/installation.md) for pinned releases, recovery,
+smaller profiles, previews, and uninstall.
 
 ## Why I built this
 
@@ -205,7 +195,7 @@ generated capability board, canonical Intent metadata, or runtime route state.
 project. A new installation starts with an empty list. You can manage it without
 learning its format—just talk to the Agent.
 
-### 1. Ask the Agent to search
+### Ask the Agent to configure it
 
 Copy this into Codex or Claude:
 
@@ -213,46 +203,53 @@ Copy this into Codex or Claude:
 Search this repository for candidate truth and specification documents, including
 instructions, product requirements, architecture, UI, testing, operations, and
 release documents. Inspect their contents. For each candidate, explain its role,
-scope, authority evidence, and conflicts. Add safe findings only as candidates.
-Do not activate any source until I confirm it one at a time.
+scope, authority evidence, and conflicts. Add safe findings only under
+`Candidates awaiting confirmation` in `.vibetether/TRUTH.md`. Do not activate or
+use any source until I confirm its exact path, role, scope, and any supersession.
+Show me the candidate diff and ask me to confirm candidates one at a time.
 ```
 
 The Agent may update the candidate list, but candidates remain non-authoritative
 and cannot govern implementation yet.
 
-### 2. Confirm one candidate
-
-After reviewing the Agent's explanation, confirm the document you trust:
+After reviewing the explanation, confirm the document you trust:
 
 ```text
-Yes. Activate `docs/product/approved-prd.md` as `product-direction` truth for
-scope `.`. Update `.vibetether/TRUTH.md`, show me the diff, and tell me when the
-Agent will reread this source.
+I confirm `docs/product/approved-prd.md` as `product-direction` truth for scope
+`.`. Move it from `Candidates awaiting confirmation` to
+`Confirmed project truth`, show me the diff, explain when the Agent will reread
+it, and run:
+`node .vibetether/bin/vibetether.mjs doctor --project . --boundary ordinary --json`
 ```
 
-Already know the file but want it reviewed first? Say:
+### Configure it manually
 
-```text
-Add `docs/product/approved-prd.md` as a candidate product-direction source. Do
-not activate or use it for implementation until I confirm it.
-```
-
-### 3. Verify
-
-Ask the Agent to validate the result:
-
-```text
-Run the project's VibeTether doctor check. If the truth map is invalid or a
-confirmed source is missing, explain the exact problem and propose a safe fix.
-```
-
-Prefer manual editing? Add the candidate under `## Candidates awaiting
-confirmation` in `.vibetether/TRUTH.md`, then ask the Agent to review it:
+Edit `.vibetether/TRUTH.md` directly. First add the proposal to the candidate
+section:
 
 ```markdown
+## Candidates awaiting confirmation
+
 - [ ] `docs/product/approved-prd.md`
   - role: `product-direction`
   - scope: `.`
+```
+
+After you review the file and decide it should govern the project, move it to the
+confirmed section and check it:
+
+```markdown
+## Confirmed project truth
+
+- [x] `docs/product/approved-prd.md`
+  - role: `product-direction`
+  - scope: `.`
+```
+
+That manual move is your confirmation. Validate the result with:
+
+```sh
+node .vibetether/bin/vibetether.mjs doctor --project . --boundary ordinary --json
 ```
 
 Documents created during a planning conversation follow the same candidate-first

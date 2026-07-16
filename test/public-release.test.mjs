@@ -31,15 +31,20 @@ test('README opens with the user problem and puts the latest install before expl
   assert.doesNotMatch(readme, /<github-owner>|your-username|OWNER\/vibetether/i);
 });
 
-test('README keeps latest installation and adds a version-pinned update path', async () => {
-  const readme = await text('README.md');
+test('README presents the current-main command as both first install and upgrade', async () => {
+  const readme = (await text('README.md')).replace(/\r\n/g, '\n');
+  const start = readme.indexOf('## One-command setup');
+  assert.notEqual(start, -1);
+  const setup = readme.slice(start, readme.indexOf('\n## ', start + 4));
   const latestInstall = `${latestCodeload} init --project . --agent both --profile extended --bundle web --bundle production --yes`;
-  const pinnedUpdate = `${pinnedCodeload} init --project . --agent both --profile extended --bundle web --bundle production --yes`;
-  assert.match(readme, new RegExp(latestInstall.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.match(readme, new RegExp(pinnedUpdate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.match(readme, /latest|current `main`/i);
-  assert.match(readme, /existing installation|update|upgrade/i);
-  assert.match(readme, /moving.*main.*cache|cache.*moving.*main/is);
+  assert.match(setup, new RegExp(latestInstall.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(setup, /first install.*upgrade|install or upgrade/is);
+  assert.match(setup, /current `main`/i);
+  assert.match(setup, /preserv|refus|safe/i);
+  assert.match(setup, /pinned release|recovery/i);
+  assert.doesNotMatch(setup, /refs\/tags\/v0\.6\.0/);
+  assert.doesNotMatch(setup, /npm may cache|moving.*main.*cache|cache.*moving.*main/is);
+  assert.doesNotMatch(setup, /reviewed motion set|eight official `gsap-\*`/i);
 });
 
 test('README makes a strong but honest long-task claim', async () => {
@@ -151,13 +156,17 @@ test('README gives beginners a copy-paste project-truth quickstart', async () =>
   assert.notEqual(start, -1);
   const tutorial = readme.slice(start, readme.indexOf('\n## ', start + 4));
   assert.doesNotMatch(readme, /## Add project truth:/);
-  assert.match(tutorial, /1\. Ask the Agent to search/i);
-  assert.match(tutorial, /2\. Confirm one candidate/i);
-  assert.match(tutorial, /3\. Verify/i);
+  const agent = tutorial.indexOf('### Ask the Agent to configure it');
+  const manual = tutorial.indexOf('### Configure it manually');
+  assert.ok(agent > -1, 'Project truth should provide an Agent-managed path');
+  assert.ok(manual > agent, 'The manual path should follow the Agent-managed path');
   assert.match(tutorial, /do not activate.*confirm/is);
   assert.match(tutorial, /role.*scope.*conflict/is);
   assert.match(tutorial, /show me the diff/i);
-  assert.match(tutorial, /VibeTether doctor check/i);
+  assert.match(tutorial, /\.vibetether\/TRUTH\.md/);
+  assert.match(tutorial, /Candidates awaiting confirmation/);
+  assert.match(tutorial, /Confirmed project truth/);
+  assert.match(tutorial, /doctor --project \. --boundary ordinary --json/);
   assert.match(tutorial, /move|supersede|remove/i);
 });
 
