@@ -11,6 +11,9 @@ import {
 import { resolveCapabilityRequest } from './capabilities.mjs';
 import { CliError } from './errors.mjs';
 import {
+  captureExecutionSnapshot,
+} from './execution-snapshot.mjs';
+import {
   readTextIfPresent,
   rejectSymlinkPath,
   resolveInside,
@@ -180,6 +183,7 @@ function formatHuman(state) {
     `VibeTether route ${state.status}: ${state.phase} / ${state.capability}`,
     `Recommended: ${state.recommended_skill ?? 'built-in fallback'}`,
     `Selected: ${state.selected_skill} [${state.selection_source}]`,
+    `Execution root: ${state.execution_start?.root ?? 'not recorded'}`,
     `Signals: ${(state.signals ?? []).join(', ') || 'none'}`,
     `Required outputs: ${(state.expected_outputs ?? []).join(', ') || 'none'}`,
     `Exit evidence: ${(state.exit_evidence ?? []).join(' ') || 'none'}`,
@@ -217,9 +221,26 @@ export async function startRoute(options) {
       && typeof prior.route_instance_id === 'string'
     ? prior.route_instance_id
     : randomUUID();
+  let executionStart;
+  if (sameActiveRoute && prior.execution_start) {
+    if (options.executionRoot) {
+      const requested = await captureExecutionSnapshot(root, options.executionRoot);
+      if (requested.root !== prior.execution_start.root) {
+        throw new CliError('An active route cannot switch to a different execution root.', 3);
+      }
+    }
+    executionStart = prior.execution_start;
+  } else {
+    try {
+      executionStart = await captureExecutionSnapshot(root, options.executionRoot);
+    } catch (error) {
+      throw new CliError(error.message, 3);
+    }
+  }
   const state = {
     schema_version: 1,
     route_instance_id: routeInstanceId,
+    execution_start: executionStart,
     agent: options.agent,
     phase: resolved.result.phase,
     capability: resolved.result.capability,
@@ -339,6 +360,10 @@ export async function completeRoute(options) {
     status: 'satisfied',
     completion_evidence: evidence,
     artifacts: await artifactPaths(root, options.artifacts),
+    execution_end: await captureExecutionSnapshot(root, state.execution_start?.root ?? '.')
+      .catch((error) => {
+        throw new CliError(error.message, 3);
+      }),
     updated_at: new Date().toISOString(),
   };
   checkpoint.provider_selection = {
@@ -375,6 +400,10 @@ export async function abandonRoute(options) {
     ...state,
     status: 'abandoned',
     abandonment_reason: reason,
+    execution_end: await captureExecutionSnapshot(root, state.execution_start?.root ?? '.')
+      .catch((error) => {
+        throw new CliError(error.message, 3);
+      }),
     updated_at: new Date().toISOString(),
   };
   checkpoint.provider_selection = {

@@ -165,6 +165,7 @@ assert.equal(route.execution_start.git.available, true);
 assert.equal(route.execution_start.git.worktree_root, 'worktree');
 assert.match(route.execution_start.git.head, /^[a-f0-9]{40}$/);
 assert.match(route.execution_start.git.status_sha256, /^[a-f0-9]{64}$/);
+assert.match(route.execution_start.git.worktree_sha256, /^[a-f0-9]{64}$/);
 ```
 
 Also assert external, symlinked, missing, and file execution roots fail before either control file changes, while a non-Git directory records `git.available: false`.
@@ -189,7 +190,10 @@ git -C <root> rev-parse --verify HEAD
 git -C <root> status --porcelain=v1 -z --untracked-files=all
 ```
 
-Hash status bytes with SHA-256. Treat Git-not-found and not-a-repository as `available: false`; propagate other safety errors.
+Hash status bytes with SHA-256, then hash the bytes of every changed and
+untracked path into a separate working-tree digest so repeated `M` status does
+not hide later content changes. Treat Git-not-found and not-a-repository as
+`available: false`; propagate other safety errors.
 
 - [ ] **Step 4: Capture start and exit snapshots**
 

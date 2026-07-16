@@ -61,6 +61,7 @@ Customize options:
 
 Route start options:
   --project PATH                    Project directory (default: current directory)
+  --execution-root PATH             Actual project-contained execution directory
   --phase PHASE                     Resolve one lifecycle phase
   --capability ID                   Resolve one capability
   --signal SIGNAL                   Add an observable routing signal (repeatable)
@@ -249,6 +250,7 @@ function parseRoute(args) {
   const options = {
     action,
     project: process.cwd(),
+    executionRoot: null,
     phase: null,
     capability: null,
     signals: [],
@@ -267,6 +269,7 @@ function parseRoute(args) {
     else if (flag === '--json') options.json = true;
     else if (flag === '--help' || flag === '-h') return { help: true };
     else if (action === 'start' && flag === '--phase') options.phase = valueAfter(args, index++, flag);
+    else if (action === 'start' && flag === '--execution-root') options.executionRoot = valueAfter(args, index++, flag);
     else if (action === 'start' && flag === '--capability') options.capability = valueAfter(args, index++, flag);
     else if (action === 'start' && flag === '--signal') options.signals.push(valueAfter(args, index++, flag));
     else if (action === 'start' && flag === '--agent') options.agent = valueAfter(args, index++, flag);

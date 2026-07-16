@@ -16,6 +16,11 @@ import { loadEffectiveProjectRoutes } from './project-routes.mjs';
 import { ROUTE_HANDSHAKE_PATH } from './route-handshake.mjs';
 import { inspectSkillRecovery } from './skill-upgrade-recovery.mjs';
 import { parseTruthMap, validateConfirmedTruth } from './truth-map.mjs';
+import {
+  captureExecutionSnapshot,
+  executionSnapshotsMatch,
+  validExecutionSnapshot,
+} from './execution-snapshot.mjs';
 
 const COMPLETION_PHASES = new Set(['REVIEW', 'SHIP']);
 const COMPLETION_BOUNDARIES = new Set(['completion', 'handoff', 'merge', 'deployment', 'release', 'publication']);
@@ -237,6 +242,7 @@ function controlPlaneSummary(issues, warnings) {
     intent: ['intent'],
     truth: ['truth', 'source', 'authority'],
     state: ['checkpoint'],
+    execution: ['execution'],
     routing: ['route', 'capability', 'project-routes'],
     experience: ['experience'],
     providers: ['provider', 'catalog', 'license'],
@@ -401,6 +407,8 @@ async function readRouteHandshake(root, issues) {
       && typeof value.capability === 'string'
       && Array.isArray(value.signals)
       && typeof value.selected_skill === 'string'
+      && (value.execution_start === undefined || validExecutionSnapshot(value.execution_start))
+      && (value.execution_end === undefined || validExecutionSnapshot(value.execution_end))
       && ['active', 'satisfied', 'abandoned'].includes(value.status);
     if (!valid) throw new Error('invalid handshake');
     return value;
@@ -460,6 +468,41 @@ function validateTruthReconciliation(checkpoint, handshake, atCompletion, issues
     issues.push(issue(
       'stale-truth-reconciliation',
       'Truth reconciliation belongs to a different route instance.',
+    ));
+  }
+}
+
+async function validateExecutionControlState(root, handshake, atCompletion, issues, warnings) {
+  if (!handshake) return;
+  if (!handshake.execution_start) {
+    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
+      'execution-snapshot-not-established',
+      'Legacy route has no execution-root snapshot; start a fresh route from the actual execution root.',
+    ));
+    return;
+  }
+  if (handshake.status === 'active') return;
+  if (!handshake.execution_end) {
+    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
+      'execution-exit-not-established',
+      'Exited route has no completion execution snapshot.',
+    ));
+    return;
+  }
+  let current;
+  try {
+    current = await captureExecutionSnapshot(root, handshake.execution_end.root);
+  } catch {
+    issues.push(issue(
+      'invalid-execution-root',
+      'The recorded execution root can no longer be inspected safely.',
+    ));
+    return;
+  }
+  if (!executionSnapshotsMatch(handshake.execution_end, current)) {
+    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
+      'stale-execution-snapshot',
+      'Git worktree, HEAD, branch, or working-tree state changed after route completion.',
     ));
   }
 }
@@ -944,6 +987,13 @@ export async function inspectProject(options) {
       const handshake = await readRouteHandshake(root, issues);
       validateTruthReconciliation(
         checkpointState,
+        handshake,
+        completionLike(checkpointState, boundary),
+        issues,
+        warnings,
+      );
+      await validateExecutionControlState(
+        root,
         handshake,
         completionLike(checkpointState, boundary),
         issues,

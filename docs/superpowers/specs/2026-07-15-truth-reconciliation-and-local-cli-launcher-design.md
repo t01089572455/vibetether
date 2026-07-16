@@ -124,7 +124,9 @@ At route start and route completion or abandonment, VibeTether records:
 - whether Git metadata is available;
 - the Git worktree root, relative to the project;
 - the current `HEAD`, when one exists;
-- a SHA-256 digest of `git status --porcelain=v1 -z --untracked-files=all`.
+- a SHA-256 digest of `git status --porcelain=v1 -z --untracked-files=all`;
+- a SHA-256 working-tree digest that also hashes the bytes of changed and
+  untracked paths without persisting their contents.
 
 Doctor rechecks the completed snapshot. A changed root, worktree, `HEAD`, or
 status digest is attention during ordinary work and an error at a completion

@@ -96,6 +96,8 @@ test('route starts a bounded active handshake with live experience metadata', as
   assert.equal(state.capability, 'planning');
   assert.equal(state.agent, 'codex');
   assert.equal(state.route_instance_id, output.route_instance_id);
+  assert.equal(output.execution_start.root, '.');
+  assert.equal(output.execution_start.git.available, false);
   for (const forbidden of ['reasoning', 'chain_of_thought', 'private_reasoning', 'raw_output']) {
     assert.equal(Object.hasOwn(state, forbidden), false);
   }
