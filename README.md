@@ -28,7 +28,7 @@ Copy and paste this inside the project you want to control. Use it for a
 **first install** or a **compatible upgrade**. It follows the current `main`:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main?v=0.6.1 vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+npx --yes --prefer-online --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
 ```
 
 That is the **full reviewed setup**: VibeTether for Codex and Claude Code,
@@ -37,21 +37,21 @@ specialists. The reliable Codeload form avoids npm's Git/SSH package path.
 It does not install a global `vibetether` executable. Initialization creates the
 project-local launcher used by the shorter commands below.
 
-Re-run the command shown in the current README to upgrade a compatible project.
-The `?v=0.6.1` suffix refreshes npm's cache key while the archive still follows
-`main`; it is not a version pin. VibeTether preserves project-owned truth and
-routing files and refuses unsafe Skill overwrites.
+Re-run the same command to upgrade a compatible project. `--prefer-online` asks
+npm to revalidate cached package data while the stable Codeload URL continues
+to follow `main`. VibeTether preserves project-owned truth and routing files and
+refuses unsafe Skill overwrites.
 
 Using Codex only? Use the same reviewed setup with `--agent codex`:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main?v=0.6.1 vibetether init --project . --agent codex --profile extended --bundle web --bundle production --yes
+npx --yes --prefer-online --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent codex --profile extended --bundle web --bundle production --yes
 ```
 
 Prefer prompts over flags? Run the guided setup:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main?v=0.6.1 vibetether init --project .
+npx --yes --prefer-online --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project .
 ```
 
 It explains each finite choice, recommends a safe default, and asks you to supply

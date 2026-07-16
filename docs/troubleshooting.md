@@ -46,11 +46,10 @@ acquisition failure that happens before its executable starts.
 `curl -I https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.1`
 tests package acquisition separately from later provider Git access.
 
-If `vibetether --version` unexpectedly reports an older release, check whether
-the command omitted the current README's cache key
-(`refs/heads/main?v=0.6.1`). npm can reuse a cached package for the bare moving
-URL even with `--prefer-online` or `--force`. Copy the current README command or
-switch to the fixed release tag above, then verify the version before `init`.
+If `vibetether --version` unexpectedly reports an older release, use the
+current README command with `--prefer-online` so npm revalidates cached package
+data. If an exact release is required, switch to the fixed release tag above,
+then verify the version before `init`.
 
 ## A provider fetch reports TLS or an unexpected EOF
 

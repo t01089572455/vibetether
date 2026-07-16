@@ -7,9 +7,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const packageMetadata = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
-const bareMainCodeload = 'npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether';
-const latestCodeload = `npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main?v=${packageMetadata.version} vibetether`;
+const latestCodeload = 'npx --yes --prefer-online --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether';
 const pinnedCodeload = 'npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.1 vibetether';
 const publicCliDocs = [
   'README.md',
@@ -49,18 +47,18 @@ test('README presents the current-main command as both first install and upgrade
   assert.doesNotMatch(setup, /reviewed motion set|eight official `gsap-\*`/i);
 });
 
-test('public moving-main commands use the package-version cache key', async () => {
+test('public moving-main commands stay release-number-free and request online cache checks', async () => {
   for (const file of ['README.md', 'docs/installation.md']) {
     const document = await text(file);
     assert.match(
       document,
       new RegExp(latestCodeload.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
-      `${file} should publish the current package-version cache key`,
+      `${file} should publish the timeless prefer-online moving-main command`,
     );
     assert.doesNotMatch(
       document,
-      new RegExp(bareMainCodeload.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
-      `${file} must not publish npm's stale bare moving-main package URL`,
+      /refs\/heads\/main\?v=/,
+      `${file} must not couple the moving-main command to a release number`,
     );
   }
 });
