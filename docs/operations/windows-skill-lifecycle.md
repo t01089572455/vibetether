@@ -24,8 +24,8 @@ after its complete resources are in place.
 Preview and then apply the same initialization profile already used by the project:
 
 ```powershell
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.1 vibetether init --project . --agent both --profile standard --dry-run
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.1 vibetether init --project . --agent both --profile standard --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.2 vibetether init --project . --agent both --profile standard --dry-run
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.2 vibetether init --project . --agent both --profile standard --yes
 ```
 
 Keep the explicit Codeload tarball `--package=https://...tar.gz` form on Windows. It does not require a local Git client or SSH. The shorter npm `github:` shorthand or a `git+https` package spec can exit with code 128 before VibeTether starts.
@@ -35,8 +35,8 @@ Keep the explicit Codeload tarball `--package=https://...tar.gz` form on Windows
 Always inspect the removal plan first:
 
 ```powershell
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.1 vibetether uninstall --project . --dry-run
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.1 vibetether uninstall --project . --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.2 vibetether uninstall --project . --dry-run
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.2 vibetether uninstall --project . --yes
 ```
 
 The plan should name only VibeTether-managed instruction blocks, unchanged managed Skills, generated routing artifacts, and owned provider material. Intent, runtime checkpoint, first-change backups, pre-existing Skills, and user documents are preserved.

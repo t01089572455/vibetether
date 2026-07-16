@@ -5,17 +5,19 @@
 Run this in the project VibeTether should control:
 
 ```sh
-npx --yes --prefer-online --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main?v=0.6.2 vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
 ```
 
 The Codeload tarball is the primary acquisition path. It downloads the public
 package over HTTPS without asking npm to invoke Git or SSH. Do not use the
 shorter `github:t01089572455/vibetether` form as the primary path; on some npm
 and Windows Git combinations it exits 128 before VibeTether starts.
-This command follows the current `main`. `--prefer-online` tells npm to force a
-staleness check for cached package data, so the URL does not need a release
-number that must be edited after every release. Use the version-pinned update
-command below when the exact target version matters.
+This command follows the current `main`. The `?v=0.6.2` suffix is a
+release-scoped npm cache key, not a source pin: Codeload still resolves `main`.
+Copy the current README command for a later release; without a changed key, npm
+may reuse an older tarball or execution environment even with `--prefer-online`
+or `--force`. Use the version-pinned update command below when the exact target
+version matters.
 
 The outer `npx --yes` lets npm acquire the package. VibeTether's `--yes` is the
 final flag and accepts the fully specified project plan. They answer different
@@ -36,7 +38,7 @@ testing or recovery control, not ordinary project configuration.
 For a beginner-friendly setup, omit the trailing options:
 
 ```sh
-npx --yes --prefer-online --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main?v=0.6.2 vibetether init --project .
 ```
 
 Finite questions use explained numbered choices and a recommendation. Goal and
@@ -72,14 +74,14 @@ Optional bundles:
 An offline-first two-stage installation is safe:
 
 ```sh
-npx --yes --prefer-online --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile core --no-auto-bundles --yes
-npx --yes --prefer-online --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main?v=0.6.2 vibetether init --project . --agent both --profile core --no-auto-bundles --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main?v=0.6.2 vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
 ```
 
 ## Preview and inspect
 
 ```sh
-npx --yes --prefer-online --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile standard --dry-run
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main?v=0.6.2 vibetether init --project . --agent both --profile standard --dry-run
 node .vibetether/bin/vibetether.mjs doctor --project . --boundary ordinary --json
 node .vibetether/bin/vibetether.mjs capabilities --project .
 ```
@@ -107,7 +109,7 @@ customized installed Skill.
 Choose the target release explicitly and rerun `init`:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.1 vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.2 vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
 ```
 
 The existing installation makes this an update; the versioned release tag makes
@@ -124,8 +126,8 @@ host and rerun the same command. See the
 Always preview first:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.1 vibetether uninstall --project . --dry-run
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.1 vibetether uninstall --project . --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.2 vibetether uninstall --project . --dry-run
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.2 vibetether uninstall --project . --yes
 ```
 
 Only unchanged VibeTether-owned files and managed blocks are removed. Intent,

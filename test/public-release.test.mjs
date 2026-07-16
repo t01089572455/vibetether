@@ -7,8 +7,10 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const latestCodeload = 'npx --yes --prefer-online --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether';
-const pinnedCodeload = 'npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.1 vibetether';
+const packageMetadata = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+const bareMainCodeload = 'npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether';
+const latestCodeload = `npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main?v=${packageMetadata.version} vibetether`;
+const pinnedCodeload = 'npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.2 vibetether';
 const publicCliDocs = [
   'README.md',
   'docs/installation.md',
@@ -47,20 +49,23 @@ test('README presents the current-main command as both first install and upgrade
   assert.doesNotMatch(setup, /reviewed motion set|eight official `gsap-\*`/i);
 });
 
-test('public moving-main commands stay release-number-free and request online cache checks', async () => {
+test('public moving-main commands use a package-version cache key instead of npm stale execution state', async () => {
   for (const file of ['README.md', 'docs/installation.md']) {
     const document = await text(file);
     assert.match(
       document,
       new RegExp(latestCodeload.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
-      `${file} should publish the timeless prefer-online moving-main command`,
+      `${file} should publish the current package-version cache key`,
     );
     assert.doesNotMatch(
       document,
-      /refs\/heads\/main\?v=/,
-      `${file} must not couple the moving-main command to a release number`,
+      new RegExp(bareMainCodeload.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+      `${file} must not publish npm's stale bare moving-main package URL`,
     );
   }
+  const installation = await text('docs/installation.md');
+  assert.match(installation, /release-scoped npm cache key/i);
+  assert.match(installation, /older tarball.*prefer-online.*force|prefer-online.*force.*older tarball/is);
 });
 
 test('README makes a strong but honest long-task claim', async () => {
@@ -386,7 +391,7 @@ test('package metadata points to the public repository', async () => {
   assert.equal(pkg.repository.url, 'git+https://github.com/t01089572455/vibetether.git');
   assert.equal(pkg.homepage, 'https://github.com/t01089572455/vibetether#readme');
   assert.equal(pkg.bugs.url, 'https://github.com/t01089572455/vibetether/issues');
-  assert.equal(pkg.version, '0.6.1');
+  assert.equal(pkg.version, '0.6.2');
   assert.ok(evalReadme.includes(`The current \`${pkg.version}\` package`));
   for (const entry of [
     'docs/operations',
@@ -484,5 +489,5 @@ test('release history reproduces every registered canonical fingerprint', () => 
     encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /release compatibility: valid \(10 historical identities\)/i);
+  assert.match(result.stdout, /release compatibility: valid \(11 historical identities\)/i);
 });

@@ -19,8 +19,8 @@ experience_index: .vibetether/experience-index.yaml
 cli:
   launcher: .vibetether/bin/vibetether.mjs
   launcher_sha256: 64-character managed fingerprint
-  package: https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.1
-  expected_version: 0.6.1
+  package: https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.2
+  expected_version: 0.6.2
 
 sources: # compatibility-only while older releases remain rollback-readable
   always:
