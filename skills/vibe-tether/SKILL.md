@@ -19,19 +19,26 @@ Do not replace the coding agent's implementation ability. Control direction, aut
 4. At task entry and every phase transition or re-entry boundary, start a stateful route:
 
    ```bash
-   vibetether route --project . --phase PLAN --capability planning --signal multi-step-change --agent codex
+   node .vibetether/bin/vibetether.mjs route --project . --execution-root . --phase PLAN --capability planning --signal multi-step-change --agent codex
    ```
 
 5. Treat the route as advice: invoke the selected installed Skill, choose an available alternative only with a material reason, or use the declared built-in fallback.
 6. Before advancing, record the disposition with bounded evidence:
 
    ```bash
-   vibetether route complete --project . --evidence "The approved plan maps every slice to a fresh check."
+   node .vibetether/bin/vibetether.mjs route complete --project . \
+     --evidence "The approved plan maps every slice to a fresh check." \
+     --truth-decision no-material-change \
+     --truth-reason "The route produced planning evidence without changing confirmed authority."
    # Or, when the route cannot be used:
-   vibetether route abandon --project . --reason "The selected provider is incompatible with this project."
+   node .vibetether/bin/vibetether.mjs route abandon --project . \
+     --reason "The selected provider is incompatible with this project." \
+     --truth-decision no-material-change \
+     --truth-reason "Abandoning the method did not change confirmed project authority."
    ```
 
-7. Record the selected path and material reason in `provider_selection`; then checkpoint the result and run the applicable evidence gate.
+7. If confirmed authority may have changed, close the route without the inline decision, then run `truth reconcile` with `candidate-pending`, `applied`, or `declined`. Reconciliation never edits `TRUTH.md` or bypasses user confirmation.
+8. Record the selected path and material reason in `provider_selection`; then checkpoint the result and run the applicable evidence gate. Before a completion-like boundary, run the local launcher with `doctor --boundary <BOUNDARY>`.
 
 If no project manifest exists, run `vibetether init` or create one using [project-manifest.md](references/project-manifest.md) before long-running product work.
 
@@ -45,11 +52,15 @@ Treat the installed artifacts as one control plane, not a loose router:
 - `project.yaml` routes the control artifacts without duplicating their prose;
 - `capabilities.yaml` recommends methods and providers;
 - `state/current.yaml` makes the current phase and slice resumable;
+- `state/route-handshake.yaml` identifies the current route instance and actual execution root or Git worktree;
 - `experience-index.yaml` recalls workflows that have actually succeeded.
+- `bin/vibetether.mjs` gives the project one versioned CLI entry for route, reconciliation, and doctor commands.
 
 On a fresh install, do not scan repository documents into active truth. A user may edit `TRUTH.md` directly or ask the Agent to find candidates. Candidates are non-authoritative and must never guide implementation. The Agent may record a discoverable candidate with its role, scope, and reason, but active additions, removals, role changes, scope changes, and supersession require user confirmation. A document generated during an approved discussion is still a candidate until separately confirmed. A later command such as "continue with the new direction" does not silently activate the file; activation needs explicit approval of its governing path, role, scope, and any supersession, without requiring a magic phrase.
 
 At task entry, read the host instructions, manifest, truth map, intent, checkpoint, then only the confirmed sources applicable to the active scope. At phase, goal, risk, authority, source, compaction, resume, handoff, merge, deployment, release, or publication boundaries, perform a full re-anchor. For an unchanged low-risk slice, compare known fingerprints and reread only affected sources; do not reload the whole corpus.
+
+Keep durable authority and transient execution evidence separate. Product rules, approved specifications, and ADRs belong in confirmed truth. The current Git worktree, branch, HEAD, dirty-content fingerprint, route instance, and exit evidence belong in the runtime handshake and checkpoint. Pass the real project-contained execution directory with `--execution-root` when work occurs in a nested repository or worktree.
 
 If confirmed truth conflicts with applicable experience, stop the affected action, explain the conflict, recommend which durable source should change, and ask the user. Safety policy remains non-overridable.
 
@@ -59,7 +70,7 @@ Read [project-truth.md](references/project-truth.md) before finding, proposing, 
 
 ## Project Bootstrap and Proven Path Recall
 
-When project direction is unresolved, route to `project-bootstrap`; do not start product implementation from a directory name, package metadata, or agent preference. In an interactive terminal, use guided `vibetether init` or `vibetether bootstrap`. In automation, require explicit goal and success evidence or leave the lifecycle at `DISCOVER`.
+When project direction is unresolved, route to `project-bootstrap`; do not start product implementation from a directory name, package metadata, or agent preference. In an interactive terminal, use the documented portable `vibetether init` acquisition command for first setup, then `node .vibetether/bin/vibetether.mjs bootstrap --project .` for later direction work. In automation, require explicit goal and success evidence or leave the lifecycle at `DISCOVER`.
 
 Before repeatable operational work, resolve `proven-path-recall` with current task and environment signals. Read only returned artifacts, not the entire index corpus. A `provisional` result or `requires_revalidation: true` guides investigation but is not known-good until fresh evidence passes. If a matching proven path is not used, record the material applicability reason. Experience is reusable procedure, never authority to override confirmed project truth.
 
@@ -202,7 +213,7 @@ For a deterministic local recommendation, run:
 node .agents/skills/vibe-tether/scripts/resolve-route.mjs --project . --phase PLAN --capability planning --signal multi-step-change --agent codex
 ```
 
-Use `.claude/skills/vibe-tether/scripts/resolve-route.mjs` for Claude projects. The offline script reads the project capability board, live project route overlay, installed project Skills, and experience metadata. `vibetether capabilities --project .` provides the human dashboard; add `--phase`, `--capability`, repeatable `--signal`, `--agent`, and `--json` for a read-only query. Use the stateful `vibetether route` command at phase boundaries so selection and disposition remain machine-inspectable.
+Use `.claude/skills/vibe-tether/scripts/resolve-route.mjs` for Claude projects. The offline script reads the project capability board, live project route overlay, installed project Skills, and experience metadata. `node .vibetether/bin/vibetether.mjs capabilities --project .` provides the human dashboard; add `--phase`, `--capability`, repeatable `--signal`, `--agent`, and `--json` for a read-only query. Use the project-local stateful `route` command at phase boundaries so route-instance identity, actual execution location, selection, and disposition remain machine-inspectable.
 
 VibeTether cannot force a host Agent to reread a Skill after context loss. The managed project instructions make re-entry explicit, and `doctor` detects missing, pending, stale, unavailable, or mismatched route state; reliable behavior still depends on host cooperation.
 
@@ -270,7 +281,7 @@ After every verified user-level or engineering-level success, determine whether 
 
 Use `pending` while candidate activation awaits a user decision. After the decision, use exactly one final disposition: `captured`, `already-encoded`, or `not-reusable`. Record the trigger, reason, and artifact paths in checkpoint `experience_feedback`. Fresh tests, runtime, remote, browser, deployment, or CI evidence proves success; the checkpoint only records the disposition.
 
-Before completion, handoff, the next slice, merge, release, or publication, run `vibetether doctor`. Do not advance while the disposition is `pending`. Never persist credentials, private keys, one-time codes, private reasoning, sensitive tool output, or full transcripts.
+Before completion, handoff, the next slice, merge, deployment, release, or publication, run `node .vibetether/bin/vibetether.mjs doctor --project . --boundary <BOUNDARY>`. Do not advance while Truth reconciliation or experience disposition is pending. Never persist credentials, private keys, one-time codes, private reasoning, sensitive tool output, or full transcripts.
 
 Read [success-capture.md](references/success-capture.md) for first, recovered, changed, repeated, and routine path classification; durable destination routing; deduplication; redaction; and revalidation rules.
 
@@ -319,4 +330,4 @@ Before claiming completion:
 4. Check functional, visual, safety, and release evidence separately.
 5. Record independence limitations honestly.
 6. Run the Success Capture Gate and update the correct durable source for accepted decisions, reusable failures, and first, recovered, or changed Proven Paths.
-7. Write `experience_feedback`, run `vibetether doctor`, and record the exact verdict.
+7. Reconcile the exited route with confirmed truth, write `experience_feedback`, run the project-local CLI with the actual completion boundary, and record the exact doctor verdict.

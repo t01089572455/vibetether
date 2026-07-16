@@ -46,9 +46,11 @@ test('managed instructions re-enter the stateful router at every long-task bound
   ]) {
     assert.match(body, new RegExp(phrase.replace(' ', '.*')), phrase);
   }
-  assert.match(body, /vibetether route --project \. --phase/);
+  assert.match(body, /vibetether\.mjs route --project \. --execution-root/);
   assert.match(body, /route complete/);
   assert.match(body, /route abandon/);
+  assert.match(body, /truth reconcile/);
+  assert.match(body, /doctor --project \. --boundary/);
   assert.match(body, /routes\.local\.yaml/);
   assert.match(body, /cannot weaken.*authority.*readiness.*evidence.*high-risk.*destructive.*permission.*release/s);
 });

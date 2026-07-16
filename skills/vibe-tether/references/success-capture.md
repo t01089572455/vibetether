@@ -86,7 +86,7 @@ Use `pending` while the candidate is awaiting an activation decision. Valid fina
 - `already-encoded`: unchanged repeated path; at least one existing enforcing artifact exists;
 - `not-reusable`: routine non-path; a reason exists and artifacts stay empty.
 
-If the user declines activation, use `not-reusable` with the decision reason and do not index the candidate. A completion-like checkpoint must pass `vibetether doctor` before the agent claims completion.
+If the user declines activation, use `not-reusable` with the decision reason and do not index the candidate. A completion-like checkpoint must pass `node .vibetether/bin/vibetether.mjs doctor --project . --boundary completion` before the agent claims completion.
 
 ## Security and Redaction
 
@@ -111,7 +111,7 @@ If a safe record cannot be written without exposing a secret, record the method 
 6. Mark a routine result `not-reusable`; create nothing new.
 7. Redact sensitive data and verify every recorded artifact exists.
 8. Ask the user to activate or decline the candidate; only confirmed activation updates the experience index.
-9. Update `experience_feedback` and run `vibetether doctor` at the completion boundary.
+9. Update `experience_feedback` and run the project-local CLI with the actual doctor boundary.
 10. On the next similar task, read the applicable Proven Path before inventing a new route.
 
 ## Rationalization Counters

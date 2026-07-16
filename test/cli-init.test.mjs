@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -66,8 +67,10 @@ test('init installs Codex and Claude project Skills and preserves user instructi
   const result = runCli(['init', '--project', target, '--agent', 'both', '--profile', 'core', '--yes']);
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /Doctor baseline: healthy/i);
   assert.equal(await exists(path.join(target, '.agents', 'skills', 'vibe-tether', 'SKILL.md')), true);
   assert.equal(await exists(path.join(target, '.claude', 'skills', 'vibe-tether', 'SKILL.md')), true);
+  assert.equal(await exists(path.join(target, '.vibetether', 'bin', 'vibetether.mjs')), true);
   assert.equal(await exists(path.join(target, 'AGENTS.md.bak')), true);
 
   const agents = await readFile(path.join(target, 'AGENTS.md'), 'utf8');
@@ -81,9 +84,21 @@ test('init installs Codex and Claude project Skills and preserves user instructi
     assert.match(instructions, /after every verified[\s\S]*success/i);
     assert.match(instructions, /first-proven-path/i);
     assert.match(instructions, /credentials|private keys|one-time codes/i);
+    assert.match(instructions, /node \.vibetether\/bin\/vibetether\.mjs route/);
+    assert.match(instructions, /--execution-root/);
+    assert.match(instructions, /truth reconcile/);
+    assert.match(instructions, /doctor --project \. --boundary/);
   }
 
   const manifest = YAML.parse(await readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'));
+  const launcher = await readFile(path.join(target, '.vibetether', 'bin', 'vibetether.mjs'), 'utf8');
+  assert.equal(manifest.cli.launcher, '.vibetether/bin/vibetether.mjs');
+  assert.equal(
+    manifest.cli.launcher_sha256,
+    createHash('sha256').update(launcher).digest('hex'),
+  );
+  assert.match(manifest.cli.package, /codeload\.github\.com\/t01089572455\/vibetether\/tar\.gz\/refs\/tags\/v\d+\.\d+\.\d+$/);
+  assert.match(manifest.cli.expected_version, /^\d+\.\d+\.\d+$/);
   assert.equal(manifest.experience_index, '.vibetether/experience-index.yaml');
   assert.deepEqual(
     YAML.parse(await readFile(path.join(target, '.vibetether', 'experience-index.yaml'), 'utf8')),
@@ -104,6 +119,7 @@ test('repeated init is byte-for-byte idempotent', async () => {
     readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'),
     readFile(path.join(target, '.vibetether', 'state', 'current.yaml'), 'utf8'),
     readFile(path.join(target, '.vibetether', 'experience-index.yaml'), 'utf8'),
+    readFile(path.join(target, '.vibetether', 'bin', 'vibetether.mjs'), 'utf8'),
   ]);
 
   const second = runCli(args);
@@ -115,10 +131,53 @@ test('repeated init is byte-for-byte idempotent', async () => {
     readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'),
     readFile(path.join(target, '.vibetether', 'state', 'current.yaml'), 'utf8'),
     readFile(path.join(target, '.vibetether', 'experience-index.yaml'), 'utf8'),
+    readFile(path.join(target, '.vibetether', 'bin', 'vibetether.mjs'), 'utf8'),
   ]);
 
   assert.deepEqual(after, before);
   assert.equal(YAML.parse(after[3]).project_state, 'greenfield');
+});
+
+test('init refuses a modified managed local CLI before writing any other project changes', async () => {
+  const target = await project('modified-local-cli');
+  assert.equal(
+    runCli(['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes']).status,
+    0,
+  );
+  const launcherPath = path.join(target, '.vibetether', 'bin', 'vibetether.mjs');
+  const agentsPath = path.join(target, 'AGENTS.md');
+  const agentsBefore = await readFile(agentsPath, 'utf8');
+  const modified = `${await readFile(launcherPath, 'utf8')}\n// local customization\n`;
+  await writeFile(launcherPath, modified, 'utf8');
+
+  const result = runCli([
+    'init', '--project', target, '--agent', 'both', '--profile', 'extended', '--yes',
+  ]);
+
+  assert.equal(result.status, 3, result.stderr || result.stdout);
+  assert.match(result.stderr, /local cli conflict/i);
+  assert.equal(await readFile(launcherPath, 'utf8'), modified);
+  assert.equal(await readFile(agentsPath, 'utf8'), agentsBefore);
+  assert.equal(await exists(path.join(target, 'CLAUDE.md')), false);
+});
+
+test('init migrates a legacy checkpoint without inventing a historical Truth decision', async () => {
+  const target = await project('legacy-truth-reconciliation');
+  const args = ['init', '--project', target, '--agent', 'codex', '--profile', 'core', '--yes'];
+  assert.equal(runCli(args).status, 0);
+  const checkpointPath = path.join(target, '.vibetether', 'state', 'current.yaml');
+  const checkpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
+  delete checkpoint.truth_reconciliation;
+  await writeFile(checkpointPath, YAML.stringify(checkpoint, { lineWidth: 0 }), 'utf8');
+
+  const result = runCli(args);
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const migrated = YAML.parse(await readFile(checkpointPath, 'utf8'));
+  assert.equal(migrated.truth_reconciliation.status, 'unknown');
+  assert.equal(migrated.truth_reconciliation.trigger, 'legacy-upgrade');
+  assert.equal(migrated.truth_reconciliation.route_instance_id, null);
+  assert.match(migrated.truth_reconciliation.reason, /no historical.*invented/i);
 });
 
 test('repeated init byte-preserves a valid non-empty experience index and routes it from the manifest', async () => {

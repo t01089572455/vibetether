@@ -61,15 +61,17 @@ test('the public Skill exposes the VibeTether drift-control contract', async () 
   assert.match(skill, /capabilities\.yaml/);
   assert.match(skill, /resolve-route\.mjs/);
   assert.match(skill, /routes\.local\.yaml/);
-  assert.match(skill, /vibetether route --project \. --phase/i);
+  assert.match(skill, /vibetether\.mjs route --project \. --execution-root \. --phase/i);
   assert.match(skill, /route complete/i);
   assert.match(skill, /route abandon/i);
+  assert.match(skill, /truth reconcile/i);
+  assert.match(skill, /doctor --project \. --boundary/i);
   assert.match(skill, /phase transition/i);
   assert.match(skill, /do not force an optional provider/i);
   assert.match(skill, /first-proven-path/i);
   assert.match(skill, /first verified reusable (workflow|path)[\s\S]*captur/i);
   assert.match(skill, /captured[\s\S]*already-encoded[\s\S]*not-reusable/i);
-  assert.match(skill, /vibetether doctor[\s\S]*pending/i);
+  assert.match(skill, /vibetether\.mjs doctor[\s\S]*pending/i);
   assert.match(skill, /DISCOVER[\s\S]*ALIGN[\s\S]*DESIGN[\s\S]*PLAN[\s\S]*EXECUTE_ONE/);
   assert.match(skill, /smallest verifiable outcome/i);
   assert.match(skill, /including delegated work/i);
@@ -128,7 +130,7 @@ test('the compatibility registry includes the exact public 0.2.1 Skill', () => {
     LEGACY_VIBETETHER_FINGERPRINTS.has('2488d70f4a07bd5df8267c0baa15439f9463868778fd837d2d11134c2209f3df'),
     true,
   );
-  assert.equal(skillInstall.VIBETETHER_RELEASE_COMPATIBILITY?.current?.version, '0.5.0');
+  assert.equal(skillInstall.VIBETETHER_RELEASE_COMPATIBILITY?.current?.version, '0.6.0');
   assert.equal(
     skillInstall.VIBETETHER_RELEASE_COMPATIBILITY.history.some((entry) => (
       entry.version === '0.2.3'
@@ -202,6 +204,10 @@ test('managed host instructions re-enter the complete project control plane', ()
     assert.match(adapter.managedBody, /candidate.*user confirmation/i);
     assert.match(adapter.managedBody, /truth.*experience.*conflict.*ask the user/i);
     assert.match(adapter.managedBody, /low-risk.*autonomously/i);
+    assert.match(adapter.managedBody, /node \.vibetether\/bin\/vibetether\.mjs route/);
+    assert.match(adapter.managedBody, /--execution-root/);
+    assert.match(adapter.managedBody, /truth reconcile/);
+    assert.match(adapter.managedBody, /doctor --project \. --boundary/);
   }
 });
 

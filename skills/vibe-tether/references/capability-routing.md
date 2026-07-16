@@ -18,7 +18,7 @@ The resolver separates `primary`, compatible `overlays`, and ordered `alternativ
 
 ## Project-Owned Routes
 
-`.vibetether/routes.local.yaml` is the user-owned live overlay. Initialization, upgrade, bootstrap, and uninstall do not overwrite, normalize, or delete it. Use `vibetether customize --project .` for guided setup, or edit the strict schema directly.
+`.vibetether/routes.local.yaml` is the user-owned live overlay. Initialization, upgrade, bootstrap, and uninstall do not overwrite, normalize, or delete it. Use `node .vibetether/bin/vibetether.mjs customize --project .` for guided setup, or edit the strict schema directly.
 
 - `primary`: preferred only when at least one declared observable signal matches;
 - `alternative`: selectable without displacing the curated primary;
@@ -31,17 +31,34 @@ The resolver discovers only already-installed Skills under the enabled project-l
 At task entry and every phase transition, reload the manifest, live overlay, applicable truth, checkpoint, and applicable experience. Start one observable phase/capability route:
 
 ```bash
-vibetether route --project . --phase EXECUTE_ONE --capability tdd --signal new-behavior --agent codex
+node .vibetether/bin/vibetether.mjs route --project . --execution-root . --phase EXECUTE_ONE --capability tdd --signal new-behavior --agent codex
 ```
 
 Invoke the selected installed Skill or declared fallback. Before entering another phase, record exactly one disposition:
 
 ```bash
-vibetether route complete --project . --evidence "Observed RED, then focused GREEN."
-vibetether route abandon --project . --reason "Provider unavailable; used the declared fallback."
+node .vibetether/bin/vibetether.mjs route complete --project . \
+  --evidence "Observed RED, then focused GREEN." \
+  --truth-decision no-material-change \
+  --truth-reason "Implementation evidence changed, but confirmed project authority did not."
+node .vibetether/bin/vibetether.mjs route abandon --project . \
+  --reason "Provider unavailable; used the declared fallback." \
+  --truth-decision no-material-change \
+  --truth-reason "Changing the method did not change confirmed project authority."
 ```
 
-The handshake records selection, route source, expected outputs, exit evidence, and bounded disposition evidence. It does not prove semantic correctness. `doctor` detects missing, pending, stale, unavailable, source-missing, ambiguous, and mismatched route state. Automatic phase re-entry therefore depends on a cooperating host Agent following the managed project instructions.
+The handshake records a unique route instance, actual project-contained execution root, Git worktree/HEAD/content fingerprints when available, selection, route source, expected outputs, exit evidence, and bounded disposition evidence. It does not prove semantic correctness. `doctor` detects missing, pending, stale, unavailable, source-missing, ambiguous, execution-drift, launcher-integrity, version, and Truth-reconciliation problems. Automatic phase re-entry therefore depends on a cooperating host Agent following the managed project instructions.
+
+If confirmed authority may have changed, omit the inline Truth decision. After updating `.vibetether/TRUTH.md` through its user-confirmed lifecycle, record one explicit disposition:
+
+```bash
+node .vibetether/bin/vibetether.mjs truth reconcile --project . \
+  --decision candidate-pending \
+  --candidate docs/proposed-direction.md \
+  --reason "The document is awaiting the user's activation decision."
+```
+
+Use `applied` only after the candidate is in the confirmed section, `declined` only after it is in the declined section, and `no-material-change` only when current authority fingerprints still match the route anchor. Candidate paths may be regular files or project directories. Candidate and declined decisions require confirmed authority to remain unchanged; an applied decision may change only its declared confirmed path. Reconcile any additional confirmed-source or Intent change in a separate consequential route. The command validates and records the decision; it never edits the Truth Map.
 
 ## Proven Path Recall
 

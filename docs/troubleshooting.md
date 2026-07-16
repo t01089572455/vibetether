@@ -3,8 +3,33 @@
 Start with:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether doctor --project . --json
+node .vibetether/bin/vibetether.mjs doctor --project . --boundary ordinary --json
 ```
+
+If the project-local launcher is missing or cannot start, use the documented
+Codeload acquisition command to rerun `init`; do not create an unrelated
+launcher by hand.
+
+## Doctor reports a changed launcher or CLI version mismatch
+
+The manifest records the managed launcher fingerprint, versioned package tag,
+and expected release. A byte mismatch is a project conflict. Back up intentional
+customization under another filename, then rerun the canonical `init` command.
+
+A version mismatch means the CLI currently inspecting the project differs from
+the project's recorded baseline. It is attention during ordinary work and a
+blocking issue at completion-like boundaries. Prefer:
+
+```sh
+node .vibetether/bin/vibetether.mjs doctor --project . --boundary completion
+```
+
+If that launcher itself is stale, rerun the canonical update command from the
+installation guide. The launcher still needs Node.js, npm, and network access to
+the pinned Codeload release unless npm already has the package cached.
+If `VIBETETHER_CLI_PACKAGE` is set, it deliberately overrides the recorded
+acquisition source for that process; clear untrusted or accidental values before
+diagnosing ordinary project behavior.
 
 ## npm exits 128 before VibeTether starts
 

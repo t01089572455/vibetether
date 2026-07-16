@@ -84,6 +84,11 @@ protocol. `candidate-pending` is deliberately not a completion disposition.
 only after their declared user-visible truth action; `no-material-change`
 proves the prior snapshot still matches rather than hiding drift.
 
+Those non-unchanged decisions also write the final reconciliation into the route
+handshake and refresh its execution-end snapshot after the visible Truth action.
+This makes later drift relative to the final decision observable, without
+claiming semantic proof that only intended files changed.
+
 Authority snapshots separate the full Truth Map file fingerprint from a
 canonical projection of only the confirmed entries (`path`, `role`, `scope`,
 and order) plus their source-content fingerprints. Candidate-only or
@@ -143,12 +148,16 @@ During `init`, write a VibeTether-owned, zero-dependency Node launcher at:
 ```
 
 It forwards arguments to the documented portable Codeload `npx --yes
---package=... vibetether` form, selecting `npx.cmd` on Windows. Its default
-package is the immutable release tag matching `expected_version`, not the
-moving `main` branch. The launcher accepts `VIBETETHER_CLI_PACKAGE` as an
-explicit override for controlled installations. It is not a global
-installation and does not create `node_modules`, modify a project's package
-manifest, run a background process, or guarantee offline execution.
+--package=... vibetether` form. On Windows it finds npm's `npx-cli.js` and
+executes it with `process.execPath`, avoiding both `npx.cmd` process ambiguity
+and a command shell. Its default package is the versioned release tag matching
+`expected_version`, not the moving `main` branch. The launcher accepts
+`VIBETETHER_CLI_PACKAGE` as an explicit override for controlled installations.
+That environment variable is a trusted testing or recovery boundary and is not
+project authority.
+It is not a global installation and does not create `node_modules`, modify a
+project's package manifest, run a background process, or guarantee offline
+execution.
 
 The manifest records the launcher path, its managed SHA-256, the acquisition
 package, and the expected VibeTether release version. `doctor` compares the
@@ -158,7 +167,7 @@ attention during ordinary execution and an error at a completion boundary.
 Managed `AGENTS.md` and `CLAUDE.md` instructions use:
 
 ```text
-node .vibetether/bin/vibetether.mjs doctor --project . --json
+node .vibetether/bin/vibetether.mjs doctor --project . --boundary <BOUNDARY> --json
 ```
 
 and the same launcher for stateful `route` and reconciliation commands. `init`

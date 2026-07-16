@@ -15,8 +15,17 @@ and Windows Git combinations it exits 128 before VibeTether starts.
 
 The outer `npx --yes` lets npm acquire the package. VibeTether's `--yes` is the
 final flag and accepts the fully specified project plan. They answer different
-questions. `init` does not install a global `vibetether` command, so copy the
-complete portable command in each example below.
+questions. `init` does not install a global `vibetether` command. It writes a
+managed project-local launcher at `.vibetether/bin/vibetether.mjs`, pinned to the
+versioned release tag matching the project's manifest baseline. Use that
+launcher for routine project commands; keep the complete portable command for
+first acquisition, update, and recovery.
+
+The launcher still uses npm/Codeload and therefore is not an offline guarantee.
+It does not add `node_modules`, change `package.json`, or run a background
+process. An explicitly supplied `VIBETETHER_CLI_PACKAGE` environment variable
+overrides the acquisition source for that invocation; treat it as a trusted
+testing or recovery control, not ordinary project configuration.
 
 ## Guided initialization
 
@@ -34,7 +43,7 @@ Before writing or provider fetching, it prints a preview and asks for confirmati
 Use guided discovery again without rebuilding unchanged provider catalogs:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether bootstrap --project .
+node .vibetether/bin/vibetether.mjs bootstrap --project .
 ```
 
 `bootstrap --dry-run` previews Intent Contract changes without writing.
@@ -67,8 +76,8 @@ npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/r
 
 ```sh
 npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile standard --dry-run
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether doctor --project . --json
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether capabilities --project .
+node .vibetether/bin/vibetether.mjs doctor --project . --boundary ordinary --json
+node .vibetether/bin/vibetether.mjs capabilities --project .
 ```
 
 The dry-run writes nothing. Re-running `init` is the supported update and repair
@@ -80,7 +89,10 @@ sources use provider networking.
 Initialization can add a bounded managed block to `AGENTS.md`, `CLAUDE.md`, or
 both; install VibeTether and exposed specialists under the enabled host Skill
 directory; and create the `.vibetether/` intent, blank user-owned `TRUTH.md`, capability board,
-provider lock, checkpoint, and experience index.
+provider lock, checkpoint, experience index, and project-local CLI launcher.
+The manifest records the launcher's path, fingerprint, versioned package tag, and
+expected release version. Initialization finishes with an in-process doctor
+baseline so structural problems are visible immediately.
 
 VibeTether backs up an instruction file before its first managed-block change.
 It does not overwrite text outside its exact markers or replace an unknown or
@@ -89,7 +101,9 @@ customized installed Skill.
 ## Update
 
 Repeat the desired canonical command. Core VibeTether replacement happens before
-provider fetching. On Windows, a host may lock the active Skill. The update is
+provider fetching. An unchanged managed launcher is upgraded atomically; a
+modified or unrelated launcher is preserved and blocks the update before partial
+writes. On Windows, a host may lock the active Skill. The update is
 then recorded as pending; close the host and rerun the same command. See the
 [Windows lifecycle runbook](operations/windows-skill-lifecycle.md).
 

@@ -116,7 +116,9 @@ test('README explains the beginner bootstrap and autonomous control loop', async
   assert.match(readme, /Manage VibeTether your way/i);
   assert.match(readme, /safe to edit|edit directly/i);
   assert.match(readme, /CLI-maintained|generated/i);
-  assert.match(readme, /vibetether doctor --project \. --json/);
+  assert.match(readme, /node \.vibetether\/bin\/vibetether\.mjs doctor --project \. --boundary ordinary --json/);
+  assert.match(readme, /\.vibetether\/bin\/vibetether\.mjs/);
+  assert.match(readme, /\.vibetether\/state\/route-handshake\.yaml/);
 });
 
 test('README teaches project truth control in ordinary language and links the visual control loop', async () => {
@@ -146,7 +148,7 @@ test('README gives beginners a copy-paste project-truth quickstart', async () =>
   assert.match(tutorial, /move|supersede|remove/i);
 });
 
-test('public command documentation keeps the portable CLI runnable after setup', async () => {
+test('public command documentation uses the project-local CLI after portable acquisition', async () => {
   const documents = await Promise.all(publicCliDocs.map(async (file) => [file, await text(file)]));
   for (const [file, document] of documents) {
     assert.doesNotMatch(
@@ -164,6 +166,11 @@ test('public command documentation keeps the portable CLI runnable after setup',
         `${file} must use the reviewed Codeload package form for every npx vibetether command`,
       );
     }
+    assert.match(
+      document,
+      /node \.vibetether\/bin\/vibetether\.mjs/,
+      `${file} should teach the project-local CLI after initialization`,
+    );
   }
 
   const readme = await text('README.md');
@@ -173,19 +180,23 @@ test('public command documentation keeps the portable CLI runnable after setup',
   assert.match(readme, /attempts recovery after the host releases/i);
   assert.match(readme, /behavioral guidance, not a host hook/i);
   assert.match(readme, /does not install a global `vibetether` executable/i);
-  assert.match(readme, /portable commands above when you also want a\s+stateful route record/is);
+  assert.match(readme, /project-local commands above create the stateful route\s+record/is);
   assert.doesNotMatch(readme, /Add project truth in 60 seconds/i);
   assert.doesNotMatch(readme, /Proven workflows do not disappear/i);
 });
 
 test('README exposes route customization and the stateful handshake', async () => {
   const readme = await text('README.md');
-  assert.match(readme, /vibetether customize --project \./);
+  assert.match(readme, /vibetether\.mjs customize --project \./);
   assert.match(readme, /\.vibetether\/routes\.local\.yaml/);
   assert.match(readme, /primary.*alternative.*overlay/is);
-  assert.match(readme, /vibetether route --project \. --phase PLAN --capability planning/);
-  assert.match(readme, /vibetether route complete --project \. --evidence/);
-  assert.match(readme, /vibetether route abandon --project \. --reason/);
+  assert.match(readme, /vibetether\.mjs route --project \. --execution-root \. --phase PLAN --capability planning/);
+  assert.match(readme, /vibetether\.mjs route complete --project \.[\s\S]*--evidence/);
+  assert.match(readme, /vibetether\.mjs route abandon --project \.[\s\S]*--reason/);
+  assert.match(readme, /vibetether\.mjs truth reconcile --project \./);
+  assert.match(readme, /doctor --project \. --boundary completion/);
+  assert.match(readme, /unique route instance/i);
+  assert.match(readme, /Git worktree.*HEAD.*fingerprint/is);
   assert.match(readme, /\.vibetether\/state\/route-handshake\.yaml/);
   assert.match(readme, /only.*(?:route|portable).*command.*(?:writes|run)|(?:route|portable).*command.*only.*(?:writes|run)/is);
   assert.match(readme, /latest route (?:disposition|snapshot).*(?:not|rather than).*history|not.*(?:background|automatic).*history/is);
@@ -224,6 +235,9 @@ test('installation guide separates reliable acquisition, guided setup, profiles,
   assert.match(guide, /outer `npx --yes`.*VibeTether's `--yes`/is);
   assert.match(guide, /uninstall --project \. --dry-run/);
   assert.match(guide, /github:.*not.*primary|not use.*github:/is);
+  assert.match(guide, /versioned release tag/i);
+  assert.match(guide, /VIBETETHER_CLI_PACKAGE[\s\S]*trusted[\s\S]*(testing|recovery)/i);
+  assert.doesNotMatch(guide, /immutable release tag/i);
 });
 
 test('routing guide documents automatic re-entry, local extension, and authority limits', async () => {
@@ -290,7 +304,7 @@ test('troubleshooting distinguishes package acquisition, provider TLS, and host 
   assert.match(guide, /verified.*catalog.*without.*network|cached.*catalog/is);
   assert.match(guide, /EPERM|EACCES/);
   assert.match(guide, /first install.*SKILL\.md.*last|SKILL\.md.*last.*first install/is);
-  assert.match(guide, /vibetether doctor/);
+  assert.match(guide, /vibetether(?:\.mjs)? doctor/);
 });
 
 test('the public GitHub publishing runbook preserves the first proven path without credentials', async () => {
@@ -307,10 +321,12 @@ test('the public GitHub publishing runbook preserves the first proven path witho
 
 test('package metadata points to the public repository', async () => {
   const pkg = JSON.parse(await text('package.json'));
+  const evalReadme = await text('evals/README.md');
   assert.equal(pkg.repository.url, 'git+https://github.com/t01089572455/vibetether.git');
   assert.equal(pkg.homepage, 'https://github.com/t01089572455/vibetether#readme');
   assert.equal(pkg.bugs.url, 'https://github.com/t01089572455/vibetether/issues');
-  assert.equal(pkg.version, '0.5.0');
+  assert.equal(pkg.version, '0.6.0');
+  assert.ok(evalReadme.includes(`The current \`${pkg.version}\` package`));
   for (const entry of [
     'docs/operations',
     'docs/installation.md',
@@ -347,6 +363,9 @@ test('the npm tarball contains new routing, recovery, and focused documentation 
     'src/project-routes.mjs',
     'src/customize.mjs',
     'src/route-handshake.mjs',
+    'src/truth-reconciliation.mjs',
+    'src/execution-snapshot.mjs',
+    'src/local-cli.mjs',
     'src/skill-upgrade-recovery.mjs',
     'docs/installation.md',
     'docs/routing.md',
@@ -404,5 +423,5 @@ test('release history reproduces every registered canonical fingerprint', () => 
     encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /release compatibility: valid \(8 historical identities\)/i);
+  assert.match(result.stdout, /release compatibility: valid \(9 historical identities\)/i);
 });

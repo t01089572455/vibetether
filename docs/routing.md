@@ -27,13 +27,13 @@ first prompt or an old conversation summary is still complete.
 Inspect the dashboard:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether capabilities --project .
+node .vibetether/bin/vibetether.mjs capabilities --project .
 ```
 
 Start an inspectable route handshake:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether route --project . --phase PLAN --capability planning --signal multi-step-change --agent codex
+node .vibetether/bin/vibetether.mjs route --project . --execution-root . --phase PLAN --capability planning --signal multi-step-change --agent codex
 ```
 
 The route phase must match the current semantic checkpoint phase in
@@ -46,39 +46,84 @@ selection source, detected signals, required outputs, and exit evidence. An
 alternative can be selected only with a material reason:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether route --project . --phase PLAN --capability planning --signal approved-refactor --select request-refactor-plan --reason "The approved task is specifically a staged refactor."
+node .vibetether/bin/vibetether.mjs route --project . --execution-root . --phase PLAN --capability planning --signal approved-refactor --select request-refactor-plan --reason "The approved task is specifically a staged refactor."
 ```
 
 Close it with bounded evidence and optional safe project-relative artifacts:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether route complete --project . --evidence "The plan has bounded slices and verification commands." --artifact docs/plan.md
+node .vibetether/bin/vibetether.mjs route complete --project . \
+  --evidence "The plan has bounded slices and verification commands." \
+  --artifact docs/plan.md \
+  --truth-decision no-material-change \
+  --truth-reason "The plan changed, but confirmed project authority did not."
 ```
 
 Or abandon it honestly:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether route abandon --project . --reason "A new product decision invalidated the plan."
+node .vibetether/bin/vibetether.mjs route abandon --project . \
+  --reason "The selected method cannot satisfy the approved direction." \
+  --truth-decision no-material-change \
+  --truth-reason "Changing the method did not change confirmed authority."
 ```
 
 The handshake prevents silently entering a different phase while the old route
 is active. It proves selection and disposition, not private reasoning or the
 semantic quality of the work.
 
+If confirmed authority may have changed, omit the inline decision. Move the
+relevant path through the user-confirmed `TRUTH.md` lifecycle, then record one
+matching disposition:
+
+```sh
+node .vibetether/bin/vibetether.mjs truth reconcile --project . \
+  --decision candidate-pending \
+  --candidate docs/proposed-direction.md \
+  --reason "The candidate is waiting for the user's activation decision."
+```
+
+`truth reconcile` accepts `no-material-change`, `candidate-pending`, `applied`,
+or `declined`. It validates authority fingerprints and Truth Map membership; it
+does not edit `TRUTH.md`. Candidate paths may be regular files or project
+directories. Candidate and declined decisions require confirmed authority to
+remain unchanged; `applied` may re-anchor only its declared confirmed path.
+Additional confirmed-source or Intent changes require a separate consequential
+route.
+
+For `candidate-pending`, `applied`, and `declined`, successful reconciliation
+updates the handshake's final Truth disposition and refreshes its execution-end
+snapshot after the visible Truth action. Doctor therefore compares the
+post-decision worktree at later boundaries. The snapshot is integrity evidence,
+not semantic proof that no unrelated change occurred; current tests, review, and
+declared artifacts still own that claim.
+
 ### What the CLI writes—and what it does not
 
-The complete portable `route` command writes the current route snapshot to
+The project-local `route` command writes the current route snapshot to
 `.vibetether/state/route-handshake.yaml` and synchronizes provider selection in
-`.vibetether/state/current.yaml`. `route complete` replaces that snapshot's
-active status with `satisfied` plus bounded evidence and optional safe
-project-relative artifacts; `route abandon` replaces it with `abandoned` and a
-material reason. The file is the latest route disposition, not a background
-history or semantic proof.
+`.vibetether/state/current.yaml`. Every start gets a unique route instance and
+captures the real project-contained execution root. When Git is available, the
+snapshot includes worktree, ref, HEAD, status, and content-sensitive dirty-tree
+fingerprints. `route complete` replaces that snapshot's active status with
+`satisfied` plus bounded evidence and optional safe project-relative artifacts;
+`route abandon` replaces it with `abandoned` and a material reason. The file is
+the latest route disposition, not a background history or semantic proof.
 
-No portable command means no CLI route snapshot. The phase re-entry instructions
+No executed command means no CLI route snapshot. The phase re-entry instructions
 in `AGENTS.md` or `CLAUDE.md` remain behavioral guidance that a cooperating host
 Agent follows; VibeTether cannot secretly run a daemon, force a host to reread a
 file, or claim that every Agent action created a record.
+
+Before a completion-like boundary, pass the actual lifecycle boundary:
+
+```sh
+node .vibetether/bin/vibetether.mjs doctor --project . --boundary handoff --json
+```
+
+Pending Truth reconciliation, execution drift after route exit, and a project
+CLI version mismatch are attention during ordinary work and block applicable
+completion, handoff, merge, deployment, release, or publication boundaries.
 
 ## Automatic phase example
 
@@ -99,7 +144,7 @@ does not score hidden reasoning or claim a probability that a model will comply.
 Run the guided editor after installing a project Skill:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether customize --project .
+node .vibetether/bin/vibetether.mjs customize --project .
 ```
 
 It writes the project-owned `.vibetether/routes.local.yaml` and registers it in

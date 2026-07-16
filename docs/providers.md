@@ -90,5 +90,5 @@ migrate data, change secrets, merge, release, or publish.
 | `.vibetether/providers.lock.yaml` | Repository, commit, fingerprints, licenses, catalog and exposure ownership |
 | `.vibetether/providers/catalog/` | Full local audited inventory for deliberate lookup |
 
-`vibetether capabilities --project .` renders the live human-readable board.
+`node .vibetether/bin/vibetether.mjs capabilities --project .` renders the live human-readable board.
 Its JSON mode provides deterministic route data for automation.

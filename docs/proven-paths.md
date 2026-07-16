@@ -48,7 +48,8 @@ The durable body belongs in its natural project source:
 - local environment constraints in the project setup guide.
 
 The checkpoint records the disposition and artifact paths. A completion-like
-state with a pending disposition fails `vibetether doctor`.
+state with a pending disposition fails
+`node .vibetether/bin/vibetether.mjs doctor --project . --boundary completion`.
 
 Confirmed project truth and experience have different jobs: truth says what the
 project requires; experience says how a procedure previously worked. If they

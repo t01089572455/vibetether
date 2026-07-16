@@ -265,7 +265,7 @@ Run the same focused command and expect all tests to pass.
 
 - [ ] **Step 1: Add launcher creation and behavior tests**
 
-Assert init creates `.vibetether/bin/vibetether.mjs`, the manifest records its path/hash/package/version, the launcher selects `npx.cmd` on Windows through an injectable unit boundary, and a fake missing `npx` produces actionable stderr and nonzero exit.
+Assert init creates `.vibetether/bin/vibetether.mjs`, the manifest records its path/hash/package/version, the launcher executes npm's `npx-cli.js` with Node on Windows without a command shell, and a missing npm/npx runtime produces actionable stderr and nonzero exit.
 
 - [ ] **Step 2: Add ownership and migration tests**
 
@@ -307,8 +307,10 @@ Expected: fail because the launcher lifecycle is absent.
 Use a fixed zero-dependency ESM script that invokes:
 
 ```js
-const executable = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-const args = ['--yes', `--package=${packageSpec}`, 'vibetether', ...process.argv.slice(2)];
+const executable = process.platform === 'win32' ? process.execPath : 'npx';
+const args = process.platform === 'win32'
+  ? [resolvedNpxCli, '--yes', `--package=${packageSpec}`, 'vibetether', ...process.argv.slice(2)]
+  : ['--yes', `--package=${packageSpec}`, 'vibetether', ...process.argv.slice(2)];
 ```
 
 Preserve child exit status and print a concise missing-Node/npm acquisition diagnostic.
@@ -369,7 +371,7 @@ node .vibetether/bin/vibetether.mjs truth reconcile --project . --decision no-ma
 node .vibetether/bin/vibetether.mjs doctor --project . --boundary handoff --json
 ```
 
-State clearly that the launcher uses the immutable matching release tag, still
+State clearly that the launcher uses the matching versioned release tag, still
 depends on npm, GitHub, TLS, and network availability, and still requires host
 cooperation.
 
@@ -393,7 +395,7 @@ Expected: all tests and self-validation pass.
 
 - [ ] **Step 1: Advance the release version**
 
-Move package metadata to `0.6.0`, append the exact public `0.5.0` commit and fingerprint to history, update the current Skill fingerprint after all Skill edits, and create the immutable `v0.6.0` Git tag only after the release commit is final.
+Move package metadata to `0.6.0`, append the exact public `0.5.0` commit and fingerprint to history, update the current Skill fingerprint after all Skill edits, and create the versioned `v0.6.0` Git tag only after the release commit is final.
 
 - [ ] **Step 2: Run focused regression**
 
@@ -428,7 +430,7 @@ Record exact commands and raw summaries in `.scratch/truth-reconciliation-local-
 - [ ] **Step 6: Commit and push**
 
 Stage only intended repository files, leave `.superpowers/` untouched, commit
-the verified release, push the branch to GitHub `main`, push the immutable
+the verified release, push the branch to GitHub `main`, push the versioned
 `v0.6.0` tag, and verify both remote refs.
 
 ## Self-review

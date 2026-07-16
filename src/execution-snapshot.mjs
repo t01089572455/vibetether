@@ -16,19 +16,27 @@ function portableRelative(root, target) {
   return relative ? relative.replaceAll('\\', '/') : '.';
 }
 
-async function git(root, args, { optional = false, binary = false } = {}) {
+export function gitFailureIsUnavailable(error) {
+  const diagnostic = `${error?.stderr ?? ''}`;
+  return error?.code === 'ENOENT' || /not a git repository/i.test(diagnostic);
+}
+
+export function gitFailureIsUnbornHead(error) {
+  const diagnostic = `${error?.stderr ?? ''}`;
+  return error?.code === 128 && /needed a single revision/i.test(diagnostic);
+}
+
+async function git(root, args, { expectedFailure = null, binary = false } = {}) {
   try {
     const result = await runFile('git', ['-C', root, ...args], {
       encoding: binary ? 'buffer' : 'utf8',
+      env: { ...process.env, LANG: 'C', LC_ALL: 'C' },
       maxBuffer: 8 * 1024 * 1024,
       windowsHide: true,
     });
     return result.stdout;
   } catch (error) {
-    const diagnostic = `${error.stderr ?? ''}`;
-    if (error.code === 'ENOENT'
-        || /not a git repository/i.test(diagnostic)
-        || (optional && [1, 128].includes(error.code))) {
+    if (gitFailureIsUnavailable(error) || expectedFailure?.(error)) {
       return null;
     }
     throw new Error('Git execution state could not be inspected safely.');
@@ -97,7 +105,7 @@ export async function captureExecutionSnapshot(projectRoot, requestedRoot = null
     throw new Error('Execution root must be a regular project-contained directory.');
   }
 
-  const worktreeOutput = await git(resolved, ['rev-parse', '--show-toplevel'], { optional: true });
+  const worktreeOutput = await git(resolved, ['rev-parse', '--show-toplevel']);
   if (worktreeOutput === null) {
     return {
       root: relativeRoot,
@@ -114,8 +122,16 @@ export async function captureExecutionSnapshot(projectRoot, requestedRoot = null
   }
   const worktree = await realpath(String(worktreeOutput).trim());
   const worktreeRelative = portableRelative(projectRoot, worktree);
-  const headOutput = await git(resolved, ['rev-parse', '--verify', 'HEAD'], { optional: true });
-  const refOutput = await git(resolved, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { optional: true });
+  const headOutput = await git(
+    resolved,
+    ['rev-parse', '--verify', 'HEAD'],
+    { expectedFailure: gitFailureIsUnbornHead },
+  );
+  const refOutput = await git(
+    resolved,
+    ['symbolic-ref', '--quiet', '--short', 'HEAD'],
+    { expectedFailure: (error) => error.code === 1 },
+  );
   const status = await git(
     resolved,
     ['status', '--porcelain=v1', '-z', '--untracked-files=all'],

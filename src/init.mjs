@@ -39,6 +39,11 @@ import {
   TRUTH_INDEX_OWNERSHIP,
 } from './manifest.mjs';
 import { validateProviderLock } from './managed-project-state.mjs';
+import {
+  currentLocalCliBaseline,
+  LOCAL_CLI_PATH,
+  sha256Text,
+} from './local-cli.mjs';
 import { scanProject } from './project-scan.mjs';
 import {
   createTruthMap,
@@ -331,6 +336,7 @@ export async function initialize(options, dependencies = {}) {
     '.vibetether/project.yaml',
     '.vibetether/intent.md',
     '.vibetether/state/current.yaml',
+    LOCAL_CLI_PATH,
     EXPERIENCE_INDEX_PATH,
     TRUTH_INDEX_PATH,
     PROJECT_ROUTES_PATH,
@@ -427,6 +433,39 @@ export async function initialize(options, dependencies = {}) {
     truth_index: TRUTH_INDEX_PATH,
   };
 
+  const localCli = currentLocalCliBaseline();
+  const launcherTarget = resolveInside(root, LOCAL_CLI_PATH);
+  const launcherOriginal = await readTextIfPresent(launcherTarget);
+  const priorCli = persistedManifest?.cli;
+  if (priorCli !== undefined) {
+    const structurallyValid = priorCli
+      && typeof priorCli === 'object'
+      && !Array.isArray(priorCli)
+      && priorCli.launcher === LOCAL_CLI_PATH
+      && typeof priorCli.launcher_sha256 === 'string'
+      && /^[a-f0-9]{64}$/.test(priorCli.launcher_sha256)
+      && typeof priorCli.package === 'string'
+      && priorCli.package
+      && typeof priorCli.expected_version === 'string'
+      && priorCli.expected_version;
+    if (!structurallyValid) {
+      throw new CliError('Manifest conflict in .vibetether/project.yaml: cli baseline is invalid.', 3);
+    }
+    if (launcherOriginal !== null && sha256Text(launcherOriginal) !== priorCli.launcher_sha256) {
+      throw new CliError(
+        `Local CLI conflict at ${LOCAL_CLI_PATH}. Refusing to overwrite a modified managed launcher.`,
+        3,
+      );
+    }
+  } else if (launcherOriginal !== null
+      && sha256Text(launcherOriginal) !== localCli.manifest.launcher_sha256) {
+    throw new CliError(
+      `Local CLI conflict at ${LOCAL_CLI_PATH}. Back up or remove the pre-existing file first.`,
+      3,
+    );
+  }
+  manifest.cli = { ...localCli.manifest };
+
   const truthTarget = resolveInside(root, TRUTH_INDEX_PATH);
   const truthOriginal = await readTextIfPresent(truthTarget);
   let truthContent = truthOriginal;
@@ -486,6 +525,12 @@ export async function initialize(options, dependencies = {}) {
     target: manifestTarget,
     original: manifestOriginal,
     content: serializeManifest(manifest),
+  });
+  textPlans.push({
+    relativePath: LOCAL_CLI_PATH,
+    target: launcherTarget,
+    original: launcherOriginal,
+    content: localCli.content,
   });
   textPlans.push({
     relativePath: TRUTH_INDEX_PATH,
@@ -934,9 +979,29 @@ export async function initialize(options, dependencies = {}) {
   if (initializationCleanupWarnings.length > 0) {
     warningMessages.push('A verified Skill upgrade completed, but transaction cleanup remains. Close Codex and Claude, then rerun init.');
   }
+  let doctorNotice = '';
+  try {
+    const { inspectProject } = await import('./doctor.mjs');
+    let report;
+    try {
+      report = JSON.parse(await inspectProject({
+        project: root,
+        boundary: 'ordinary',
+        json: true,
+      }));
+    } catch (error) {
+      if (typeof error.output !== 'string') throw error;
+      report = JSON.parse(error.output);
+    }
+    doctorNotice = report.ok
+      ? `Doctor baseline: healthy${report.warnings.length ? ` with ${report.warnings.length} attention item(s)` : ''}.\n`
+      : `Doctor baseline: ${report.issues.length} issue(s) require attention; run node ${LOCAL_CLI_PATH} doctor --project . --json.\n`;
+  } catch {
+    doctorNotice = `Doctor baseline: unavailable; run node ${LOCAL_CLI_PATH} doctor --project . --json.\n`;
+  }
   const warnings = warningMessages.map((warning) => `- ${warning}`).join('\n');
   const truthNotice = manifestOriginal === null
     ? `Project truth is intentionally empty. Edit ${TRUTH_INDEX_PATH}, or ask the Agent to search for candidates and confirm activation one at a time.\n`
     : '';
-  return `${recoveryPrefix}VibeTether initialized ${root} for ${adapters.join(' + ')} using the ${options.profile} profile with ${providers.length} curated provider Skill(s).\n${truthNotice}${warnings ? `Warnings:\n${warnings}\n` : ''}`;
+  return `${recoveryPrefix}VibeTether initialized ${root} for ${adapters.join(' + ')} using the ${options.profile} profile with ${providers.length} curated provider Skill(s).\n${truthNotice}${doctorNotice}${warnings ? `Warnings:\n${warnings}\n` : ''}`;
 }

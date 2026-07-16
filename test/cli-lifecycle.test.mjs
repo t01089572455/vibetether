@@ -607,8 +607,11 @@ test('uninstall removes only VibeTether-managed content and preserves the Intent
   assert.equal(await exists(path.join(target, 'CLAUDE.md')), false);
   assert.equal(await exists(path.join(target, '.agents', 'skills', 'vibe-tether')), false);
   assert.equal(await exists(path.join(target, '.claude', 'skills', 'vibe-tether')), false);
+  assert.equal(await exists(path.join(target, '.vibetether', 'bin', 'vibetether.mjs')), false);
   assert.equal(await exists(path.join(target, '.vibetether', 'project.yaml')), true);
   assert.equal(await exists(path.join(target, '.vibetether', 'intent.md')), true);
+  const manifest = YAML.parse(await readFile(path.join(target, '.vibetether', 'project.yaml'), 'utf8'));
+  assert.equal(Object.hasOwn(manifest, 'cli'), false);
 });
 
 test('uninstall removes an unchanged empty VibeTether experience index', async () => {
@@ -1062,4 +1065,21 @@ test('uninstall refuses a modified installed Skill without changing project file
   assert.match(result.stderr, /modified installed Skill/i);
   assert.equal(await readFile(path.join(target, 'AGENTS.md'), 'utf8'), agentsBefore);
   assert.equal(await exists(installedSkill), true);
+});
+
+test('uninstall refuses a modified managed local CLI without changing project files', async () => {
+  const target = await initializedProject('uninstall-modified-local-cli');
+  const launcherPath = path.join(target, '.vibetether', 'bin', 'vibetether.mjs');
+  const agentsPath = path.join(target, 'AGENTS.md');
+  const agentsBefore = await readFile(agentsPath, 'utf8');
+  const modified = `${await readFile(launcherPath, 'utf8')}\n// local customization\n`;
+  await writeFile(launcherPath, modified, 'utf8');
+
+  const result = runCli(['uninstall', '--project', target, '--yes']);
+
+  assert.equal(result.status, 3, result.stderr || result.stdout);
+  assert.match(result.stderr, /modified managed local cli/i);
+  assert.equal(await readFile(launcherPath, 'utf8'), modified);
+  assert.equal(await readFile(agentsPath, 'utf8'), agentsBefore);
+  assert.equal(await exists(path.join(target, '.agents', 'skills', 'vibe-tether')), true);
 });

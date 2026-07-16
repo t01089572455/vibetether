@@ -68,7 +68,7 @@ transaction manifest, and returns controlled instructions:
 1. Note the exact Skill path and pending transaction.
 2. Close Codex, Claude Code, the editor, or other process using the path.
 3. Rerun the same `init` command again.
-4. Run `vibetether doctor --project . --json` and confirm the transaction issue
+4. Run `node .vibetether/bin/vibetether.mjs doctor --project . --boundary ordinary --json` and confirm the transaction issue
    is gone.
 
 Pending recovery runs before provider metadata or provider network access. If
@@ -108,7 +108,7 @@ If an older release reports a partial rollback:
 2. Check the Codex and Claude VibeTether Skill paths separately; one may exist while the other is missing.
 3. Preserve any transaction directory or registered `.previous` candidate that
    still contains a copy.
-4. Run `vibetether doctor --project . --json` and follow the exact recovery code.
+4. Run `node .vibetether/bin/vibetether.mjs doctor --project . --boundary ordinary --json` and follow the exact recovery code.
 5. If recovery is unambiguous, rerun the same current `init` command. If Windows
    reports a lock, close the owning process and retry.
 6. For `ambiguous-recovery`, preserve every numbered candidate and compare them;

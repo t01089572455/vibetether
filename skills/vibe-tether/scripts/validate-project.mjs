@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { access, lstat, readFile, readdir } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +16,17 @@ const skillDir = path.resolve(scriptDir, '..');
 const managedStart = '<!-- vibetether:start -->';
 const managedEnd = '<!-- vibetether:end -->';
 const projectRoutesPath = '.vibetether/routes.local.yaml';
+const localCliPath = '.vibetether/bin/vibetether.mjs';
+const routeHandshakePath = '.vibetether/state/route-handshake.yaml';
+const hashPattern = /^[a-f0-9]{64}$/;
+const reconciliationStatuses = new Set([
+  'unknown',
+  'pending',
+  'candidate_pending',
+  'no_material_change',
+  'applied',
+  'declined',
+]);
 
 async function exists(target) {
   try {
@@ -118,6 +130,54 @@ function flattenSources(value) {
   return [];
 }
 
+function record(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function validExecutionSnapshot(snapshot) {
+  if (!record(snapshot)
+      || typeof snapshot.root !== 'string'
+      || !snapshot.root
+      || !Number.isFinite(Date.parse(snapshot.captured_at ?? ''))
+      || !record(snapshot.git)
+      || typeof snapshot.git.available !== 'boolean') {
+    return false;
+  }
+  if (!snapshot.git.available) {
+    return snapshot.git.worktree_root === null
+      && snapshot.git.ref === null
+      && snapshot.git.head === null
+      && snapshot.git.status_sha256 === null
+      && snapshot.git.worktree_sha256 === null;
+  }
+  return typeof snapshot.git.worktree_root === 'string'
+    && (snapshot.git.ref === null || typeof snapshot.git.ref === 'string')
+    && (snapshot.git.head === null || /^[a-f0-9]{40}$/.test(snapshot.git.head))
+    && hashPattern.test(snapshot.git.status_sha256 ?? '')
+    && hashPattern.test(snapshot.git.worktree_sha256 ?? '');
+}
+
+function validTruthReconciliation(value) {
+  if (!record(value)
+      || !reconciliationStatuses.has(value.status)
+      || typeof value.trigger !== 'string'
+      || !value.trigger
+      || !Number.isFinite(Date.parse(value.updated_at ?? ''))
+      || !(value.route_instance_id === null || (typeof value.route_instance_id === 'string' && value.route_instance_id))
+      || !(value.reason === null || (typeof value.reason === 'string' && value.reason.trim()))
+      || !(value.candidate_path === null
+        || (typeof value.candidate_path === 'string'
+          && isSafeProjectRelativeArtifactPath(value.candidate_path)
+          && !isSensitiveArtifactPath(value.candidate_path)))) {
+    return false;
+  }
+  if (['candidate_pending', 'applied', 'declined'].includes(value.status)) {
+    return typeof value.candidate_path === 'string' && Boolean(value.reason);
+  }
+  if (value.status === 'no_material_change') return value.candidate_path === null && Boolean(value.reason);
+  return value.candidate_path === null;
+}
+
 function safeDiagnosticPath(value, fallback) {
   return typeof value === 'string'
     && isSafeProjectRelativeArtifactPath(value)
@@ -148,6 +208,27 @@ async function validateProject(projectRoot) {
   if (!manifest?.provider_lock) errors.push('Manifest provider_lock is required');
   if (!manifest?.experience_index) errors.push('Manifest experience_index is required');
   if (!manifest?.truth_index) errors.push('Manifest truth_index is required');
+  if (!record(manifest?.cli)
+      || manifest.cli.launcher !== localCliPath
+      || !hashPattern.test(manifest.cli.launcher_sha256 ?? '')
+      || typeof manifest.cli.package !== 'string'
+      || !manifest.cli.package.trim()
+      || !/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(manifest.cli.expected_version ?? '')) {
+    errors.push('Manifest cli baseline is invalid');
+  } else {
+    const launcherStatus = await projectEntryStatus(projectRoot, manifest.cli.launcher);
+    if (launcherStatus === 'missing') {
+      errors.push('Missing project-local CLI launcher');
+    } else if (launcherStatus !== 'ok') {
+      errors.push('Project-local CLI launcher must be a regular non-linked file');
+    } else {
+      const launcher = await readFile(path.resolve(projectRoot, manifest.cli.launcher));
+      const actual = createHash('sha256').update(launcher).digest('hex');
+      if (actual !== manifest.cli.launcher_sha256) {
+        errors.push('Project-local CLI launcher differs from its managed fingerprint');
+      }
+    }
+  }
   let truth = null;
   if (manifest.truth_index) {
     const truthStatus = await projectEntryStatus(projectRoot, manifest.truth_index);
@@ -298,6 +379,12 @@ async function validateProject(projectRoot) {
     } else {
       const checkpointPath = path.resolve(projectRoot, manifest.checkpoint.path);
       const checkpointSource = await readFile(checkpointPath, 'utf8');
+      let checkpoint = null;
+      try {
+        checkpoint = parseCanonicalYaml(checkpointSource, { allowFlowSequences: true });
+      } catch {
+        errors.push('Checkpoint YAML is invalid');
+      }
       for (const field of ['goal', 'phase', 'slice', 'last_reanchor', 'next_intended_action']) {
         if (!new RegExp(`^${field}:\\s*.+$`, 'm').test(checkpointSource)) {
           errors.push(`Checkpoint is missing required field: ${field}`);
@@ -313,9 +400,36 @@ async function validateProject(projectRoot) {
       const maxAge = Number(manifest.checkpoint.max_age_hours ?? 168) * 60 * 60 * 1000;
       if (!Number.isFinite(timestamp)) errors.push('Checkpoint has an invalid last_reanchor value');
       else if (Date.now() - timestamp > maxAge) errors.push(`Stale checkpoint: older than ${manifest.checkpoint.max_age_hours ?? 168} hours`);
+      if (checkpoint && !validTruthReconciliation(checkpoint.truth_reconciliation)) {
+        errors.push('Checkpoint truth_reconciliation is invalid');
+      }
       if (/private_reasoning|chain[-_ ]of[-_ ]thought/i.test(checkpointSource)) {
         errors.push('Checkpoint contains a forbidden private-reasoning field');
       }
+    }
+  }
+
+  const handshakeStatus = await projectEntryStatus(projectRoot, routeHandshakePath);
+  if (!['missing', 'ok'].includes(handshakeStatus)) {
+    errors.push('Route handshake must be a regular non-linked file');
+  } else if (handshakeStatus === 'ok') {
+    try {
+      const handshake = parseCanonicalYaml(
+        await readFile(path.resolve(projectRoot, routeHandshakePath), 'utf8'),
+        { allowFlowSequences: true },
+      );
+      const valid = record(handshake)
+        && handshake.schema_version === 1
+        && typeof handshake.route_instance_id === 'string'
+        && Boolean(handshake.route_instance_id)
+        && ['active', 'satisfied', 'abandoned'].includes(handshake.status)
+        && validExecutionSnapshot(handshake.execution_start)
+        && (handshake.execution_end === undefined || validExecutionSnapshot(handshake.execution_end))
+        && (handshake.truth_reconciliation === undefined
+          || validTruthReconciliation(handshake.truth_reconciliation));
+      if (!valid) errors.push('Route handshake lifecycle state is invalid');
+    } catch {
+      errors.push('Route handshake YAML is invalid');
     }
   }
   return errors;

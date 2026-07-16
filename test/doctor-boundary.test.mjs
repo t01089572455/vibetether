@@ -133,3 +133,36 @@ test('doctor distinguishes Truth Map metadata changes from confirmed authority c
     true,
   );
 });
+
+test('doctor surfaces a legacy route without a route-instance identity', async () => {
+  const root = await initializedProject('missing-route-instance');
+  await setPhase(root, 'PLAN');
+  await main([
+    'route', '--project', root, '--phase', 'PLAN', '--capability', 'planning',
+    '--signal', 'direction-approved', '--agent', 'codex',
+  ]);
+  await main([
+    'route', 'complete', '--project', root,
+    '--evidence', 'Plan approved',
+    '--truth-decision', 'no-material-change',
+    '--truth-reason', 'The route changed no confirmed authority.',
+  ]);
+  const handshakePath = path.join(root, '.vibetether', 'state', 'route-handshake.yaml');
+  const handshake = YAML.parse(await readFile(handshakePath, 'utf8'));
+  delete handshake.route_instance_id;
+  await writeFile(handshakePath, YAML.stringify(handshake), 'utf8');
+
+  const ordinary = await doctorReport(root, 'ordinary');
+  assert.equal(ordinary.ok, true);
+  assert.equal(
+    ordinary.warnings.some(({ code }) => code === 'route-instance-not-established'),
+    true,
+  );
+
+  const completion = await doctorReport(root, 'completion');
+  assert.equal(completion.ok, false);
+  assert.equal(
+    completion.issues.some(({ code }) => code === 'route-instance-not-established'),
+    true,
+  );
+});

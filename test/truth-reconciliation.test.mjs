@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -30,6 +31,22 @@ async function startPlanning(root) {
     'route', '--project', root, '--phase', 'PLAN', '--capability', 'planning',
     '--signal', 'direction-approved', '--agent', 'codex', '--json',
   ]));
+}
+
+function git(cwd, args) {
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+}
+
+async function doctorReport(root, boundary = 'ordinary') {
+  try {
+    return JSON.parse(await main([
+      'doctor', '--project', root, '--boundary', boundary, '--json',
+    ]));
+  } catch (error) {
+    if (typeof error.output === 'string') return JSON.parse(error.output);
+    throw error;
+  }
 }
 
 test('no-material-change reconciles the exited route without editing the Truth Map', async () => {
@@ -168,6 +185,159 @@ test('candidate decisions require a safe existing path in the matching Truth Map
     ]),
     /safe path inside the project|unsafe/i,
   );
+});
+
+test('candidate reconciliation accepts a safe project directory truth source', async () => {
+  const root = await initializedProject('candidate-directory');
+  git(root, ['init', '--quiet']);
+  await mkdir(path.join(root, 'docs', 'specs'), { recursive: true });
+  await writeFile(path.join(root, 'docs', 'specs', 'product.md'), '# Product specs\n', 'utf8');
+  const truthPath = path.join(root, '.vibetether', 'TRUTH.md');
+  await writeFile(
+    truthPath,
+    createTruthMap({
+      harnesses: ['codex'],
+      candidates: [{ path: 'docs/specs/', role: 'product-specifications', scope: '.' }],
+    }),
+    'utf8',
+  );
+  await startPlanning(root);
+  await main(['route', 'complete', '--project', root, '--evidence', 'Specification directory proposed']);
+
+  const pending = JSON.parse(await main([
+    'truth', 'reconcile', '--project', root,
+    '--decision', 'candidate-pending',
+    '--candidate', 'docs/specs/',
+    '--reason', 'The specification directory is waiting for user confirmation.',
+    '--json',
+  ]));
+
+  assert.equal(pending.status, 'candidate_pending');
+  assert.equal(pending.candidate_path, 'docs/specs/');
+
+  await writeFile(
+    truthPath,
+    createTruthMap({
+      harnesses: ['codex'],
+      confirmed: [{ path: 'docs/specs/', role: 'product-specifications', scope: '.' }],
+    }),
+    'utf8',
+  );
+  const applied = JSON.parse(await main([
+    'truth', 'reconcile', '--project', root,
+    '--decision', 'applied',
+    '--candidate', 'docs/specs/',
+    '--reason', 'The user approved this directory path, role, and scope.',
+    '--json',
+  ]));
+  assert.equal(applied.status, 'applied');
+
+  const handshake = YAML.parse(await readFile(
+    path.join(root, '.vibetether', 'state', 'route-handshake.yaml'),
+    'utf8',
+  ));
+  assert.equal(handshake.truth_reconciliation.status, 'applied');
+  const report = await doctorReport(root);
+  assert.equal(
+    report.issues.some(({ code }) => code === 'changed-confirmed-truth'),
+    false,
+  );
+  assert.equal(
+    report.warnings.some(({ code }) => code === 'stale-execution-snapshot'),
+    false,
+  );
+});
+
+test('candidate reconciliation cannot absorb unrelated confirmed-source drift', async () => {
+  const root = await initializedProject('candidate-unrelated-confirmed-drift');
+  await mkdir(path.join(root, 'docs'), { recursive: true });
+  await writeFile(path.join(root, 'docs', 'product.md'), '# Approved product\n', 'utf8');
+  await writeFile(path.join(root, 'docs', 'design.md'), '# Candidate design\n', 'utf8');
+  await writeFile(
+    path.join(root, '.vibetether', 'TRUTH.md'),
+    createTruthMap({
+      harnesses: ['codex'],
+      confirmed: [{ path: 'docs/product.md', role: 'product-direction', scope: '.' }],
+      candidates: [{ path: 'docs/design.md', role: 'design-direction', scope: '.' }],
+    }),
+    'utf8',
+  );
+  await startPlanning(root);
+  await main(['route', 'complete', '--project', root, '--evidence', 'Candidate documented']);
+  await writeFile(path.join(root, 'docs', 'product.md'), '# Unapproved product change\n', 'utf8');
+
+  await assert.rejects(
+    main([
+      'truth', 'reconcile', '--project', root,
+      '--decision', 'candidate-pending',
+      '--candidate', 'docs/design.md',
+      '--reason', 'The design candidate is still waiting for a decision.',
+    ]),
+    /confirmed project authority changed|cannot absorb.*drift/i,
+  );
+
+  const checkpoint = YAML.parse(await readFile(
+    path.join(root, '.vibetether', 'state', 'current.yaml'),
+    'utf8',
+  ));
+  assert.equal(checkpoint.truth_reconciliation.status, 'pending');
+});
+
+test('applied reconciliation permits only the declared confirmed path to change', async () => {
+  const root = await initializedProject('applied-bounded-change');
+  await mkdir(path.join(root, 'docs'), { recursive: true });
+  await writeFile(path.join(root, 'docs', 'product.md'), '# Approved product\n', 'utf8');
+  await writeFile(path.join(root, 'docs', 'design.md'), '# Candidate design\n', 'utf8');
+  const truthPath = path.join(root, '.vibetether', 'TRUTH.md');
+  await writeFile(
+    truthPath,
+    createTruthMap({
+      harnesses: ['codex'],
+      confirmed: [{ path: 'docs/product.md', role: 'product-direction', scope: '.' }],
+      candidates: [{ path: 'docs/design.md', role: 'design-direction', scope: '.' }],
+    }),
+    'utf8',
+  );
+  await startPlanning(root);
+  await main(['route', 'complete', '--project', root, '--evidence', 'Design reviewed']);
+  await writeFile(
+    truthPath,
+    createTruthMap({
+      harnesses: ['codex'],
+      confirmed: [
+        { path: 'docs/product.md', role: 'product-direction', scope: '.' },
+        { path: 'docs/design.md', role: 'design-direction', scope: '.' },
+      ],
+    }),
+    'utf8',
+  );
+  await writeFile(path.join(root, 'docs', 'product.md'), '# Unapproved product change\n', 'utf8');
+
+  await assert.rejects(
+    main([
+      'truth', 'reconcile', '--project', root,
+      '--decision', 'applied',
+      '--candidate', 'docs/design.md',
+      '--reason', 'The user approved only the design source.',
+    ]),
+    /outside the declared path|confirmed project authority changed/i,
+  );
+
+  const checkpoint = YAML.parse(await readFile(
+    path.join(root, '.vibetether', 'state', 'current.yaml'),
+    'utf8',
+  ));
+  assert.equal(checkpoint.truth_reconciliation.status, 'pending');
+
+  await writeFile(path.join(root, 'docs', 'product.md'), '# Approved product\n', 'utf8');
+  const applied = JSON.parse(await main([
+    'truth', 'reconcile', '--project', root,
+    '--decision', 'applied',
+    '--candidate', 'docs/design.md',
+    '--reason', 'The user approved the design source and no other authority changed.',
+    '--json',
+  ]));
+  assert.equal(applied.status, 'applied');
 });
 
 test('route completion can inline a verified no-material-change disposition', async () => {

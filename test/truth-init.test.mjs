@@ -104,7 +104,7 @@ test('doctor validates confirmed truth paths but does not activate missing candi
   assert.equal(candidateOnly.status, 0, candidateOnly.stderr || candidateOnly.stdout);
   const healthy = JSON.parse(candidateOnly.stdout);
   assert.deepEqual(Object.keys(healthy.control_plane), [
-    'bootstrap', 'intent', 'truth', 'state', 'routing', 'experience', 'providers',
+    'bootstrap', 'cli', 'intent', 'truth', 'state', 'execution', 'routing', 'experience', 'providers',
   ]);
 
   await writeFile(truthPath, createTruthFixture({ confirmed: 'docs/not-created.md' }), 'utf8');

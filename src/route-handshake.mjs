@@ -2,7 +2,10 @@ import { lstat, realpath, rm } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import YAML from 'yaml';
-import { createAuthoritySnapshot } from './authority-snapshot.mjs';
+import {
+  createAuthoritySnapshot,
+  fingerprintAuthorityPath,
+} from './authority-snapshot.mjs';
 import {
   containsSecretValue,
   isSafeProjectRelativeArtifactPath,
@@ -22,6 +25,8 @@ import {
 import { parseTruthMap } from './truth-map.mjs';
 import {
   authoritySnapshotsMatch,
+  confirmedAuthorityChangeIsLimitedToPath,
+  confirmedAuthorityMatches,
   normalizeTruthDecision,
   truthSectionForDecision,
 } from './truth-reconciliation.mjs';
@@ -324,6 +329,31 @@ async function artifactPaths(root, values) {
   return artifacts;
 }
 
+async function inspectTruthCandidate(root, truth, section, candidate) {
+  const portable = String(candidate).trim().replaceAll('\\', '/').replace(/^\.\//, '');
+  if (!portable
+      || !isSafeProjectRelativeArtifactPath(portable)
+      || isSensitiveArtifactPath(portable)) {
+    throw new CliError('Truth reconciliation candidate must be a safe path inside the project and must not be sensitive.', 3);
+  }
+  const normalized = portable.replace(/\/+$/, '');
+  const entry = truth[section].find(
+    ({ path: entryPath }) => entryPath.replace(/\/+$/, '') === normalized,
+  );
+  if (!entry) {
+    throw new CliError(`Truth reconciliation candidate is not present in the Truth Map ${section} section.`, 3);
+  }
+  try {
+    await fingerprintAuthorityPath(root, entry.path);
+  } catch {
+    throw new CliError(
+      'Truth reconciliation candidate must be an existing regular file or directory inside the project.',
+      3,
+    );
+  }
+  return entry.path;
+}
+
 async function routeExitTruthReconciliation(root, manifest, checkpoint, state, options, trigger, now) {
   const pending = {
     status: 'pending',
@@ -460,11 +490,8 @@ export async function reconcileTruth(options) {
   let candidatePath = null;
   if (section) {
     if (!options.candidate) throw new CliError(`--candidate is required for ${options.decision}.`);
-    candidatePath = await inspectArtifact(root, options.candidate);
     const truth = parseTruthMap(await readTextIfPresent(resolveInside(root, manifest.truth_index)));
-    if (!truth[section].some((entry) => entry.path.replace(/\/$/, '') === candidatePath.replace(/\/$/, ''))) {
-      throw new CliError(`Truth reconciliation candidate is not present in the Truth Map ${section} section.`, 3);
-    }
+    candidatePath = await inspectTruthCandidate(root, truth, section, options.candidate);
   } else if (options.candidate) {
     throw new CliError('--candidate is not allowed with no-material-change.');
   }
@@ -475,6 +502,24 @@ export async function reconcileTruth(options) {
       && !authoritySnapshotsMatch(checkpoint.authority_snapshot, currentAuthority)) {
     throw new CliError(
       'Confirmed project authority changed after the route started; no-material-change cannot hide that drift.',
+      3,
+    );
+  }
+  if (['candidate_pending', 'declined'].includes(decision)
+      && !confirmedAuthorityMatches(checkpoint.authority_snapshot, currentAuthority)) {
+    throw new CliError(
+      'Confirmed project authority changed after the route started; this candidate decision cannot absorb that drift.',
+      3,
+    );
+  }
+  if (decision === 'applied'
+      && !confirmedAuthorityChangeIsLimitedToPath(
+        checkpoint.authority_snapshot,
+        currentAuthority,
+        candidatePath,
+      )) {
+    throw new CliError(
+      'Confirmed project authority changed outside the declared applied path; reconcile that change separately.',
       3,
     );
   }
@@ -491,7 +536,22 @@ export async function reconcileTruth(options) {
     updated_at: now,
   };
   checkpoint.truth_reconciliation = reconciliation;
-  await writeControlState(root, manifest, state, checkpoint);
+  const reconciledState = {
+    ...state,
+    ...(decision === 'no_material_change'
+      ? {}
+      : {
+        execution_end: await captureExecutionSnapshot(
+          root,
+          state.execution_start?.root ?? '.',
+        ).catch((error) => {
+          throw new CliError(error.message, 3);
+        }),
+      }),
+    truth_reconciliation: reconciliation,
+    updated_at: now,
+  };
+  await writeControlState(root, manifest, reconciledState, checkpoint);
   return reconciliation;
 }
 

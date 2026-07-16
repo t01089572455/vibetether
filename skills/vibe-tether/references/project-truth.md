@@ -6,6 +6,8 @@ Use `.vibetether/TRUTH.md` as the human-readable entry list for durable project 
 
 The project owns this file. VibeTether may create the initial blank scaffold, validate its structure, and help edit it. It must not silently discover or activate project documents.
 
+Do not put transient Git or task state here. Branch, HEAD, dirty files, active worktree, route instance, current phase, and exit evidence belong in `.vibetether/state/`, where VibeTether can compare them without turning implementation accidents into project authority.
+
 ## Entry States
 
 - **Confirmed project truth** governs work in its declared role and scope.
@@ -70,4 +72,14 @@ Changes to active role, scope, order, removal, or supersession always require us
 
 Preserve user prose and ordering outside the entry being changed. Reject absolute, linked, escaping, duplicate, or malformed active entries. Never write credentials, private keys, one-time codes, private reasoning, or sensitive tool output into the truth map.
 
-Run `vibetether doctor --project . --json` after an active registry change. Doctor validates structure and path safety; it does not claim semantic understanding or user approval.
+After an active registry change, reconcile the route explicitly:
+
+```bash
+node .vibetether/bin/vibetether.mjs truth reconcile --project . \
+  --decision applied \
+  --candidate docs/approved-direction.md \
+  --reason "The user confirmed this path, role, scope, and supersession."
+node .vibetether/bin/vibetether.mjs doctor --project . --boundary ordinary --json
+```
+
+Use `candidate-pending` while user confirmation is outstanding and `declined` only after the path appears in the matching Truth Map section. Candidate paths may be regular files or project directories. `candidate-pending` and `declined` cannot absorb changes to confirmed authority; `applied` may re-anchor only its declared confirmed path, so additional confirmed-source or Intent changes require a separate consequential route. Reconciliation validates the current section and records the decision; it does not modify `TRUTH.md`. Doctor validates structure, fingerprints, and path safety; it does not claim semantic understanding or user approval.

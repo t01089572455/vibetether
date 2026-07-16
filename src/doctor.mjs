@@ -8,7 +8,17 @@ import { CliError } from './errors.mjs';
 import { managedBlockBody, rejectSymlinkPath } from './files.mjs';
 import { parseExperienceIndex, validateExperienceIndex } from './experience-index.mjs';
 import { isSafeProjectRelativeArtifactPath, isSensitiveArtifactPath } from './artifact-safety.mjs';
-import { inspectVibeTetherIdentity, skillFingerprint } from './skill-install.mjs';
+import {
+  inspectVibeTetherIdentity,
+  skillFingerprint,
+  VIBETETHER_RELEASE_COMPATIBILITY,
+} from './skill-install.mjs';
+import {
+  currentLocalCliBaseline,
+  LOCAL_CLI_PATH,
+  releasePackage,
+  sha256Text,
+} from './local-cli.mjs';
 import { assertCapabilityBoard } from '../skills/vibe-tether/scripts/capability-routing.mjs';
 import { parseCanonicalManifest } from '../skills/vibe-tether/scripts/manifest.mjs';
 import { refreshBoardAvailability, resolveBoardRoute } from './capabilities.mjs';
@@ -90,6 +100,10 @@ function portablePath(value) {
 
 function normalizedArtifactPath(value) {
   return portablePath(value).replace(/^\.\//, '');
+}
+
+function normalizedAuthorityPath(value) {
+  return normalizedArtifactPath(value).replace(/\/+$/, '');
 }
 
 function isBuiltInExperienceArtifact(artifact) {
@@ -239,6 +253,7 @@ async function readTruthIndex(root, manifest, issues) {
 function controlPlaneSummary(issues, warnings) {
   const areas = {
     bootstrap: ['manifest', 'harness', 'instructions', 'managed-block', 'skill', 'recovery'],
+    cli: ['cli', 'launcher'],
     intent: ['intent'],
     truth: ['truth', 'source', 'authority'],
     state: ['checkpoint'],
@@ -251,6 +266,72 @@ function controlPlaneSummary(issues, warnings) {
     const has = (entries) => entries.some((entry) => tokens.some((token) => entry.code.includes(token)));
     return [area, has(issues) ? 'error' : has(warnings) ? 'attention' : 'healthy'];
   }));
+}
+
+async function validateLocalCli(root, manifest, atCompletion, issues, warnings) {
+  const baseline = manifest.cli;
+  if (baseline === undefined) {
+    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
+      'cli-baseline-not-established',
+      'Run VibeTether init to install and record the project-local CLI launcher.',
+    ));
+    return;
+  }
+  const hash = /^[a-f0-9]{64}$/;
+  const version = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
+  const valid = baseline
+    && typeof baseline === 'object'
+    && !Array.isArray(baseline)
+    && portablePath(baseline.launcher) === LOCAL_CLI_PATH
+    && hash.test(baseline.launcher_sha256 ?? '')
+    && typeof baseline.package === 'string'
+    && baseline.package.trim() !== ''
+    && version.test(baseline.expected_version ?? '');
+  if (!valid) {
+    issues.push(issue(
+      'invalid-local-cli-baseline',
+      'Manifest cli must declare the canonical launcher path, SHA-256, package, and semantic release version.',
+    ));
+    return;
+  }
+  if (baseline.package !== releasePackage(baseline.expected_version)) {
+    issues.push(issue(
+      'invalid-local-cli-package',
+      'Manifest cli package must use the versioned release tag matching expected_version.',
+    ));
+  }
+
+  const entry = await projectEntryStatus(root, baseline.launcher);
+  if (entry.status === 'missing') {
+    issues.push(issue('missing-local-cli-launcher', 'The project-local VibeTether CLI launcher is missing.'));
+  } else if (entry.status !== 'ok') {
+    issues.push(issue('unsafe-local-cli-launcher', unsafeAuthorityMessage('Local CLI launcher')));
+  } else {
+    const actualHash = sha256Text(await readFile(entry.target, 'utf8'));
+    if (actualHash !== baseline.launcher_sha256) {
+      issues.push(issue(
+        'changed-local-cli-launcher',
+        'The project-local VibeTether CLI launcher differs from its managed manifest fingerprint.',
+      ));
+    }
+  }
+
+  const currentVersion = VIBETETHER_RELEASE_COMPATIBILITY.current.version;
+  if (baseline.expected_version !== currentVersion) {
+    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
+      'cli-version-mismatch',
+      `The running VibeTether CLI is ${currentVersion}, while this project expects ${baseline.expected_version}. Run the expected project-local launcher or upgrade with init.`,
+    ));
+  } else {
+    const current = currentLocalCliBaseline();
+    if (baseline.package !== current.manifest.package
+      || baseline.launcher_sha256 !== current.manifest.launcher_sha256) {
+      issues.push(issue(
+        'noncanonical-local-cli-baseline',
+        'The current-version project-local CLI baseline is not the canonical VibeTether launcher.',
+      ));
+    }
+  }
 }
 
 async function validateAuthoritySnapshot(root, manifest, truth, state, issues, warnings, boundary) {
@@ -312,11 +393,16 @@ async function validateAuthoritySnapshot(root, manifest, truth, state, issues, w
   if ((snapshot.intent?.sha256 ?? null) !== (current.intent?.sha256 ?? null)) {
     issues.push(issue('changed-intent-contract', 'Intent Contract changed after the last full re-anchor.'));
   }
-  const currentSources = new Map(current.confirmed_sources.map((entry) => [entry.path, entry]));
-  const snapshotSources = new Map(snapshot.confirmed_sources.map((entry) => [entry.path, entry]));
+  const currentSources = new Map(
+    current.confirmed_sources.map((entry) => [normalizedAuthorityPath(entry.path), entry]),
+  );
+  const snapshotSources = new Map(
+    snapshot.confirmed_sources.map((entry) => [normalizedAuthorityPath(entry.path), entry]),
+  );
   for (const entry of truth?.confirmed ?? []) {
-    const before = snapshotSources.get(entry.path);
-    const after = currentSources.get(entry.path);
+    const sourcePath = normalizedAuthorityPath(entry.path);
+    const before = snapshotSources.get(sourcePath);
+    const after = currentSources.get(sourcePath);
     if (!before || !after || before.sha256 !== after.sha256 || before.role !== entry.role || before.scope !== entry.scope) {
       issues.push(issue('changed-confirmed-truth', `Confirmed project truth changed after the last full re-anchor: ${entry.path}`));
     }
@@ -424,6 +510,14 @@ function routeCandidates(result) {
 
 function validateTruthReconciliation(checkpoint, handshake, atCompletion, issues, warnings) {
   const reconciliation = checkpoint?.truth_reconciliation;
+  if (handshake
+      && (typeof handshake.route_instance_id !== 'string'
+        || !handshake.route_instance_id.trim())) {
+    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
+      'route-instance-not-established',
+      'Legacy route state has no unique route-instance identity; start and dispose a fresh route.',
+    ));
+  }
   if (!reconciliation) {
     warnings.push(warning(
       'truth-reconciliation-not-established',
@@ -983,6 +1077,13 @@ export async function inspectProject(options) {
         'Completion-like project state cannot retain a pending Skill upgrade transaction.',
       ));
     }
+    await validateLocalCli(
+      root,
+      manifest,
+      completionLike(checkpointState, boundary),
+      issues,
+      warnings,
+    );
     if (board) {
       const handshake = await readRouteHandshake(root, issues);
       validateTruthReconciliation(

@@ -15,6 +15,11 @@ meaning, not permission to govern implementation.
 The file also points to host bootstrap and control-plane artifacts. Those entries
 explain how VibeTether runs; they are not product decisions.
 
+Do not add transient execution facts to `TRUTH.md`. The current branch, HEAD,
+dirty files, worktree, route instance, phase, and exit evidence belong under
+`.vibetether/state/`; they describe what is happening now, not what the product
+must become.
+
 Initialization creates the blank list and does not scan or activate repository
 documents. You can edit it directly, or ask the Agent to help in ordinary language.
 
@@ -86,8 +91,26 @@ activation decisions.
 This is behavioral control, not a background daemon or security sandbox. Run:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether doctor --project . --json
+node .vibetether/bin/vibetether.mjs doctor --project . --boundary ordinary --json
 ```
 
 Doctor validates structure, contained paths, control state, and pending
 dispositions. It does not pretend to prove semantic correctness or user approval.
+
+After a route exits, the next route and completion-like boundaries require an
+explicit Truth disposition. The common unchanged case can be recorded inline on
+`route complete` or `route abandon`. If a candidate or active entry changed,
+update `TRUTH.md` only after the required user decision, then run:
+
+```sh
+node .vibetether/bin/vibetether.mjs truth reconcile --project . \
+  --decision applied \
+  --candidate docs/approved-direction.md \
+  --reason "The user confirmed this path, role, scope, and supersession."
+```
+
+The reconciliation command validates the matching Truth Map section and records
+the disposition. An `applied` decision may re-anchor only its declared confirmed
+path; any additional confirmed-source or Intent change must be reconciled in a
+separate consequential route. Candidate paths may be regular files or project
+directories. The command never edits the Truth Map or invents user approval.

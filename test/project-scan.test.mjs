@@ -8,6 +8,7 @@ import { SENSITIVE_CREDENTIAL_PHRASES } from '../src/artifact-safety.mjs';
 import { applyManagedBlock } from '../src/files.mjs';
 import { scanProject } from '../src/project-scan.mjs';
 import { sourceSkill } from '../src/skill-install.mjs';
+import { currentLocalCliBaseline, LOCAL_CLI_PATH } from '../src/local-cli.mjs';
 
 async function project(name) {
   return mkdtemp(path.join(os.tmpdir(), `vibetether-scan-${name}-`));
@@ -33,7 +34,9 @@ async function linkDirectory(target, linkPath) {
 
 async function managedProject(name) {
   const root = await project(name);
+  const localCli = currentLocalCliBaseline();
   await mkdir(path.join(root, '.vibetether', 'state'), { recursive: true });
+  await mkdir(path.join(root, '.vibetether', 'bin'), { recursive: true });
   await mkdir(path.join(root, '.agents', 'skills'), { recursive: true });
   await writeFile(
     path.join(root, '.vibetether', 'project.yaml'),
@@ -44,6 +47,7 @@ async function managedProject(name) {
       profile: 'core',
       intent_contract: '.vibetether/intent.md',
       provider_lock: '.vibetether/providers.lock.yaml',
+      cli: localCli.manifest,
       harnesses: {
         codex: { enabled: true, instruction_file: 'AGENTS.md' },
       },
@@ -56,6 +60,7 @@ async function managedProject(name) {
     'utf8',
   );
   await writeFile(path.join(root, '.vibetether', 'intent.md'), '# Intent\n', 'utf8');
+  await writeFile(path.join(root, ...LOCAL_CLI_PATH.split('/')), localCli.content, 'utf8');
   await writeFile(path.join(root, '.vibetether', 'state', 'current.yaml'), 'schema_version: 1\n', 'utf8');
   await writeFile(path.join(root, 'AGENTS.md'), applyManagedBlock('', ADAPTERS.codex.managedBody), 'utf8');
   await writeFile(path.join(root, '.gitignore'), applyManagedBlock('', GITIGNORE_BODY), 'utf8');
@@ -466,6 +471,18 @@ test('project scan detects a modified canonical VibeTether Skill', async () => {
   const root = await managedProject('modified-vibetether-skill');
   const skillPath = path.join(root, '.agents', 'skills', 'vibe-tether', 'SKILL.md');
   await writeFile(skillPath, `${await readFile(skillPath, 'utf8')}\nUser customization.\n`, 'utf8');
+
+  assert.equal((await scanProject(root, ['codex'], 'core')).project_state, 'existing');
+});
+
+test('project scan detects a modified managed project-local CLI launcher', async () => {
+  const root = await managedProject('modified-local-cli');
+  const launcherPath = path.join(root, ...LOCAL_CLI_PATH.split('/'));
+  await writeFile(
+    launcherPath,
+    `${await readFile(launcherPath, 'utf8')}\n// local customization\n`,
+    'utf8',
+  );
 
   assert.equal((await scanProject(root, ['codex'], 'core')).project_state, 'existing');
 });

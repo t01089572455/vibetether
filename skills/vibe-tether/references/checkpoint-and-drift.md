@@ -43,6 +43,7 @@ authority_snapshot:
     path: .vibetether/TRUTH.md
     kind: file
     sha256: 64-character content fingerprint
+  confirmed_projection_sha256: 64-character confirmed-entry fingerprint
   confirmed_sources:
     - path: docs/product-direction.md
       kind: file
@@ -61,11 +62,20 @@ experience_feedback:
   reason: First verified publication workflow for this repository.
   artifacts:
     - docs/operations/publication.md
+truth_reconciliation:
+  status: no_material_change
+  trigger: route-complete
+  route_instance_id: unique route execution identifier
+  reason: Verified evidence changed without changing confirmed authority.
+  candidate_path: null
+  updated_at: 2026-07-15T12:05:00Z
 ```
 
 Exclude prompts, credentials, sensitive tool output, raw reasoning, full provider responses, and private user data.
 
-The route re-anchor writes mechanical content fingerprints. They detect byte changes; they do not prove the Agent read or understood a source. `doctor` reports truth or intent changed after the last route anchor so the affected slice can return to alignment.
+The route re-anchor writes mechanical content fingerprints. The full Truth Map hash detects metadata and candidate changes; `confirmed_projection_sha256` distinguishes those from changes to active authority. These fingerprints detect bytes and structure; they do not prove the Agent read or understood a source. `doctor` reports truth or intent changed after the last route anchor so the affected slice can return to alignment.
+
+The route handshake also records a unique `route_instance_id`, `execution_start`, and—after completion or abandonment—`execution_end`. Execution snapshots include the real project-contained root and, when Git is available, worktree, branch/ref, HEAD, status hash, and a content-sensitive dirty-worktree hash. This state belongs in the local checkpoint layer, not in durable project truth.
 
 ## Resume Protocol
 
@@ -74,15 +84,18 @@ The route re-anchor writes mechanical content fingerprints. They detect byte cha
 3. Compare checkpoint paths, truth fingerprints, and scope with the working tree.
 4. Reload only confirmed sources applicable to the next action.
 5. Resolve stale decisions or conflicts.
-6. Consult the capability board and live project route overlay, then start `vibetether route` for the current phase, capability, and observable signals.
+6. Consult the capability board and live project route overlay, then start `node .vibetether/bin/vibetether.mjs route` for the current phase, capability, observable signals, and real execution root.
 7. Read applicable Proven Paths before inventing a new operational route.
 8. Restate goal, phase, protected capabilities, provider selection, experience disposition, evidence gap, and next action.
 9. Write a fresh checkpoint before acting.
-10. Before a phase transition, run `vibetether route complete` with bounded evidence or `vibetether route abandon` with a material reason.
+10. Before a phase transition, close the route with bounded evidence or a material abandonment reason, then resolve `truth_reconciliation`. Use the inline `no-material-change` decision only when confirmed authority did not change.
+11. At completion, handoff, merge, deployment, release, or publication, run `node .vibetether/bin/vibetether.mjs doctor --project . --boundary <BOUNDARY>`.
 
 Never resume directly from a compacted conversational summary.
 
 The route handshake is machine-owned runtime state, not durable project truth. It proves that a cooperating host selected and disposed a route; it does not prove that outputs are correct. Use current tests, reviews, captures, or other declared evidence for semantic claims.
+
+When `candidate-pending`, `applied`, or `declined` reconciliation succeeds, the handshake records the final Truth disposition and refreshes its execution-end snapshot after the visible Truth action. Later doctor checks compare against that post-decision snapshot. This remains integrity evidence rather than proof that only intended files changed.
 
 ## Drift Levels
 

@@ -16,6 +16,7 @@ import {
   writeAtomic,
 } from './files.mjs';
 import { inspectVibeTetherIdentity, skillFingerprint } from './skill-install.mjs';
+import { LOCAL_CLI_PATH } from './local-cli.mjs';
 
 async function exists(target) {
   try {
@@ -296,6 +297,44 @@ export async function uninstall(options) {
       let removedCanonicalEmptyExperienceIndex = false;
       let removedCanonicalEmptyTruthIndex = false;
       let clearedStaleTruthOwnership = false;
+      let removedLocalCli = false;
+      if (manifest.cli !== undefined) {
+        const cli = manifest.cli;
+        const validCli = mapping(cli)
+          && portablePath(cli.launcher) === LOCAL_CLI_PATH
+          && /^[a-f0-9]{64}$/.test(cli.launcher_sha256 ?? '')
+          && typeof cli.package === 'string'
+          && cli.package.trim() !== ''
+          && typeof cli.expected_version === 'string'
+          && cli.expected_version.trim() !== '';
+        if (!validCli) {
+          throw new CliError(
+            'Cannot safely remove the project-local CLI because the manifest cli baseline is invalid.',
+            3,
+          );
+        }
+        await rejectSymlinkPath(root, LOCAL_CLI_PATH);
+        const launcherPath = resolveInside(root, LOCAL_CLI_PATH);
+        const launcherOriginal = await readTextIfPresent(launcherPath);
+        if (launcherOriginal !== null) {
+          const actual = createHash('sha256').update(launcherOriginal, 'utf8').digest('hex');
+          if (actual !== cli.launcher_sha256) {
+            throw new CliError(
+              `Refusing to remove modified managed local CLI at ${LOCAL_CLI_PATH}. Back up the customization first.`,
+              3,
+            );
+          }
+          textPlans.push({
+            relativePath: LOCAL_CLI_PATH,
+            target: launcherPath,
+            original: launcherOriginal,
+            content: '',
+            removeFile: true,
+          });
+        }
+        delete manifest.cli;
+        removedLocalCli = true;
+      }
       const canonicalEmptyIndex = serializeExperienceIndex(EMPTY_EXPERIENCE_INDEX);
       if (manifest.experience_index === '.vibetether/experience-index.yaml'
         && isVibeTetherOwnedExperienceIndex(manifest.experience_index_ownership)) {
@@ -341,6 +380,7 @@ export async function uninstall(options) {
       }
       const hadRouting = 'capability_board' in manifest
         || 'provider_lock' in manifest
+        || removedLocalCli
         || removedCanonicalEmptyExperienceIndex
         || removedCanonicalEmptyTruthIndex
         || clearedStaleTruthOwnership;

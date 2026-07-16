@@ -19,6 +19,7 @@ import {
   inspectVibeTetherIdentity,
   skillFingerprint,
 } from './skill-install.mjs';
+import { LOCAL_CLI_PATH } from './local-cli.mjs';
 
 const LEGACY_GITIGNORE_BODY = '.vibetether/state/';
 const HASH = /^[a-f0-9]{64}$/;
@@ -236,6 +237,20 @@ async function verifiedManagedState(root) {
     const manifest = parseManifest((await readRegularFile(root, '.vibetether/project.yaml')).toString('utf8'));
     const enabledHarnesses = validateManifest(manifest);
     if (!enabledHarnesses) return null;
+    const allowedControlFiles = new Set(CONTROL_FILES);
+    if (manifest.cli !== undefined) {
+      const cli = manifest.cli;
+      if (!record(cli)
+          || !samePath(cli.launcher, LOCAL_CLI_PATH)
+          || !HASH.test(cli.launcher_sha256 ?? '')
+          || !nonemptyString(cli.package)
+          || !nonemptyString(cli.expected_version)) {
+        return null;
+      }
+      const launcher = await readRegularFile(root, LOCAL_CLI_PATH);
+      if (createHash('sha256').update(launcher).digest('hex') !== cli.launcher_sha256) return null;
+      allowedControlFiles.add(LOCAL_CLI_PATH);
+    }
     const lock = validateProviderLock(YAML.parse(
       (await readRegularFile(root, '.vibetether/providers.lock.yaml')).toString('utf8'),
     ));
@@ -268,7 +283,6 @@ async function verifiedManagedState(root) {
       allowedControlDirectories.add(relativePath);
     }
 
-    const allowedControlFiles = new Set(CONTROL_FILES);
     for (const source of lock.sources) {
       if (source.license_installation?.ownership !== 'vibetether') continue;
       if (!(await verifyLicense(root, source))) return null;

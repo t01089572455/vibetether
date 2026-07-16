@@ -33,8 +33,8 @@ npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/r
 That is the **full reviewed setup**: VibeTether for Codex and Claude Code,
 plus its curated product, planning, debugging, testing, UI, Web, and production
 specialists. The reliable Codeload form avoids npm's Git/SSH package path.
-It does not install a global `vibetether` executable, so copy each complete
-portable command below.
+It does not install a global `vibetether` executable. Initialization creates the
+project-local launcher used by the shorter commands below.
 
 It also installs the reviewed motion set: `motion-design` from the `extended`
 profile plus eight official `gsap-*` Skills from the Web bundle. Initialization
@@ -97,15 +97,18 @@ You say: “Build me a customer portal.” You do not need to know any Skill nam
 5. **Verify before advancing.** `test-driven-development` owns behavior changes,
    and `verification-before-completion` requires fresh slice evidence before
    the Agent advances or proposes another slice. The route is closed with a
-   recorded `route complete` event through the portable command shown below.
+   recorded `route complete` event, explicit Truth reconciliation, and a
+   boundary-specific doctor check.
 
 The installed project instructions tell a cooperating host Agent to perform the
 same re-check at task entry, consequential phase changes, compaction, resume,
 handoff, repeated failure, the next slice, completion, merge, release, and
 publication. That **phase re-entry** helps keep a long Goal-mode task from treating
 an old summary as current authority. It is behavioral guidance, not a host hook.
-The stateful `route` ledger is optional and uses the complete portable commands
-below; VibeTether does not install a global `vibetether` executable.
+Initialization installs a versioned project-local launcher at
+`.vibetether/bin/vibetether.mjs`; the managed instructions ask a cooperating
+Agent to use it at consequential boundaries. VibeTether still does not install a
+global `vibetether` executable.
 
 ## Features
 
@@ -117,7 +120,10 @@ below; VibeTether does not install a global `vibetether` executable.
 | 🗺️ | **User-owned truth map** | Keeps confirmed, candidate, and declined documents visible without silently activating them |
 | ⚓ | **Project-truth re-anchor** | Guides a cooperating Agent to re-read applicable confirmed rules before consequential actions |
 | 🧩 | **Automatic, inspectable Skill routing** | Maps observable task signals to one curated installed recommendation or declared fallback; selection remains advisory |
-| 🤝 | **Stateful phase handshake** | The portable CLI can record route selection, required output, evidence, completion, or abandonment |
+| 🤝 | **Stateful phase handshake** | The project-local CLI records a unique route instance, selection, required output, evidence, completion, or abandonment |
+| 🧾 | **Truth reconciliation gate** | Requires each exited route to state whether confirmed authority stayed unchanged, has a pending candidate, was applied, or was declined |
+| 🌳 | **Execution anchoring** | Records the real project-contained execution root and Git worktree/HEAD/content fingerprints when available |
+| 🩺 | **Boundary-aware doctor** | Treats pending reconciliation, execution drift, launcher drift, and version mismatch more strictly at completion, handoff, merge, deployment, release, or publication |
 | 📍 | **Long-task checkpoints** | Carries the current objective and slice through compaction, resume, and handoff |
 | 🎯 | **Smallest Verifiable Slice** | Defines the smallest verifiable outcome that advances the approved goal and keeps direct or delegated work inside it—without limiting Subagent use |
 | 🔁 | **Proven Path recall** | Reads a matching successful runbook before rediscovering an operational workflow |
@@ -138,7 +144,9 @@ VibeTether gives a new or existing project a beginner-readable control surface:
 | `.vibetether/project.yaml` | Routes the control artifacts without copying their content |
 | `.vibetether/capabilities.yaml` | Shows scenarios, routes, fallbacks, outputs, and exit evidence |
 | `.vibetether/state/current.yaml` | Keeps the current phase and bounded slice resumable |
+| `.vibetether/state/route-handshake.yaml` | Records the current route instance, execution root, disposition, and bounded evidence |
 | `.vibetether/experience-index.yaml` | Points to reusable workflows that have actually succeeded |
+| `.vibetether/bin/vibetether.mjs` | Pins one project-local CLI entry to the matching versioned VibeTether release tag |
 
 Initialization creates a blank truth entry list. It may inspect repository
 evidence for setup recommendations, but it does not automatically activate
@@ -162,19 +170,19 @@ confirmation.
 | Artifact | How to manage it |
 | --- | --- |
 | `.vibetether/TRUTH.md` | Edit directly or ask the Agent to propose candidates and confirm them one at a time |
-| `.vibetether/intent.md` | Use the portable `bootstrap` command below or ask the Agent to propose a directional update |
-| `.vibetether/routes.local.yaml` | Use the portable `customize` command below or edit validated YAML directly |
+| `.vibetether/intent.md` | Use the project-local `bootstrap` command below or ask the Agent to propose a directional update |
+| `.vibetether/routes.local.yaml` | Use the project-local `customize` command below or edit validated YAML directly |
 | Proven Path documents | Edit the referenced sanitized runbook; confirm before active indexing |
 | `.vibetether/project.yaml` | CLI-maintained topology; inspect it and normally repair it with the portable `init` command |
-| `.vibetether/capabilities.yaml` | Generated board; inspect it with the portable `capabilities` command |
+| `.vibetether/capabilities.yaml` | Generated board; inspect it with the project-local `capabilities` command |
 | `.vibetether/state/current.yaml` | Runtime checkpoint; inspect it for diagnosis and normally let VibeTether maintain it |
 
 Common guided operations:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether bootstrap --project .
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether customize --project .
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether doctor --project . --json
+node .vibetether/bin/vibetether.mjs bootstrap --project .
+node .vibetether/bin/vibetether.mjs customize --project .
+node .vibetether/bin/vibetether.mjs doctor --project . --boundary ordinary --json
 ```
 
 Edit project prose outside VibeTether's markers in `AGENTS.md` or `CLAUDE.md`.
@@ -271,44 +279,75 @@ still require the appropriate user decision.
 See the capability board:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether capabilities --project .
+node .vibetether/bin/vibetether.mjs capabilities --project .
 ```
 
 Start and close one phase route explicitly:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether route --project . --phase PLAN --capability planning --signal multi-step-change --agent codex
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether route complete --project . --evidence "The approved plan names bounded slices and verification."
+node .vibetether/bin/vibetether.mjs route --project . --execution-root . --phase PLAN --capability planning --signal multi-step-change --agent codex
+node .vibetether/bin/vibetether.mjs route complete --project . \
+  --evidence "The approved plan names bounded slices and verification." \
+  --truth-decision no-material-change \
+  --truth-reason "Planning evidence changed; confirmed project authority did not."
 ```
 
-If the route no longer fits:
+If the selected method no longer fits but confirmed authority is unchanged:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether route abandon --project . --reason "The governing product decision changed."
+node .vibetether/bin/vibetether.mjs route abandon --project . \
+  --reason "The selected provider cannot produce the required evidence." \
+  --truth-decision no-material-change \
+  --truth-reason "Changing the method did not change confirmed project authority."
+```
+
+If confirmed authority may have changed, close the route without the inline
+Truth decision, update `TRUTH.md` only through the user-confirmed lifecycle, then
+record the result:
+
+```sh
+node .vibetether/bin/vibetether.mjs truth reconcile --project . \
+  --decision candidate-pending \
+  --candidate docs/proposed-direction.md \
+  --reason "The proposed direction is waiting for user confirmation."
 ```
 
 The installed `AGENTS.md`/`CLAUDE.md` block tells the host agent to re-anchor at
-long-task boundaries. Use the portable commands above when you also want a
-stateful route record. A record proves that a route was selected and disposed;
+long-task boundaries. The project-local commands above create the stateful route
+record expected by those instructions. A record proves that a route was selected and disposed;
 it does not expose private reasoning or pretend to prove semantic correctness.
 Read the [routing guide](docs/routing.md) for the complete model.
 
-### What the optional CLI record writes
+### What the project-local CLI record writes
 
 Automatic phase re-entry is behavioral guidance in `AGENTS.md` or `CLAUDE.md`,
-not a background daemon or host hook. Only a portable `route` command writes
+not a background daemon or host hook. Only an executed project-local `route` command writes
 `.vibetether/state/route-handshake.yaml` and synchronizes
-`.vibetether/state/current.yaml`. `route complete` records bounded evidence and
-safe project-relative artifacts; `route abandon` records a material reason.
-Without those commands, there is no stateful CLI record. The file is the latest
-route disposition, not automatic background history or proof that the work is
-semantically correct.
+`.vibetether/state/current.yaml`. Each start receives a unique route instance and
+records the actual execution directory plus Git worktree, HEAD, and content
+fingerprints when Git is available. `route complete` records bounded evidence and
+safe project-relative artifacts; `route abandon` records a material reason. Each
+exit also requires an explicit Truth disposition before the next route or a
+completion-like boundary. Without those commands, there is no stateful CLI
+record. The file is the latest route disposition, not automatic background
+history or proof that the work is semantically correct.
 
 The route phase must match the current semantic checkpoint phase in
 `.vibetether/state/current.yaml`. When work is genuinely entering a new phase,
 the cooperating Agent re-anchors and updates that checkpoint first, then starts
 the matching `route` handshake. This stops a `PLAN` command from quietly being
 recorded while the resumable project state still says `DISCOVER`.
+
+Before completion, handoff, merge, deployment, release, or publication, pass the
+actual boundary:
+
+```sh
+node .vibetether/bin/vibetether.mjs doctor --project . --boundary completion
+```
+
+Ordinary work may report some transition states as attention; completion-like
+boundaries fail closed on pending Truth reconciliation, execution drift, or a
+project-local CLI version mismatch.
 
 For the full reviewed setup, `motion-design` becomes a **design overlay** for
 motion signals such as `animation` or `micro-interaction`; `gsap-core` becomes
@@ -324,7 +363,7 @@ work: install or copy one reviewed `SKILL.md` directory under
 `.agents/skills/<skill-name>/` and/or `.claude/skills/<skill-name>/`, then run:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether customize --project .
+node .vibetether/bin/vibetether.mjs customize --project .
 ```
 
 The guided editor lists installed project Skills and asks for one existing
@@ -412,8 +451,8 @@ Skill, but project instruction discovery and phase re-entry are host-dependent.
 ## Verify the installation
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether doctor --project . --json
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether capabilities --project .
+node .vibetether/bin/vibetether.mjs doctor --project . --boundary ordinary --json
+node .vibetether/bin/vibetether.mjs capabilities --project .
 ```
 
 For repository contributors, the offline acceptance tour is:

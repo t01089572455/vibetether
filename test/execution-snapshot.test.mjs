@@ -6,6 +6,10 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import YAML from 'yaml';
 import { main } from '../src/cli.mjs';
+import {
+  gitFailureIsUnavailable,
+  gitFailureIsUnbornHead,
+} from '../src/execution-snapshot.mjs';
 import { ROUTE_HANDSHAKE_PATH } from '../src/route-handshake.mjs';
 
 function git(cwd, args) {
@@ -142,5 +146,29 @@ test('doctor detects execution worktree drift after route completion', async () 
   assert.equal(
     completion.issues.some(({ code }) => code === 'stale-execution-snapshot'),
     true,
+  );
+});
+
+test('Git anchoring treats only missing Git or a non-repository as unavailable', () => {
+  assert.equal(gitFailureIsUnavailable({ code: 'ENOENT', stderr: '' }), true);
+  assert.equal(
+    gitFailureIsUnavailable({ code: 128, stderr: 'fatal: not a git repository' }),
+    true,
+  );
+  assert.equal(
+    gitFailureIsUnavailable({ code: 128, stderr: 'fatal: detected dubious ownership in repository' }),
+    false,
+  );
+  assert.equal(
+    gitFailureIsUnavailable({ code: 128, stderr: 'fatal: bad object HEAD' }),
+    false,
+  );
+  assert.equal(
+    gitFailureIsUnbornHead({ code: 128, stderr: 'fatal: Needed a single revision' }),
+    true,
+  );
+  assert.equal(
+    gitFailureIsUnbornHead({ code: 128, stderr: 'fatal: bad object HEAD' }),
+    false,
   );
 });
