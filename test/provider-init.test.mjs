@@ -587,6 +587,14 @@ test('safe same-name collision preserves the user Skill and installs other revie
   assert.deepEqual(demoBoard.blocked_in, {
     codex: 'different-preexisting-skill',
   });
+  const report = JSON.parse(await inspectProject({ project: target, json: true }));
+  assert.equal(report.issues.some(({ code }) => code.includes('collision')), false);
+  assert.equal(
+    report.warnings.some(({ code }) => code === 'optional-provider-name-collision'),
+    true,
+  );
+  assert.equal(report.providers.active, 2);
+  assert.equal(report.providers.available, 1);
   assert.match(output, /Preserved Skill name collisions/i);
   assert.match(output, /\.agents\/skills\/demo/);
 });
@@ -648,6 +656,64 @@ test('collision in one harness still installs the reviewed provider in the other
     codex: 'different-preexisting-skill',
   });
   assert.deepEqual(demoRoute.recommendation.available_in, ['claude']);
+});
+
+test('doctor rejects unsafe or contradictory provider collision metadata', async () => {
+  const source = await completeUpstream();
+  const target = await project('invalid-collision-metadata');
+  const customSkill = path.join(target, '.agents', 'skills', 'demo');
+  await mkdir(customSkill, { recursive: true });
+  await writeFile(
+    path.join(customSkill, 'SKILL.md'),
+    '---\nname: demo\ndescription: User-owned demo.\n---\n',
+    'utf8',
+  );
+  await initialize(options(target, { agent: 'codex' }), {
+    loadRegistry: async () => twoExposureRegistry(source),
+  });
+
+  const lockPath = path.join(target, '.vibetether', 'providers.lock.yaml');
+  const base = YAML.parse(await readFile(lockPath, 'utf8'));
+  const cases = [
+    {
+      code: 'provider-collision-path-mismatch',
+      mutate(lock) {
+        for (const collection of [lock.exposures, lock.skills]) {
+          collection.find((skill) => skill.id === 'fixture-demo').collisions.codex.path = '.agents/skills/other';
+        }
+      },
+    },
+    {
+      code: 'invalid-provider-collision',
+      mutate(lock) {
+        for (const collection of [lock.exposures, lock.skills]) {
+          collection.find((skill) => skill.id === 'fixture-demo').collisions.codex.reason = 'unsupported';
+        }
+      },
+    },
+    {
+      code: 'provider-collision-overlap',
+      mutate(lock) {
+        for (const collection of [lock.exposures, lock.skills]) {
+          collection.find((skill) => skill.id === 'fixture-demo').installations.codex = {
+            path: '.agents/skills/demo',
+            ownership: 'vibetether',
+          };
+        }
+      },
+    },
+  ];
+
+  for (const value of cases) {
+    const lock = structuredClone(base);
+    value.mutate(lock);
+    await writeFile(lockPath, YAML.stringify(lock), 'utf8');
+    await assert.rejects(
+      inspectProject({ project: target, json: true }),
+      (error) => JSON.parse(error.output).issues.some(({ code }) => code === value.code),
+      value.code,
+    );
+  }
 });
 
 test('extended Web initialization exposes all reviewed motion Skills and writes their advisory routes', async () => {

@@ -38,6 +38,10 @@ const CAPTURE_TRIGGERS = new Set(['first-proven-path', 'recovered-path', 'change
 const VALID_TRIGGERS = new Set([...CAPTURE_TRIGGERS, 'repeat-proven-path', 'routine-non-path']);
 const VALID_DISPOSITIONS = new Set(['captured', 'already-encoded', 'not-reusable']);
 const RESOLVED_TRUTH_RECONCILIATIONS = new Set(['no_material_change', 'applied', 'declined']);
+const PROVIDER_COLLISION_REASONS = new Set([
+  'different-preexisting-skill',
+  'modified-managed-skill',
+]);
 
 function completionLike(state, boundary = 'ordinary') {
   return COMPLETION_BOUNDARIES.has(boundary)
@@ -979,6 +983,57 @@ export async function inspectProject(options) {
         } catch {
           issues.push(issue('invalid-provider', 'Cannot verify provider installation'));
         }
+      }
+      const collisions = skill.collisions ?? {};
+      if (!collisions || typeof collisions !== 'object' || Array.isArray(collisions)) {
+        issues.push(issue('invalid-provider-collision', 'Invalid provider collision record'));
+        continue;
+      }
+      for (const [harness, collision] of Object.entries(collisions)) {
+        if (!collision || typeof collision !== 'object' || Array.isArray(collision)
+          || collision.preserved !== true
+          || !PROVIDER_COLLISION_REASONS.has(collision.reason)) {
+          issues.push(issue('invalid-provider-collision', 'Invalid provider collision record'));
+          continue;
+        }
+        if (Object.hasOwn(installations, harness)) {
+          issues.push(issue(
+            'provider-collision-overlap',
+            'A provider harness cannot be both a verified installation and a preserved collision',
+          ));
+          continue;
+        }
+        const adapter = ADAPTERS[harness];
+        const expectedPath = adapter
+          ? portablePath(path.join(path.dirname(adapter.skillDirectory), skill.install_name))
+          : null;
+        if (!expectedPath || portablePath(collision.path) !== expectedPath) {
+          issues.push(issue(
+            'provider-collision-path-mismatch',
+            'Provider collision path does not match the expected project Skill path',
+          ));
+          continue;
+        }
+        const collisionEntry = await projectEntryStatus(root, collision.path, 'directory');
+        if (collisionEntry.status === 'escape') {
+          issues.push(issue('provider-collision-path-escape', 'Provider collision path escapes the project'));
+          continue;
+        }
+        if (collisionEntry.status === 'missing') {
+          issues.push(issue('missing-provider-collision-target', 'Preserved provider collision target is missing'));
+          continue;
+        }
+        if (collisionEntry.status !== 'ok') {
+          issues.push(issue('unsafe-provider-collision', unsafeAuthorityMessage('Provider collision', 'directory')));
+          continue;
+        }
+        const code = collision.reason === 'modified-managed-skill'
+          ? 'modified-managed-provider-preserved'
+          : 'optional-provider-name-collision';
+        warnings.push(warning(
+          code,
+          `Preserved ${collision.path}; the reviewed ${skill.install_name} provider is unavailable in ${harness}.`,
+        ));
       }
     }
 
