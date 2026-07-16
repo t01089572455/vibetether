@@ -7,7 +7,8 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const codeload = 'npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether';
+const latestCodeload = 'npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether';
+const pinnedCodeload = 'npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.0 vibetether';
 const publicCliDocs = [
   'README.md',
   'docs/installation.md',
@@ -20,14 +21,25 @@ async function text(relativePath) {
   return readFile(path.join(root, relativePath), 'utf8');
 }
 
-test('README opens with the user problem and puts the reliable install before explanation', async () => {
+test('README opens with the user problem and puts the latest install before explanation', async () => {
   const readme = (await text('README.md')).replace(/\r\n/g, '\n');
   assert.ok(readme.startsWith(`# VibeTether\n\n> Even strong agents can drift during long-running work.\n\nVibeTether is a beginner-friendly control Skill for long-running Codex and Claude\nprojects. It is designed for increasingly capable models—including GPT‑5.6 Sol,\nClaude Fable 5, and the models that come next—helping coding agents stay aligned\n`));
-  const install = `${codeload} init --project . --agent both --profile extended --bundle web --bundle production --yes`;
+  const install = `${latestCodeload} init --project . --agent both --profile extended --bundle web --bundle production --yes`;
   assert.match(readme, new RegExp(install.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.ok(readme.indexOf(install) < readme.indexOf('## Why I built this'));
   assert.match(readme, /one command|copy.*paste/i);
   assert.doesNotMatch(readme, /<github-owner>|your-username|OWNER\/vibetether/i);
+});
+
+test('README keeps latest installation and adds a version-pinned update path', async () => {
+  const readme = await text('README.md');
+  const latestInstall = `${latestCodeload} init --project . --agent both --profile extended --bundle web --bundle production --yes`;
+  const pinnedUpdate = `${pinnedCodeload} init --project . --agent both --profile extended --bundle web --bundle production --yes`;
+  assert.match(readme, new RegExp(latestInstall.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(readme, new RegExp(pinnedUpdate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(readme, /latest|current `main`/i);
+  assert.match(readme, /existing installation|update|upgrade/i);
+  assert.match(readme, /moving.*main.*cache|cache.*moving.*main/is);
 });
 
 test('README makes a strong but honest long-task claim', async () => {
@@ -135,9 +147,10 @@ test('README teaches project truth control in ordinary language and links the vi
 
 test('README gives beginners a copy-paste project-truth quickstart', async () => {
   const readme = (await text('README.md')).replace(/\r\n/g, '\n');
-  const start = readme.indexOf('## Add project truth: a 3-step quickstart');
+  const start = readme.indexOf('## Add project truth');
   assert.notEqual(start, -1);
   const tutorial = readme.slice(start, readme.indexOf('\n## ', start + 4));
+  assert.doesNotMatch(readme, /## Add project truth:/);
   assert.match(tutorial, /1\. Ask the Agent to search/i);
   assert.match(tutorial, /2\. Confirm one candidate/i);
   assert.match(tutorial, /3\. Verify/i);
@@ -146,6 +159,24 @@ test('README gives beginners a copy-paste project-truth quickstart', async () =>
   assert.match(tutorial, /show me the diff/i);
   assert.match(tutorial, /VibeTether doctor check/i);
   assert.match(tutorial, /move|supersede|remove/i);
+});
+
+test('README places custom Skill setup after project truth and teaches Agent-managed installation and routing', async () => {
+  const readme = (await text('README.md')).replace(/\r\n/g, '\n');
+  const truth = readme.indexOf('## Add project truth');
+  const customSkills = readme.indexOf('## Add your own Skills');
+  const controlLoop = readme.indexOf('## The control loop');
+  assert.ok(truth < customSkills, 'Custom Skill setup should follow project truth');
+  assert.ok(customSkills < controlLoop, 'Custom Skill setup should precede the control-loop reference');
+
+  const tutorial = readme.slice(customSkills, readme.indexOf('\n## ', customSkills + 4));
+  assert.match(tutorial, /URL-or-local-path|repository URL.*local path/is);
+  assert.match(tutorial, /inspect.*SKILL\.md.*source.*license/is);
+  assert.match(tutorial, /\.agents\/skills\/<skill-name>\/.*\.claude\/skills\/<skill-name>\//is);
+  assert.match(tutorial, /install.*Skill.*update.*routes\.local\.yaml/is);
+  assert.match(tutorial, /I authorize|I approve/i);
+  assert.match(tutorial, /capabilities.*--phase.*--capability.*--signal.*--agent/is);
+  assert.match(tutorial, /doctor.*--boundary ordinary/is);
 });
 
 test('public command documentation uses the project-local CLI after portable acquisition', async () => {
@@ -161,7 +192,8 @@ test('public command documentation uses the project-local CLI after portable acq
       .filter((line) => /^\s*npx\s+--yes\b.*\bvibetether\b/.test(line));
     for (const invocation of portableInvocations) {
       assert.equal(
-        invocation.trimStart().startsWith(codeload),
+        invocation.trimStart().startsWith(latestCodeload)
+          || invocation.trimStart().startsWith(pinnedCodeload),
         true,
         `${file} must use the reviewed Codeload package form for every npx vibetether command`,
       );
@@ -174,7 +206,7 @@ test('public command documentation uses the project-local CLI after portable acq
   }
 
   const readme = await text('README.md');
-  assert.match(readme, new RegExp(`${codeload.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} init --project \\. --agent codex`));
+  assert.match(readme, new RegExp(`${latestCodeload.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} init --project \\. --agent codex`));
   assert.match(readme, /cooperating Agent/i);
   assert.match(readme, /model names.*not.*compatibility/i);
   assert.match(readme, /attempts recovery after the host releases/i);
@@ -226,7 +258,8 @@ test('README stays focused and delegates complete inventories and operations', a
 
 test('installation guide separates reliable acquisition, guided setup, profiles, and uninstall', async () => {
   const guide = await text('docs/installation.md');
-  assert.match(guide, new RegExp(codeload.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(guide, new RegExp(latestCodeload.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(guide, new RegExp(pinnedCodeload.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.match(guide, /guided|numbered choices/i);
   assert.match(guide, /core.*standard.*extended/is);
   assert.match(guide, /--bundle web/);
@@ -235,6 +268,9 @@ test('installation guide separates reliable acquisition, guided setup, profiles,
   assert.match(guide, /outer `npx --yes`.*VibeTether's `--yes`/is);
   assert.match(guide, /uninstall --project \. --dry-run/);
   assert.match(guide, /github:.*not.*primary|not use.*github:/is);
+  assert.match(guide, /latest|current `main`/i);
+  assert.match(guide, /update|upgrade/i);
+  assert.match(guide, /moving.*main.*cache|cache.*moving.*main/is);
   assert.match(guide, /versioned release tag/i);
   assert.match(guide, /VIBETETHER_CLI_PACKAGE[\s\S]*trusted[\s\S]*(testing|recovery)/i);
   assert.doesNotMatch(guide, /immutable release tag/i);

@@ -12,6 +12,8 @@ The Codeload tarball is the primary acquisition path. It downloads the public
 package over HTTPS without asking npm to invoke Git or SSH. Do not use the
 shorter `github:t01089572455/vibetether` form as the primary path; on some npm
 and Windows Git combinations it exits 128 before VibeTether starts.
+This command follows the current `main`. Use the version-pinned update command
+below when the exact target version matters.
 
 The outer `npx --yes` lets npm acquire the package. VibeTether's `--yes` is the
 final flag and accepts the fully specified project plan. They answer different
@@ -100,11 +102,19 @@ customized installed Skill.
 
 ## Update
 
-Repeat the desired canonical command. Core VibeTether replacement happens before
-provider fetching. An unchanged managed launcher is upgraded atomically; a
-modified or unrelated launcher is preserved and blocks the update before partial
-writes. On Windows, a host may lock the active Skill. The update is
-then recorded as pending; close the host and rerun the same command. See the
+Choose the target release explicitly and rerun `init`:
+
+```sh
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.0 vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+```
+
+The existing installation makes this an update; the versioned release tag makes
+the target reproducible and avoids npm's cache reusing a stale package for the
+moving `main` URL. Core VibeTether replacement happens before provider fetching.
+An unchanged managed launcher is upgraded atomically; a modified or unrelated
+launcher is preserved and blocks the update before partial writes. On Windows, a
+host may lock the active Skill. The update is then recorded as pending; close the
+host and rerun the same command. See the
 [Windows lifecycle runbook](operations/windows-skill-lifecycle.md).
 
 ## Uninstall
@@ -112,8 +122,8 @@ then recorded as pending; close the host and rerun the same command. See the
 Always preview first:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether uninstall --project . --dry-run
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether uninstall --project . --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.0 vibetether uninstall --project . --dry-run
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.0 vibetether uninstall --project . --yes
 ```
 
 Only unchanged VibeTether-owned files and managed blocks are removed. Intent,

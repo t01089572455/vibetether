@@ -36,15 +36,20 @@ diagnosing ordinary project behavior.
 Use the documented Codeload tarball form:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.0 vibetether init --project .
 ```
 
 The shorter `github:t01089572455/vibetether` shorthand can make npm invoke Git
 or SSH and exit 128 before VibeTether is running. VibeTether cannot recover an
 acquisition failure that happens before its executable starts.
 
-`curl -I https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main`
+`curl -I https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.0`
 tests package acquisition separately from later provider Git access.
+
+If `vibetether --version` unexpectedly reports an older release, check whether
+the command used the moving `refs/heads/main` URL. npm can reuse a cached package
+for that URL. Switch to the fixed release tag above, optionally use a fresh npm
+cache, and verify the version before running `init`.
 
 ## A provider fetch reports TLS or an unexpected EOF
 
@@ -73,7 +78,7 @@ Prompt, then rerun the same install:
 set "GIT_CONFIG_COUNT=1"
 set "GIT_CONFIG_KEY_0=http.sslBackend"
 set "GIT_CONFIG_VALUE_0=openssl"
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.0 vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
 ```
 
 `GIT_SSL_BACKEND=openssl` alone does not configure Git's HTTP backend.

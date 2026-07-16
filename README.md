@@ -36,6 +36,16 @@ specialists. The reliable Codeload form avoids npm's Git/SSH package path.
 It does not install a global `vibetether` executable. Initialization creates the
 project-local launcher used by the shorter commands below.
 
+This first command follows the current `main`. For an existing installation,
+recovery, or a reproducible setup, pin the target release:
+
+```sh
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.0 vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+```
+
+npm may cache the moving `main` package URL and start an older package. The fixed
+tag makes the intended update version explicit.
+
 It also installs the reviewed motion set: `motion-design` from the `extended`
 profile plus eight official `gsap-*` Skills from the Web bundle. Initialization
 caches their pinned sources, exposes them to the selected host, and renders their
@@ -189,7 +199,7 @@ Edit project prose outside VibeTether's markers in `AGENTS.md` or `CLAUDE.md`.
 Rerun the portable `init` command to repair the CLI-maintained block. Do not hand-edit the
 generated capability board, canonical Intent metadata, or runtime route state.
 
-## Add project truth: a 3-step quickstart
+## Add project truth
 
 `.vibetether/TRUTH.md` is the entry list for documents that may govern the
 project. A new installation starts with an empty list. You can manage it without
@@ -252,6 +262,72 @@ previously successful workflow, the Agent must show the conflict and ask instead
 of letting old experience override current direction.
 
 See [Project truth and document lifecycle](docs/project-truth.md).
+
+## Add your own Skills
+
+VibeTether can route a Skill you installed yourself, including one it does not
+recommend or distribute. Adding the folder alone is not enough: the Skill must
+also be connected to an observable project route before VibeTether can recommend
+it for the right situation.
+
+### Ask the Agent to install and connect it
+
+Copy this into Codex or Claude and replace the placeholders:
+
+```text
+Install the reviewed Skill from `<URL-or-local-path>` for `<codex|claude|both>`.
+I authorize this project-local Skill installation and the smallest safe
+VibeTether route update.
+
+1. Inspect its `SKILL.md`, source, license, intended use, and existing project
+   Skills and routes. Stop and explain the problem if the source is untrusted,
+   incompatible, ambiguously named, or conflicts with an existing route.
+2. Install the complete Skill directory under
+   `.agents/skills/<skill-name>/` and/or `.claude/skills/<skill-name>/` for the
+   enabled host. Do not overwrite a different or modified Skill.
+3. Add or update `.vibetether/routes.local.yaml` with the smallest
+   signal-specific route that fits an existing phase and capability. Choose
+   `primary`, `alternative`, or `overlay` deliberately, and do not weaken any
+   authority, readiness, evidence, security, data, permission, or release gate.
+4. Show the installed paths and route diff. Then verify the new route with:
+   `node .vibetether/bin/vibetether.mjs capabilities --project . --phase <PHASE> --capability <CAPABILITY> --signal <SIGNAL> --agent <codex|claude> --json`
+   and run:
+   `node .vibetether/bin/vibetether.mjs doctor --project . --boundary ordinary --json`.
+5. Report whether the signal-matched query actually recommends the new Skill.
+   Do not claim it is routed merely because its directory exists.
+```
+
+This prompt authorizes the bounded project-local installation and route update.
+The Agent should still stop for an untrusted source, destructive replacement,
+route conflict, or other high-risk decision.
+
+Want to approve the route before it is written instead? Use:
+
+> Inspect my installed project Skills. For each relevant candidate, explain its
+> source and role. Propose the smallest useful VibeTether route with phase,
+> capability, observable signals, role, expected output, and exit evidence. Show
+> the `routes.local.yaml` diff and wait for my confirmation before writing it.
+
+### Configure it manually
+
+Install or copy one reviewed `SKILL.md` directory under
+`.agents/skills/<skill-name>/` and/or `.claude/skills/<skill-name>/`, then run:
+
+```sh
+node .vibetether/bin/vibetether.mjs customize --project .
+```
+
+The guided editor lists installed project Skills and asks for one existing
+phase/capability, route role, observable signals, outputs, and exit evidence.
+Confirm the preview to write `.vibetether/routes.local.yaml`, then inspect the
+result with `capabilities` or a signal-matched route query. A local route can be
+a signal-specific `primary`, an `alternative`, or an additive `overlay`.
+
+Project-local routes are re-read live. They extend the reviewed board but cannot
+weaken authority, readiness, evidence, security, permission, destructive-data,
+or release gates. If a local primary is missing, VibeTether names the problem
+and falls back to the curated route. The [routing guide](docs/routing.md) has the
+complete YAML schema and verification sequence.
 
 ## The control loop
 
@@ -354,55 +430,6 @@ motion signals such as `animation` or `micro-interaction`; `gsap-core` becomes
 an **implementation overlay** for `motion`, `gsap`, or scroll-animation signals.
 The other installed GSAP Skills stay visible as focused aliases. Ordinary React
 or frontend work alone does not automatically select a GSAP overlay.
-
-## Add your own Skills
-
-VibeTether can route a Skill you installed yourself, including one it does not
-recommend or distribute. It never downloads an arbitrary Skill during active
-work: install or copy one reviewed `SKILL.md` directory under
-`.agents/skills/<skill-name>/` and/or `.claude/skills/<skill-name>/`, then run:
-
-```sh
-node .vibetether/bin/vibetether.mjs customize --project .
-```
-
-The guided editor lists installed project Skills and asks for one existing
-phase/capability, route role, observable signals, outputs, and exit evidence.
-Confirm the preview to write `.vibetether/routes.local.yaml`, then inspect the
-result with `capabilities` or a signal-matched `route` command. A local route can
-be a signal-specific `primary`, an `alternative`, or an additive `overlay`.
-
-Prefer to ask your Agent? Copy this request into the project:
-
-> Inspect my installed project Skills. For each relevant candidate, explain its
-> source and role. Propose the smallest useful VibeTether route with phase,
-> capability, observable signals, role, expected output, and exit evidence. Show
-> the `routes.local.yaml` diff and wait for my confirmation before writing it.
-
-For example, after installing a `motion-audit` Skill, a confirmed local overlay
-could look like this:
-
-```yaml
-schema_version: 1
-routes:
-  - id: project-motion-audit
-    phases: [DESIGN]
-    capability: frontend-product-design
-    when_any: [motion-audit-requested]
-    skill: motion-audit
-    role: overlay
-    use_when:
-      - Audit approved UI motion for clarity, accessibility, and restraint.
-    expected_outputs: [motion-audit]
-    exit_evidence:
-      - The motion audit identifies tested improvements or confirms no change is needed.
-```
-
-Project-local routes are re-read live. They extend the reviewed board but cannot
-weaken authority, readiness, evidence, security, permission, destructive-data,
-or release gates. If a local primary is missing, VibeTether names the problem
-and falls back to the curated route. The [routing guide](docs/routing.md) has the
-complete schema and verification sequence.
 
 ## Preserve proven workflows
 
