@@ -166,6 +166,33 @@ function formatDryRun(root, textPlans, skillPlans, action = 'initialize') {
   return `DRY RUN - VibeTether would ${action} ${root}:${details}`;
 }
 
+async function findUnprocessedManagedCollisions(root, existingLock, processedKeys) {
+  const collisions = [];
+  for (const skill of existingLock?.exposures ?? existingLock?.skills ?? []) {
+    for (const [harness, installation] of Object.entries(skill.installations ?? {})) {
+      if (installation.ownership !== 'vibetether') continue;
+      const key = `${skill.id}:${harness}`;
+      if (processedKeys.has(key)) continue;
+      try {
+        await rejectSymlinkPath(root, installation.path);
+        const installedFingerprint = await skillFingerprint(resolveInside(root, installation.path));
+        if (installedFingerprint !== skill.fingerprint) {
+          collisions.push({
+            provider_id: skill.id,
+            harness,
+            path: installation.path,
+            reason: 'modified-managed-skill',
+          });
+        }
+      } catch (error) {
+        if (error.code === 'ENOENT') continue;
+        throw new CliError(`Cannot verify installed Skill at ${installation.path}: ${error.message}`, 3);
+      }
+    }
+  }
+  return collisions;
+}
+
 export async function applyInitialization(root, textPlans, skillPlans, installSkillOperation = installSkill) {
   const appliedTexts = [];
   const createdBackups = [];
@@ -787,6 +814,20 @@ export async function initialize(options, dependencies = {}) {
         }
       }
     }
+    const processedKeys = new Set([
+      ...installations.map((entry) => `${entry.provider_id}:${entry.harness}`),
+      ...collisions.map((entry) => `${entry.provider_id}:${entry.harness}`),
+    ]);
+    for (const collision of await findUnprocessedManagedCollisions(root, existingLock, processedKeys)) {
+      collisions.push(collision);
+      skillPlans.push({
+        relativePath: collision.path,
+        target: resolveInside(root, collision.path),
+        needsInstall: false,
+        kind: 'collision',
+        providerId: collision.provider_id,
+      });
+    }
     const plannedSources = [];
     for (const source of providerSources) {
       if (source.license_evidence?.mode === 'readme-declaration') {
@@ -984,6 +1025,14 @@ export async function initialize(options, dependencies = {}) {
         });
         installations.push({ provider_id: provider.id, harness: adapter, path: relativePath, ownership });
       }
+    }
+    const processedKeys = new Set([
+      ...installations.map((entry) => `${entry.provider_id}:${entry.harness}`),
+      ...collisions.map((entry) => `${entry.provider_id}:${entry.harness}`),
+    ]);
+    for (const collision of await findUnprocessedManagedCollisions(root, existingLock, processedKeys)) {
+      collisions.push(collision);
+      preservedCollisions.push(collision);
     }
 
     const lock = createProviderLock({

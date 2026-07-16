@@ -227,6 +227,70 @@ test('uninstall preserves identical providers that existed before VibeTether', a
   assert.equal(await exists(path.join(provider, 'SKILL.md')), true);
 });
 
+test('reinit preserves a modified managed provider and relinquishes uninstall ownership', async () => {
+  const { source, target, provider } = await initialized('modified-managed');
+  const customized = `${await readFile(path.join(provider, 'SKILL.md'), 'utf8')}\nUser customization.\n`;
+  await writeFile(path.join(provider, 'SKILL.md'), customized, 'utf8');
+
+  await initialize(
+    { project: target, agent: 'codex', profile: 'standard', dryRun: false, yes: true },
+    { loadRegistry: async () => registry(source) },
+  );
+
+  const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
+  assert.equal(lock.exposures[0].installations.codex, undefined);
+  assert.equal(lock.exposures[0].collisions.codex.reason, 'modified-managed-skill');
+  const report = JSON.parse(await inspectProject({ project: target, json: true }));
+  assert.equal(
+    report.warnings.some(({ code }) => code === 'modified-managed-provider-preserved'),
+    true,
+  );
+
+  await uninstall({ project: target, dryRun: false, yes: true });
+  assert.equal(await readFile(path.join(provider, 'SKILL.md'), 'utf8'), customized);
+});
+
+test('profile downgrade relinquishes ownership of a modified managed provider', async () => {
+  const { source, target, provider } = await initialized('modified-managed-downgrade');
+  const customized = `${await readFile(path.join(provider, 'SKILL.md'), 'utf8')}\nUser customization.\n`;
+  await writeFile(path.join(provider, 'SKILL.md'), customized, 'utf8');
+
+  await initialize(
+    { project: target, agent: 'codex', profile: 'core', dryRun: false, yes: true },
+    { loadRegistry: async () => registry(source) },
+  );
+
+  const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
+  assert.equal(lock.profile, 'core');
+  assert.equal(lock.exposures[0].active, false);
+  assert.equal(lock.exposures[0].installations.codex, undefined);
+  assert.equal(lock.exposures[0].collisions.codex.reason, 'modified-managed-skill');
+
+  await uninstall({ project: target, dryRun: false, yes: true });
+  assert.equal(await readFile(path.join(provider, 'SKILL.md'), 'utf8'), customized);
+});
+
+test('removing a preserved collision lets reinit install the reviewed provider', async () => {
+  const { source, target, provider } = await initialized('collision-recovery');
+  await writeFile(path.join(provider, 'SKILL.md'), 'user replacement\n', 'utf8');
+  const dependencies = { loadRegistry: async () => registry(source) };
+
+  await initialize(
+    { project: target, agent: 'codex', profile: 'standard', dryRun: false, yes: true },
+    dependencies,
+  );
+  await rm(provider, { recursive: true });
+  await initialize(
+    { project: target, agent: 'codex', profile: 'standard', dryRun: false, yes: true },
+    dependencies,
+  );
+
+  const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
+  assert.equal(lock.exposures[0].collisions, undefined);
+  assert.equal(lock.exposures[0].installations.codex.ownership, 'vibetether');
+  assert.equal(await skillFingerprint(provider), source.fingerprint);
+});
+
 test('profile downgrade retains inactive ownership so managed providers remain safely uninstallable', async () => {
   const { source, target, provider } = await initialized('profile-downgrade');
   const dependencies = { loadRegistry: async () => registry(source) };

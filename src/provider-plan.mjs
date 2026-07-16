@@ -88,7 +88,32 @@ export function createProviderLock({
 
   for (const previous of existingLock?.exposures ?? existingLock?.skills ?? []) {
     if (activeIds.has(previous.id)) continue;
-    exposures.push({ ...previous, active: false });
+    const installations = Object.fromEntries(
+      Object.entries(previous.installations ?? {}).map(([harness, installation]) => [
+        harness,
+        { ...installation },
+      ]),
+    );
+    const previousCollisions = Object.fromEntries(
+      Object.entries(previous.collisions ?? {}).map(([harness, collision]) => [
+        harness,
+        { ...collision },
+      ]),
+    );
+    for (const value of collisions.filter((collision) => collision.provider_id === previous.id)) {
+      delete installations[value.harness];
+      previousCollisions[value.harness] = {
+        path: value.path,
+        reason: value.reason,
+        preserved: true,
+      };
+    }
+    exposures.push({
+      ...previous,
+      active: false,
+      installations,
+      ...(Object.keys(previousCollisions).length > 0 ? { collisions: previousCollisions } : {}),
+    });
   }
 
   const activeCatalogIds = new Set(sources.flatMap((source) => source.skills.map((skill) => skill.id)));
