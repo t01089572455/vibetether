@@ -143,6 +143,12 @@ function formatDryRun(root, textPlans, skillPlans, action = 'initialize') {
     );
   }
   for (const plan of skillPlans) {
+    if (plan.kind === 'collision') {
+      sections.push(
+        `--- ${plan.relativePath}\n+++ ${plan.relativePath}\n=<preserve existing Skill; reviewed provider ${plan.providerId} blocked by name collision>`,
+      );
+      continue;
+    }
     if (!plan.needsInstall) continue;
     if (plan.kind === 'catalog') {
       sections.push(
@@ -693,8 +699,11 @@ export async function initialize(options, dependencies = {}) {
     return `${recoveryPrefix}VibeTether bootstrapped project truth in ${root} without changing provider installations.\n`;
   }
 
+  const preservedCollisions = [];
+  let availableProviderCount = providers.length;
   if (options.dryRun) {
     const installations = [];
+    const collisions = [];
     const catalogInstallations = [];
     for (const source of providerSources) {
       for (const catalogSkill of source.skills) {
@@ -736,13 +745,19 @@ export async function initialize(options, dependencies = {}) {
         const target = resolveInside(root, relativePath);
         let needsInstall = true;
         let ownership = 'planned';
+        let collision = null;
         try {
           const installedFingerprint = await skillFingerprint(target);
           if (installedFingerprint !== provider.fingerprint) {
-            throw new CliError(`Refusing to overwrite different or modified installed Skill at ${relativePath}. Back up or remove it first.`, 3);
+            collision = priorInstallationOwnership(existingLock, provider, adapter, relativePath) === 'vibetether'
+              ? 'modified-managed-skill'
+              : 'different-preexisting-skill';
+            needsInstall = false;
+            ownership = null;
+          } else {
+            needsInstall = false;
+            ownership = priorInstallationOwnership(existingLock, provider, adapter, relativePath) ?? 'preexisting';
           }
-          needsInstall = false;
-          ownership = priorInstallationOwnership(existingLock, provider, adapter, relativePath) ?? 'preexisting';
         } catch (error) {
           if (error.code !== 'ENOENT') throw error;
         }
@@ -750,17 +765,26 @@ export async function initialize(options, dependencies = {}) {
           relativePath,
           target,
           needsInstall,
-          kind: 'provider',
+          kind: collision ? 'collision' : 'provider',
           providerId: provider.id,
           sourceId: provider.source_id,
           commit: provider.commit,
         });
-        installations.push({
-          provider_id: provider.id,
-          harness: adapter,
-          path: relativePath,
-          ownership,
-        });
+        if (collision) {
+          collisions.push({
+            provider_id: provider.id,
+            harness: adapter,
+            path: relativePath,
+            reason: collision,
+          });
+        } else {
+          installations.push({
+            provider_id: provider.id,
+            harness: adapter,
+            path: relativePath,
+            ownership,
+          });
+        }
       }
     }
     const plannedSources = [];
@@ -809,6 +833,7 @@ export async function initialize(options, dependencies = {}) {
       sources: plannedSources,
       providers,
       installations,
+      collisions,
       catalogInstallations,
       existingLock,
     });
@@ -914,6 +939,7 @@ export async function initialize(options, dependencies = {}) {
       }
     }
     const installations = [];
+    const collisions = [];
     for (const provider of providers) {
       const stagedProvider = stagedSkills.get(provider.id);
       if (!stagedProvider) throw new CliError(`Staged provider is missing: ${provider.id}`, 3);
@@ -923,8 +949,27 @@ export async function initialize(options, dependencies = {}) {
           .replaceAll('\\', '/');
         await rejectSymlinkPath(root, relativePath);
         const target = resolveInside(root, relativePath);
-        const inspection = await inspectDirectoryInstall(stagedProvider.source_path, target, relativePath);
         const priorOwnership = priorInstallationOwnership(existingLock, provider, adapter, relativePath);
+        const inspection = await inspectDirectoryInstall(
+          stagedProvider.source_path,
+          target,
+          relativePath,
+          {
+            preserveConflict: true,
+            previouslyManaged: priorOwnership === 'vibetether',
+          },
+        );
+        if (inspection.collision) {
+          const collision = {
+            provider_id: provider.id,
+            harness: adapter,
+            path: relativePath,
+            reason: inspection.collision,
+          };
+          collisions.push(collision);
+          preservedCollisions.push(collision);
+          continue;
+        }
         const ownership = priorOwnership ?? inspection.ownership;
         skillPlans.push({
           relativePath,
@@ -947,9 +992,13 @@ export async function initialize(options, dependencies = {}) {
       sources: installedSources,
       providers,
       installations,
+      collisions,
       catalogInstallations,
       existingLock,
     });
+    availableProviderCount = lock.exposures.filter((skill) => (
+      skill.active && Object.keys(skill.installations ?? {}).length > 0
+    )).length;
     const board = createCapabilityBoard(registry, options.profile, lock, adapters);
     if (projectRoutesDocument) validateProjectRoutes(projectRoutesDocument, board);
     const boardTarget = resolveInside(root, '.vibetether/capabilities.yaml');
@@ -1000,8 +1049,19 @@ export async function initialize(options, dependencies = {}) {
     doctorNotice = `Doctor baseline: unavailable; run node ${LOCAL_CLI_PATH} doctor --project . --json.\n`;
   }
   const warnings = warningMessages.map((warning) => `- ${warning}`).join('\n');
+  const collisionNotice = preservedCollisions.length > 0
+    ? [
+        'Preserved Skill name collisions:',
+        ...preservedCollisions.map((collision) => (
+          `- ${collision.path} (${collision.provider_id}; ${collision.reason})`
+        )),
+        'Existing Skills were left unchanged and were not recorded as reviewed provider routes.',
+        `Run node ${LOCAL_CLI_PATH} customize --project . to review and route an existing project Skill.`,
+        '',
+      ].join('\n')
+    : '';
   const truthNotice = manifestOriginal === null
     ? `Project truth is intentionally empty. Edit ${TRUTH_INDEX_PATH}, or ask the Agent to search for candidates and confirm activation one at a time.\n`
     : '';
-  return `${recoveryPrefix}VibeTether initialized ${root} for ${adapters.join(' + ')} using the ${options.profile} profile with ${providers.length} curated provider Skill(s).\n${truthNotice}${doctorNotice}${warnings ? `Warnings:\n${warnings}\n` : ''}`;
+  return `${recoveryPrefix}VibeTether initialized ${root} for ${adapters.join(' + ')} using the ${options.profile} profile with ${availableProviderCount} of ${providers.length} curated provider Skill(s) available.\n${truthNotice}${doctorNotice}${collisionNotice}${warnings ? `Warnings:\n${warnings}\n` : ''}`;
 }

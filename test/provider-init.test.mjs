@@ -185,6 +185,19 @@ function completeRegistry(source) {
   return value;
 }
 
+function twoExposureRegistry(source) {
+  const value = completeRegistry(source);
+  value.profiles.standard.skills = ['fixture-demo', 'fixture-router'];
+  value.sources[0].skills[1] = {
+    ...value.sources[0].skills[1],
+    workflow_role: 'domain',
+    invocation_policy: 'advisory-auto-eligible',
+    exposure: 'standard',
+    conflicts: [],
+  };
+  return value;
+}
+
 function motionRegistry(source) {
   const skill = (name, exposure, policy, role) => ({
     id: `fixture-${name}`,
@@ -545,6 +558,80 @@ test('complete catalogs are cached while competing routers remain outside host d
   assert.equal(lock.catalog.find((skill) => skill.install_name === 'router').workflow_role, 'competing-router');
   assert.equal(lock.catalog.every((skill) => skill.installation.ownership === 'vibetether'), true);
   assert.equal(lock.exposures[0].installations.codex.path, '.agents/skills/demo');
+});
+
+test('safe same-name collision preserves the user Skill and installs other reviewed providers', async () => {
+  const source = await completeUpstream();
+  const target = await project('preserved-collision');
+  const customSkill = path.join(target, '.agents', 'skills', 'demo');
+  const customBytes = '---\nname: demo\ndescription: User-owned demo.\n---\n';
+  await mkdir(customSkill, { recursive: true });
+  await writeFile(path.join(customSkill, 'SKILL.md'), customBytes, 'utf8');
+
+  const output = await initialize(options(target, { agent: 'codex' }), {
+    loadRegistry: async () => twoExposureRegistry(source),
+  });
+
+  assert.equal(await readFile(path.join(customSkill, 'SKILL.md'), 'utf8'), customBytes);
+  assert.equal(await exists(path.join(target, '.agents', 'skills', 'router', 'SKILL.md')), true);
+  const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
+  const demo = lock.exposures.find((skill) => skill.id === 'fixture-demo');
+  const router = lock.exposures.find((skill) => skill.id === 'fixture-router');
+  assert.equal(demo.installations.codex, undefined);
+  assert.equal(demo.collisions.codex.reason, 'different-preexisting-skill');
+  assert.equal(router.installations.codex.ownership, 'vibetether');
+  assert.match(output, /Preserved Skill name collisions/i);
+  assert.match(output, /\.agents\/skills\/demo/);
+});
+
+test('collision dry-run previews preservation and remaining installs without writing', async () => {
+  const source = await completeUpstream();
+  const target = await project('preserved-collision-dry-run');
+  const customSkill = path.join(target, '.agents', 'skills', 'demo');
+  const customBytes = '---\nname: demo\ndescription: User-owned demo.\n---\n';
+  await mkdir(customSkill, { recursive: true });
+  await writeFile(path.join(customSkill, 'SKILL.md'), customBytes, 'utf8');
+
+  const output = await initialize(options(target, {
+    agent: 'codex',
+    dryRun: true,
+    yes: false,
+  }), {
+    loadRegistry: async () => twoExposureRegistry(source),
+    stageProviders: async () => {
+      throw new Error('dry-run must not fetch');
+    },
+  });
+
+  assert.match(output, /preserve existing Skill/i);
+  assert.match(output, /\.agents\/skills\/demo/);
+  assert.match(output, /\.agents\/skills\/router/);
+  assert.equal(await readFile(path.join(customSkill, 'SKILL.md'), 'utf8'), customBytes);
+  assert.equal(await exists(path.join(target, '.vibetether')), false);
+});
+
+test('collision in one harness still installs the reviewed provider in the other harness', async () => {
+  const source = await completeUpstream();
+  const target = await project('partial-harness-collision');
+  const customSkill = path.join(target, '.agents', 'skills', 'demo');
+  const customBytes = '---\nname: demo\ndescription: User-owned Codex demo.\n---\n';
+  await mkdir(customSkill, { recursive: true });
+  await writeFile(path.join(customSkill, 'SKILL.md'), customBytes, 'utf8');
+
+  await initialize(options(target, { agent: 'both' }), {
+    loadRegistry: async () => twoExposureRegistry(source),
+  });
+
+  assert.equal(await readFile(path.join(customSkill, 'SKILL.md'), 'utf8'), customBytes);
+  assert.equal(
+    await skillFingerprint(path.join(target, '.claude', 'skills', 'demo')),
+    source.fingerprints.demo,
+  );
+  const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
+  const demo = lock.exposures.find((skill) => skill.id === 'fixture-demo');
+  assert.equal(demo.installations.codex, undefined);
+  assert.equal(demo.collisions.codex.reason, 'different-preexisting-skill');
+  assert.equal(demo.installations.claude.ownership, 'vibetether');
 });
 
 test('extended Web initialization exposes all reviewed motion Skills and writes their advisory routes', async () => {
