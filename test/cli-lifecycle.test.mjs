@@ -374,7 +374,10 @@ test('doctor accepts a captured first-proven path with a manifest-routed durable
   assert.equal(routed.status, 0, routed.stderr || routed.stdout);
   const completedRoute = runCli([
     'route', 'complete', '--project', target,
-    '--evidence', 'Review contract exited 0', '--json',
+    '--evidence', 'Review contract exited 0',
+    '--truth-decision', 'no-material-change',
+    '--truth-reason', 'The review changed no confirmed project authority.',
+    '--json',
   ]);
   assert.equal(completedRoute.status, 0, completedRoute.stderr || completedRoute.stdout);
 

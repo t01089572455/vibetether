@@ -18,9 +18,16 @@ import { inspectSkillRecovery } from './skill-upgrade-recovery.mjs';
 import { parseTruthMap, validateConfirmedTruth } from './truth-map.mjs';
 
 const COMPLETION_PHASES = new Set(['REVIEW', 'SHIP']);
+const COMPLETION_BOUNDARIES = new Set(['completion', 'handoff', 'merge', 'deployment', 'release', 'publication']);
 const CAPTURE_TRIGGERS = new Set(['first-proven-path', 'recovered-path', 'changed-proven-path']);
 const VALID_TRIGGERS = new Set([...CAPTURE_TRIGGERS, 'repeat-proven-path', 'routine-non-path']);
 const VALID_DISPOSITIONS = new Set(['captured', 'already-encoded', 'not-reusable']);
+const RESOLVED_TRUTH_RECONCILIATIONS = new Set(['no_material_change', 'applied', 'declined']);
+
+function completionLike(state, boundary = 'ordinary') {
+  return COMPLETION_BOUNDARIES.has(boundary)
+    || COMPLETION_PHASES.has(String(state?.phase ?? '').toUpperCase());
+}
 
 function flattenSources(value) {
   if (typeof value === 'string') return [value];
@@ -99,11 +106,11 @@ async function feedbackArtifactStatus(root, artifact) {
   }
 }
 
-async function validateExperienceFeedback(root, state, manifest, experienceIndex, issues) {
+async function validateExperienceFeedback(root, state, manifest, experienceIndex, issues, boundary) {
   const feedback = state.experience_feedback;
-  const completionLike = COMPLETION_PHASES.has(String(state.phase ?? '').toUpperCase());
+  const atCompletion = completionLike(state, boundary);
   if (!feedback || feedback.disposition === 'pending') {
-    if (completionLike) {
+    if (atCompletion) {
       issues.push(issue(
         'pending-experience-feedback',
         'Completion-like checkpoint requires a captured, already-encoded, or not-reusable experience disposition',
@@ -240,20 +247,22 @@ function controlPlaneSummary(issues, warnings) {
   }));
 }
 
-async function validateAuthoritySnapshot(root, manifest, truth, state, issues, warnings) {
+async function validateAuthoritySnapshot(root, manifest, truth, state, issues, warnings, boundary) {
   const snapshot = state.authority_snapshot;
-  const completionLike = COMPLETION_PHASES.has(String(state.phase ?? '').toUpperCase());
+  const atCompletion = completionLike(state, boundary);
   if (!snapshot) {
-    (completionLike ? issues : warnings).push((completionLike ? issue : warning)(
+    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
       'authority-snapshot-not-established',
       'Run a full VibeTether route re-anchor so the checkpoint records current project truth fingerprints.',
     ));
     return;
   }
   const hash = /^[a-f0-9]{64}$/;
+  const hasConfirmedProjection = snapshot.confirmed_projection_sha256 !== undefined;
   const valid = typeof snapshot.anchored_at === 'string'
     && snapshot.truth_index?.path === manifest.truth_index
     && hash.test(snapshot.truth_index?.sha256 ?? '')
+    && (!hasConfirmedProjection || hash.test(snapshot.confirmed_projection_sha256 ?? ''))
     && Array.isArray(snapshot.confirmed_sources)
     && snapshot.confirmed_sources.every((entry) => (
       typeof entry?.path === 'string'
@@ -265,6 +274,12 @@ async function validateAuthoritySnapshot(root, manifest, truth, state, issues, w
     issues.push(issue('invalid-authority-snapshot', 'Checkpoint authority_snapshot is structurally invalid.'));
     return;
   }
+  if (!hasConfirmedProjection) {
+    warnings.push(warning(
+      'authority-projection-not-established',
+      'Legacy authority snapshot has no confirmed-only Truth projection; rerun the current route to establish it.',
+    ));
+  }
   let current;
   try {
     current = await createAuthoritySnapshot(root, manifest, snapshot.anchored_at);
@@ -272,7 +287,20 @@ async function validateAuthoritySnapshot(root, manifest, truth, state, issues, w
     issues.push(issue('invalid-authority-snapshot', 'Current project authority cannot be fingerprinted safely.'));
     return;
   }
-  if (snapshot.truth_index.sha256 !== current.truth_index.sha256) {
+  const truthMapChanged = snapshot.truth_index.sha256 !== current.truth_index.sha256;
+  const confirmedProjectionChanged = hasConfirmedProjection
+    && snapshot.confirmed_projection_sha256 !== current.confirmed_projection_sha256;
+  if (confirmedProjectionChanged) {
+    issues.push(issue(
+      'changed-confirmed-truth-map',
+      'Confirmed Truth Map entries changed after the last full re-anchor.',
+    ));
+  } else if (truthMapChanged && hasConfirmedProjection) {
+    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
+      'changed-truth-metadata',
+      'Truth Map candidates, declined entries, or other metadata changed after the last full re-anchor.',
+    ));
+  } else if (truthMapChanged) {
     issues.push(issue('changed-truth-index', 'Project truth map changed after the last full re-anchor.'));
   }
   if ((snapshot.intent?.sha256 ?? null) !== (current.intent?.sha256 ?? null)) {
@@ -386,7 +414,66 @@ function routeCandidates(result) {
   return [result.recommendation, ...(result.alternatives ?? [])].filter(Boolean);
 }
 
-async function validateRouteControlState({ root, manifest, baseBoard, checkpoint, issues, warnings }) {
+function validateTruthReconciliation(checkpoint, handshake, atCompletion, issues, warnings) {
+  const reconciliation = checkpoint?.truth_reconciliation;
+  if (!reconciliation) {
+    warnings.push(warning(
+      'truth-reconciliation-not-established',
+      'Legacy checkpoint has no Truth reconciliation state; the next consequential route will establish it.',
+    ));
+    return;
+  }
+  if (typeof reconciliation !== 'object' || Array.isArray(reconciliation)) {
+    issues.push(issue('invalid-truth-reconciliation', 'Checkpoint truth_reconciliation must be a mapping.'));
+    return;
+  }
+  const status = reconciliation.status;
+  if (status === 'unknown') {
+    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
+      'truth-reconciliation-not-established',
+      'Truth reconciliation is unknown after legacy migration; run and reconcile a fresh consequential route.',
+    ));
+    return;
+  }
+  if (['pending', 'candidate_pending'].includes(status)) {
+    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
+      status === 'pending' ? 'pending-truth-reconciliation' : 'candidate-truth-reconciliation',
+      status === 'pending'
+        ? 'The exited route still needs an explicit Truth reconciliation disposition.'
+        : 'A Truth candidate is still awaiting user confirmation or decline.',
+    ));
+    return;
+  }
+  const valid = RESOLVED_TRUTH_RECONCILIATIONS.has(status)
+    && typeof reconciliation.reason === 'string'
+    && reconciliation.reason.trim()
+    && typeof reconciliation.updated_at === 'string'
+    && (status === 'no_material_change'
+      ? reconciliation.candidate_path === null
+      : typeof reconciliation.candidate_path === 'string' && reconciliation.candidate_path.trim());
+  if (!valid) {
+    issues.push(issue('invalid-truth-reconciliation', 'Checkpoint Truth reconciliation fields are inconsistent.'));
+    return;
+  }
+  if (handshake?.route_instance_id
+      && reconciliation.route_instance_id !== handshake.route_instance_id) {
+    issues.push(issue(
+      'stale-truth-reconciliation',
+      'Truth reconciliation belongs to a different route instance.',
+    ));
+  }
+}
+
+async function validateRouteControlState({
+  root,
+  manifest,
+  baseBoard,
+  checkpoint,
+  handshake,
+  issues,
+  warnings,
+  boundary,
+}) {
   let board;
   try {
     board = (await loadEffectiveProjectRoutes(root, manifest, baseBoard)).board;
@@ -402,10 +489,9 @@ async function validateRouteControlState({ root, manifest, baseBoard, checkpoint
     return;
   }
 
-  const handshake = await readRouteHandshake(root, issues);
-  const completionLike = COMPLETION_PHASES.has(String(checkpoint?.phase ?? '').toUpperCase());
+  const atCompletion = completionLike(checkpoint, boundary);
   if (!handshake) {
-    if (completionLike) {
+    if (atCompletion) {
       issues.push(issue(
         'missing-route-handshake',
         'Completion-like checkpoint requires a current satisfied phase route handshake.',
@@ -427,7 +513,7 @@ async function validateRouteControlState({ root, manifest, baseBoard, checkpoint
         ? 'The active route must be completed or abandoned before the checkpoint advances phases.'
         : 'The route handshake phase does not match the current checkpoint phase.',
     ));
-  } else if (completionLike && handshake.status === 'active') {
+  } else if (atCompletion && handshake.status === 'active') {
     issues.push(issue(
       'pending-route-exit',
       'Completion-like checkpoint requires the active route to be completed or abandoned.',
@@ -494,6 +580,7 @@ export async function inspectProject(options) {
   }
   const issues = [];
   const warnings = [];
+  const boundary = options.boundary ?? 'ordinary';
   let manifest = null;
   const manifestEntry = await projectEntryStatus(root, '.vibetether/project.yaml');
   if (manifestEntry.status === 'missing') {
@@ -836,8 +923,8 @@ export async function inspectProject(options) {
             } else if (Date.now() - updatedAt > maxAge) {
               issues.push(issue('stale-checkpoint', `Runtime checkpoint is older than ${checkpoint.max_age_hours ?? 168} hours`));
             }
-            await validateAuthoritySnapshot(root, manifest, truth, state, issues, warnings);
-            await validateExperienceFeedback(root, state, manifest, experienceIndex, issues);
+            await validateAuthoritySnapshot(root, manifest, truth, state, issues, warnings, boundary);
+            await validateExperienceFeedback(root, state, manifest, experienceIndex, issues, boundary);
             checkpointState = state;
           }
         } catch {
@@ -846,7 +933,7 @@ export async function inspectProject(options) {
       }
     }
     if (checkpointState
-        && COMPLETION_PHASES.has(String(checkpointState.phase ?? '').toUpperCase())
+        && completionLike(checkpointState, boundary)
         && pendingRecoveryHarnesses.size > 0) {
       issues.push(issue(
         'pending-skill-upgrade',
@@ -854,13 +941,23 @@ export async function inspectProject(options) {
       ));
     }
     if (board) {
+      const handshake = await readRouteHandshake(root, issues);
+      validateTruthReconciliation(
+        checkpointState,
+        handshake,
+        completionLike(checkpointState, boundary),
+        issues,
+        warnings,
+      );
       await validateRouteControlState({
         root,
         manifest,
         baseBoard: board,
         checkpoint: checkpointState,
+        handshake,
         issues,
         warnings,
+        boundary,
       });
     }
   }
@@ -872,6 +969,7 @@ export async function inspectProject(options) {
     ok: issues.length === 0,
     schema_version: manifest?.schema_version ?? null,
     project: root,
+    boundary,
     harnesses,
     issues,
     warnings,

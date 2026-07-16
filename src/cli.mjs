@@ -7,7 +7,7 @@ import { inspectProject } from './doctor.mjs';
 import { uninstall } from './uninstall.mjs';
 import { showCapabilities } from './capabilities.mjs';
 import { runCustomize } from './customize.mjs';
-import { runRoute } from './route-handshake.mjs';
+import { runRoute, runTruthReconciliation } from './route-handshake.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -22,6 +22,7 @@ Usage:
   vibetether route [options]
   vibetether route complete [options]
   vibetether route abandon [options]
+  vibetether truth reconcile [options]
   vibetether uninstall [options]
   vibetether --help
   vibetether --version
@@ -42,6 +43,8 @@ Init and bootstrap options:
 
 Doctor options:
   --project PATH                    Project directory (default: current directory)
+  --boundary ordinary|completion|handoff|merge|deployment|release|publication
+                                    Set the current lifecycle boundary
   --json                            Print a machine-readable report
 
 Capabilities options:
@@ -70,12 +73,25 @@ Route complete options:
   --project PATH                    Project directory (default: current directory)
   --evidence TEXT                   Add bounded completion evidence (repeatable)
   --artifact PATH                   Add a safe project-relative artifact (repeatable)
+  --truth-decision no-material-change
+                                    Inline the common unchanged-authority disposition
+  --truth-reason TEXT               Required with --truth-decision
   --json                            Print machine-readable route state
 
 Route abandon options:
   --project PATH                    Project directory (default: current directory)
   --reason TEXT                     Record the material abandonment reason
+  --truth-decision no-material-change
+                                    Inline the common unchanged-authority disposition
+  --truth-reason TEXT               Required with --truth-decision
   --json                            Print machine-readable route state
+
+Truth reconcile options:
+  --project PATH                    Project directory (default: current directory)
+  --decision DECISION               no-material-change|candidate-pending|applied|declined
+  --reason TEXT                     Record the material reconciliation reason
+  --candidate PATH                  Required for candidate-pending, applied, and declined
+  --json                            Print machine-readable reconciliation state
 
 Uninstall options:
   --project PATH                    Project directory (default: current directory)
@@ -166,15 +182,26 @@ function parseInit(args, command = 'init') {
 }
 
 function parseSimple(args, command) {
-  const options = { project: process.cwd(), json: false, dryRun: false, yes: false };
+  const options = {
+    project: process.cwd(),
+    json: false,
+    dryRun: false,
+    yes: false,
+    boundary: 'ordinary',
+  };
   for (let index = 0; index < args.length; index += 1) {
     const flag = args[index];
     if (flag === '--project') options.project = valueAfter(args, index++, flag);
     else if (flag === '--json' && command === 'doctor') options.json = true;
+    else if (flag === '--boundary' && command === 'doctor') options.boundary = valueAfter(args, index++, flag);
     else if (flag === '--dry-run' && command === 'uninstall') options.dryRun = true;
     else if (flag === '--yes' && command === 'uninstall') options.yes = true;
     else if (flag === '--help' || flag === '-h') return { help: true };
     else throw new CliError(`Unknown option for ${command}: ${flag}`);
+  }
+  if (command === 'doctor'
+      && !['ordinary', 'completion', 'handoff', 'merge', 'deployment', 'release', 'publication'].includes(options.boundary)) {
+    throw new CliError(`Invalid --boundary value: ${options.boundary}`);
   }
   return options;
 }
@@ -228,6 +255,8 @@ function parseRoute(args) {
     agent: null,
     select: null,
     reason: null,
+    truthDecision: null,
+    truthReason: null,
     evidence: [],
     artifacts: [],
     json: false,
@@ -245,6 +274,8 @@ function parseRoute(args) {
     else if (action === 'start' && flag === '--reason') options.reason = valueAfter(args, index++, flag);
     else if (action === 'complete' && flag === '--evidence') options.evidence.push(valueAfter(args, index++, flag));
     else if (action === 'complete' && flag === '--artifact') options.artifacts.push(valueAfter(args, index++, flag));
+    else if (action !== 'start' && flag === '--truth-decision') options.truthDecision = valueAfter(args, index++, flag);
+    else if (action !== 'start' && flag === '--truth-reason') options.truthReason = valueAfter(args, index++, flag);
     else if (action === 'abandon' && flag === '--reason') options.reason = valueAfter(args, index++, flag);
     else throw new CliError(`Unknown option for route${action === 'start' ? '' : ` ${action}`}: ${flag}`);
   }
@@ -257,7 +288,38 @@ function parseRoute(args) {
     }
     if (options.select && !options.reason) throw new CliError('--reason is required when --select is used.');
     if (options.reason && !options.select) throw new CliError('--select is required when --reason is used.');
+  } else {
+    if (Boolean(options.truthDecision) !== Boolean(options.truthReason)) {
+      throw new CliError('--truth-decision and --truth-reason are required together.');
+    }
+    if (options.truthDecision && options.truthDecision !== 'no-material-change') {
+      throw new CliError('Route exit supports only --truth-decision no-material-change; use truth reconcile for other decisions.');
+    }
   }
+  return options;
+}
+
+function parseTruth(args) {
+  if (args[0] !== 'reconcile') throw new CliError('Truth command requires the reconcile action.');
+  const options = {
+    project: process.cwd(),
+    decision: null,
+    reason: null,
+    candidate: null,
+    json: false,
+  };
+  for (let index = 1; index < args.length; index += 1) {
+    const flag = args[index];
+    if (flag === '--project') options.project = valueAfter(args, index++, flag);
+    else if (flag === '--decision') options.decision = valueAfter(args, index++, flag);
+    else if (flag === '--reason') options.reason = valueAfter(args, index++, flag);
+    else if (flag === '--candidate') options.candidate = valueAfter(args, index++, flag);
+    else if (flag === '--json') options.json = true;
+    else if (flag === '--help' || flag === '-h') return { help: true };
+    else throw new CliError(`Unknown option for truth reconcile: ${flag}`);
+  }
+  if (!options.decision) throw new CliError('Truth reconcile requires --decision.');
+  if (!options.reason) throw new CliError('Truth reconcile requires --reason.');
   return options;
 }
 
@@ -298,6 +360,11 @@ export async function main(args = process.argv.slice(2), runtime = {}) {
     const options = parseRoute(args.slice(1));
     if (options.help) return HELP;
     return runRoute(options);
+  }
+  if (args[0] === 'truth') {
+    const options = parseTruth(args.slice(1));
+    if (options.help) return HELP;
+    return runTruthReconciliation(options);
   }
   if (args[0] === 'uninstall') {
     const options = parseSimple(args.slice(1), 'uninstall');

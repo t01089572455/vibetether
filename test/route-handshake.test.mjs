@@ -63,6 +63,18 @@ async function updateCheckpoint(root, update) {
   await writeFile(target, YAML.stringify(checkpoint), 'utf8');
 }
 
+async function resolveTruthForTest(root, reason = 'No confirmed project truth changed.') {
+  const target = path.join(root, '.vibetether', 'state', 'current.yaml');
+  const checkpoint = YAML.parse(await readFile(target, 'utf8'));
+  checkpoint.truth_reconciliation = {
+    ...checkpoint.truth_reconciliation,
+    status: 'no_material_change',
+    reason,
+    updated_at: new Date().toISOString(),
+  };
+  await writeFile(target, YAML.stringify(checkpoint), 'utf8');
+}
+
 test('route starts a bounded active handshake with live experience metadata', async () => {
   const root = await initializedProject('start');
 
@@ -71,6 +83,7 @@ test('route starts a bounded active handshake with live experience metadata', as
   assert.equal(output.status, 'active');
   assert.equal(output.phase, 'PLAN');
   assert.equal(output.capability, 'planning');
+  assert.match(output.route_instance_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   assert.deepEqual(output.signals, ['direction-approved']);
   assert.equal(output.selected_skill, output.selection.skill);
   assert.ok(Array.isArray(output.expected_outputs));
@@ -82,6 +95,7 @@ test('route starts a bounded active handshake with live experience metadata', as
   assert.equal(state.phase, 'PLAN');
   assert.equal(state.capability, 'planning');
   assert.equal(state.agent, 'codex');
+  assert.equal(state.route_instance_id, output.route_instance_id);
   for (const forbidden of ['reasoning', 'chain_of_thought', 'private_reasoning', 'raw_output']) {
     assert.equal(Object.hasOwn(state, forbidden), false);
   }
@@ -148,7 +162,11 @@ test('route lifecycle synchronizes checkpoint provider selection', async () => {
   await main(['route', 'complete', '--project', root, '--evidence', 'Plan approved']);
   checkpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
   assert.equal(checkpoint.provider_selection.invocation_status, 'satisfied');
+  assert.equal(checkpoint.truth_reconciliation.status, 'pending');
+  assert.equal(checkpoint.truth_reconciliation.trigger, 'route-complete');
+  assert.equal(checkpoint.truth_reconciliation.route_instance_id, started.route_instance_id);
 
+  await resolveTruthForTest(root, 'Planning changed no confirmed project truth.');
   await startRoute(root, { phase: 'DESIGN', capability: 'product-design', signals: ['behavior-choice-needed'] });
   await main(['route', 'abandon', '--project', root, '--reason', 'Direction changed']);
   checkpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
@@ -187,12 +205,38 @@ test('an active route blocks a different phase but permits an idempotent same-ro
   const refreshed = await startRoute(root);
   assert.equal(refreshed.status, 'active');
   assert.equal(refreshed.selected_skill, first.selected_skill);
+  assert.equal(refreshed.route_instance_id, first.route_instance_id);
 
   await assert.rejects(
     startRoute(root, { phase: 'EXECUTE_ONE', capability: 'tdd', signals: ['new-behavior'] }),
     /complete or abandon.*active route/i,
   );
   assert.equal((await readHandshake(root)).phase, 'PLAN');
+});
+
+test('an idempotent active-route refresh preserves the original authority anchor', async () => {
+  const root = await initializedProject('refresh-anchor');
+  await mkdir(path.join(root, 'docs'), { recursive: true });
+  await writeFile(path.join(root, 'docs', 'product.md'), '# Approved A\n', 'utf8');
+  await writeFile(
+    path.join(root, '.vibetether', 'TRUTH.md'),
+    createTruthMap({
+      harnesses: ['codex'],
+      confirmed: [{ path: 'docs/product.md', role: 'product-direction', scope: '.' }],
+    }),
+    'utf8',
+  );
+
+  const first = await startRoute(root);
+  const checkpointPath = path.join(root, '.vibetether', 'state', 'current.yaml');
+  const before = YAML.parse(await readFile(checkpointPath, 'utf8')).authority_snapshot;
+  await writeFile(path.join(root, 'docs', 'product.md'), '# Approved B\n', 'utf8');
+
+  const refreshed = await startRoute(root);
+  const after = YAML.parse(await readFile(checkpointPath, 'utf8')).authority_snapshot;
+
+  assert.equal(refreshed.route_instance_id, first.route_instance_id);
+  assert.deepEqual(after, before);
 });
 
 test('route complete requires bounded evidence and safe existing artifacts', async () => {
@@ -223,6 +267,7 @@ test('route complete requires bounded evidence and safe existing artifacts', asy
   ]);
   assert.deepEqual(completed.artifacts, ['test/planning.test.mjs']);
 
+  await resolveTruthForTest(root);
   const next = await startRoute(root, {
     phase: 'EXECUTE_ONE',
     capability: 'tdd',
@@ -242,12 +287,32 @@ test('route abandon requires a material reason and allows re-anchoring', async (
   ]));
   assert.equal(abandoned.status, 'abandoned');
   assert.equal(abandoned.abandonment_reason, 'The user replaced the approved design.');
+  await resolveTruthForTest(root);
   const next = await startRoute(root, {
     phase: 'DESIGN',
     capability: 'product-design',
     signals: ['behavior-choice-needed'],
   });
   assert.equal(next.phase, 'DESIGN');
+});
+
+test('an unresolved Truth reconciliation blocks the next consequential route', async () => {
+  const root = await initializedProject('pending-truth');
+  await startRoute(root);
+  await main(['route', 'complete', '--project', root, '--evidence', 'Planning passed']);
+
+  await assert.rejects(
+    startRoute(root, {
+      phase: 'EXECUTE_ONE',
+      capability: 'tdd',
+      signals: ['new-behavior'],
+    }),
+    /truth reconciliation.*pending|pending.*truth reconciliation/i,
+  );
+
+  const handshake = await readHandshake(root);
+  assert.equal(handshake.phase, 'PLAN');
+  assert.equal(handshake.status, 'satisfied');
 });
 
 async function installSkill(root, skill) {

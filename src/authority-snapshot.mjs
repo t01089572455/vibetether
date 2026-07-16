@@ -54,6 +54,11 @@ export async function createAuthoritySnapshot(root, manifest, anchoredAt = new D
   if (typeof truthPath !== 'string' || !truthPath.trim()) throw new Error('Manifest truth_index is required');
   const truthFingerprint = await fingerprintAuthorityPath(root, truthPath);
   const truth = parseTruthMap(await readFile(resolveInside(root, truthPath), 'utf8'));
+  const confirmedProjectionSha256 = sha256([
+    `${JSON.stringify(
+      truth.confirmed.map(({ path: sourcePath, role, scope }) => ({ path: sourcePath, role, scope })),
+    )}\n`,
+  ]);
   const confirmedSources = [];
   for (const entry of truth.confirmed) {
     confirmedSources.push({
@@ -70,6 +75,7 @@ export async function createAuthoritySnapshot(root, manifest, anchoredAt = new D
     anchored_at: anchoredAt,
     intent,
     truth_index: truthFingerprint,
+    confirmed_projection_sha256: confirmedProjectionSha256,
     confirmed_sources: confirmedSources,
   };
 }

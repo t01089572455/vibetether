@@ -1,4 +1,5 @@
 import { lstat, realpath, rm } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import YAML from 'yaml';
 import { createAuthoritySnapshot } from './authority-snapshot.mjs';
@@ -15,6 +16,12 @@ import {
   resolveInside,
   writeAtomic,
 } from './files.mjs';
+import { parseTruthMap } from './truth-map.mjs';
+import {
+  authoritySnapshotsMatch,
+  normalizeTruthDecision,
+  truthSectionForDecision,
+} from './truth-reconciliation.mjs';
 
 export const ROUTE_HANDSHAKE_PATH = '.vibetether/state/route-handshake.yaml';
 const EVIDENCE_LIMIT = 500;
@@ -189,6 +196,12 @@ export async function startRoute(options) {
     throw new CliError('Complete or abandon the active route before entering a new phase or capability.', 3);
   }
   const checkpoint = await readCheckpoint(root, resolved.manifest);
+  if (['pending', 'candidate_pending'].includes(checkpoint.truth_reconciliation?.status)) {
+    throw new CliError(
+      'Truth reconciliation is pending for the previous route. Resolve it before entering another consequential route.',
+      3,
+    );
+  }
   if (String(checkpoint.phase).toUpperCase() !== String(resolved.result.phase).toUpperCase()) {
     throw new CliError(
       `Checkpoint phase ${checkpoint.phase} does not match route phase ${resolved.result.phase}. Re-anchor and update the semantic checkpoint first.`,
@@ -197,8 +210,16 @@ export async function startRoute(options) {
   }
   const selection = selectRoute(resolved.result, options.select, options.reason);
   const now = new Date().toISOString();
+  const sameActiveRoute = prior?.status === 'active'
+    && prior.phase === resolved.result.phase
+    && prior.capability === resolved.result.capability;
+  const routeInstanceId = sameActiveRoute
+      && typeof prior.route_instance_id === 'string'
+    ? prior.route_instance_id
+    : randomUUID();
   const state = {
     schema_version: 1,
+    route_instance_id: routeInstanceId,
     agent: options.agent,
     phase: resolved.result.phase,
     capability: resolved.result.capability,
@@ -215,8 +236,10 @@ export async function startRoute(options) {
     updated_at: now,
   };
   checkpoint.provider_selection = selectionCheckpoint(selection, resolved.result, 'active');
-  checkpoint.last_reanchor = now;
-  checkpoint.authority_snapshot = await createAuthoritySnapshot(root, resolved.manifest, now);
+  if (!sameActiveRoute || !checkpoint.authority_snapshot) {
+    checkpoint.last_reanchor = now;
+    checkpoint.authority_snapshot = await createAuthoritySnapshot(root, resolved.manifest, now);
+  }
   await writeControlState(root, resolved.manifest, state, checkpoint);
   return {
     ...resolved.result,
@@ -280,6 +303,30 @@ async function artifactPaths(root, values) {
   return artifacts;
 }
 
+async function routeExitTruthReconciliation(root, manifest, checkpoint, state, options, trigger, now) {
+  const pending = {
+    status: 'pending',
+    trigger,
+    route_instance_id: state.route_instance_id,
+    reason: null,
+    candidate_path: null,
+    updated_at: now,
+  };
+  if (!options.truthDecision) return pending;
+  const [reason] = nonemptyStrings([options.truthReason], 'Inline Truth reconciliation', {
+    required: true,
+    requiredNoun: 'material reason',
+    limit: EVIDENCE_LIMIT,
+  });
+  const currentAuthority = await createAuthoritySnapshot(root, manifest, now);
+  if (!authoritySnapshotsMatch(checkpoint.authority_snapshot, currentAuthority)) return pending;
+  return {
+    ...pending,
+    status: 'no_material_change',
+    reason,
+  };
+}
+
 export async function completeRoute(options) {
   const { root, manifest, state, checkpoint } = await requireActiveHandshake(options.project);
   const evidence = nonemptyStrings(options.evidence, 'Route completion', {
@@ -302,6 +349,16 @@ export async function completeRoute(options) {
     selection_reason: state.selection_reason ?? state.alternative_reason ?? null,
     invocation_status: 'satisfied',
   };
+  checkpoint.truth_reconciliation = await routeExitTruthReconciliation(
+    root,
+    manifest,
+    checkpoint,
+    state,
+    options,
+    'route-complete',
+    completed.updated_at,
+  );
+  completed.truth_reconciliation = checkpoint.truth_reconciliation;
   checkpoint.last_reanchor = completed.updated_at;
   await writeControlState(root, manifest, completed, checkpoint);
   return completed;
@@ -328,9 +385,85 @@ export async function abandonRoute(options) {
     selection_reason: reason,
     invocation_status: 'abandoned',
   };
+  checkpoint.truth_reconciliation = await routeExitTruthReconciliation(
+    root,
+    manifest,
+    checkpoint,
+    state,
+    options,
+    'route-abandon',
+    abandoned.updated_at,
+  );
+  abandoned.truth_reconciliation = checkpoint.truth_reconciliation;
   checkpoint.last_reanchor = abandoned.updated_at;
   await writeControlState(root, manifest, abandoned, checkpoint);
   return abandoned;
+}
+
+export async function reconcileTruth(options) {
+  const root = await resolveProject(options.project);
+  const manifest = await readManifest(root);
+  const state = await readHandshake(root);
+  if (!state || !['satisfied', 'abandoned'].includes(state.status)) {
+    throw new CliError('Truth reconciliation requires a completed or abandoned route.', 3);
+  }
+  const checkpoint = await readCheckpoint(root, manifest);
+  const prior = checkpoint.truth_reconciliation;
+  if (!prior || !['pending', 'candidate_pending'].includes(prior.status)) {
+    throw new CliError('No pending Truth reconciliation belongs to the current route.', 3);
+  }
+  if (!state.route_instance_id || prior.route_instance_id !== state.route_instance_id) {
+    throw new CliError('Truth reconciliation does not match the current route instance.', 3);
+  }
+
+  let decision;
+  try {
+    decision = normalizeTruthDecision(options.decision);
+  } catch (error) {
+    throw new CliError(error.message);
+  }
+  const [reason] = nonemptyStrings([options.reason], 'Truth reconciliation', {
+    required: true,
+    requiredNoun: 'material reason',
+    limit: EVIDENCE_LIMIT,
+  });
+  const section = truthSectionForDecision(decision);
+  let candidatePath = null;
+  if (section) {
+    if (!options.candidate) throw new CliError(`--candidate is required for ${options.decision}.`);
+    candidatePath = await inspectArtifact(root, options.candidate);
+    const truth = parseTruthMap(await readTextIfPresent(resolveInside(root, manifest.truth_index)));
+    if (!truth[section].some((entry) => entry.path.replace(/\/$/, '') === candidatePath.replace(/\/$/, ''))) {
+      throw new CliError(`Truth reconciliation candidate is not present in the Truth Map ${section} section.`, 3);
+    }
+  } else if (options.candidate) {
+    throw new CliError('--candidate is not allowed with no-material-change.');
+  }
+
+  const now = new Date().toISOString();
+  const currentAuthority = await createAuthoritySnapshot(root, manifest, now);
+  if (decision === 'no_material_change'
+      && !authoritySnapshotsMatch(checkpoint.authority_snapshot, currentAuthority)) {
+    throw new CliError(
+      'Confirmed project authority changed after the route started; no-material-change cannot hide that drift.',
+      3,
+    );
+  }
+  if (decision !== 'no_material_change') {
+    checkpoint.authority_snapshot = currentAuthority;
+    checkpoint.last_reanchor = now;
+  }
+  const reconciliation = {
+    status: decision,
+    trigger: prior.trigger,
+    route_instance_id: state.route_instance_id,
+    reason,
+    candidate_path: candidatePath,
+    updated_at: now,
+  };
+  checkpoint.truth_reconciliation = reconciliation;
+  await writeControlState(root, manifest, state, checkpoint);
+  return reconciliation;
 }
 
 export async function runRoute(options) {
@@ -340,4 +473,10 @@ export async function runRoute(options) {
       ? await abandonRoute(options)
       : await startRoute(options);
   return options.json ? `${JSON.stringify(result, null, 2)}\n` : formatHuman(result);
+}
+
+export async function runTruthReconciliation(options) {
+  const result = await reconcileTruth(options);
+  if (options.json) return `${JSON.stringify(result, null, 2)}\n`;
+  return `VibeTether Truth reconciliation: ${result.status} (${result.reason})\n`;
 }

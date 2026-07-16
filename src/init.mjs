@@ -27,6 +27,7 @@ import {
 import {
   createInitialCheckpoint,
   createInitialExperienceFeedback,
+  createInitialTruthReconciliation,
   DEFAULT_INTENT,
   enableHarnesses,
   EXPERIENCE_INDEX_OWNERSHIP,
@@ -552,6 +553,10 @@ export async function initialize(options, dependencies = {}) {
     }
     if (!checkpoint.experience_feedback) {
       checkpoint.experience_feedback = createInitialExperienceFeedback();
+      checkpointChanged = true;
+    }
+    if (!checkpoint.truth_reconciliation) {
+      checkpoint.truth_reconciliation = createInitialTruthReconciliation({ legacy: true });
       checkpointChanged = true;
     }
     if (checkpointChanged) {

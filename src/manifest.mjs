@@ -104,6 +104,19 @@ export function createInitialExperienceFeedback() {
   };
 }
 
+export function createInitialTruthReconciliation({ legacy = false } = {}) {
+  return {
+    status: legacy ? 'unknown' : 'no_material_change',
+    trigger: legacy ? 'legacy-upgrade' : 'initialization',
+    route_instance_id: null,
+    reason: legacy
+      ? 'No historical Truth disposition was invented during upgrade.'
+      : 'Initialization did not activate or change confirmed project truth.',
+    candidate_path: null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
 export function isVibeTetherOwnedExperienceIndex(value) {
   return value?.owner === EXPERIENCE_INDEX_OWNERSHIP.owner
     && value?.fingerprint === EXPERIENCE_INDEX_OWNERSHIP.fingerprint;
@@ -139,6 +152,7 @@ export function createInitialCheckpoint(goalSource, recommendedProvider = 'vibe-
         invocation_status: 'not-started',
       },
       experience_feedback: createInitialExperienceFeedback(),
+      truth_reconciliation: createInitialTruthReconciliation(),
     },
     { lineWidth: 0 },
   );
