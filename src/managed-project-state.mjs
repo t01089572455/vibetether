@@ -25,6 +25,10 @@ const LEGACY_GITIGNORE_BODY = '.vibetether/state/';
 const HASH = /^[a-f0-9]{64}$/;
 const SAFE_ID = /^[a-z0-9][a-z0-9._-]*$/;
 const OWNERSHIP = new Set(['vibetether', 'preexisting']);
+const COLLISION_REASONS = new Set([
+  'different-preexisting-skill',
+  'modified-managed-skill',
+]);
 const CONTROL_FILES = new Set([
   '.vibetether/project.yaml',
   '.vibetether/intent.md',
@@ -90,6 +94,13 @@ function validateInstallation(installation, expectedPath) {
     && samePath(installation.path, expectedPath);
 }
 
+function validateCollision(collision, expectedPath) {
+  return record(collision)
+    && collision.preserved === true
+    && COLLISION_REASONS.has(collision.reason)
+    && samePath(collision.path, expectedPath);
+}
+
 function validateSource(source) {
   if (!record(source)
     || !safeId(source.id)
@@ -127,7 +138,8 @@ function validateSkillRecord(skill, sources) {
     || !HASH.test(skill.fingerprint ?? '')
     || typeof skill.active !== 'boolean'
     || !stringArray(skill.capabilities)
-    || !record(skill.installations)) {
+    || !record(skill.installations)
+    || (skill.collisions !== undefined && !record(skill.collisions))) {
     return false;
   }
   for (const [harness, installation] of Object.entries(skill.installations)) {
@@ -135,6 +147,12 @@ function validateSkillRecord(skill, sources) {
     if (!adapter) return false;
     const expected = path.join(path.dirname(adapter.skillDirectory), skill.install_name);
     if (!validateInstallation(installation, expected)) return false;
+  }
+  for (const [harness, collision] of Object.entries(skill.collisions ?? {})) {
+    const adapter = ADAPTERS[harness];
+    if (!adapter || Object.hasOwn(skill.installations, harness)) return false;
+    const expected = path.join(path.dirname(adapter.skillDirectory), skill.install_name);
+    if (!validateCollision(collision, expected)) return false;
   }
   return true;
 }

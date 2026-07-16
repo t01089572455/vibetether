@@ -40,6 +40,7 @@ export function createProviderLock({
   sources,
   providers,
   installations,
+  collisions = [],
   catalogInstallations = [],
   existingLock = null,
 }) {
@@ -52,11 +53,26 @@ export function createProviderLock({
         ownership: value.ownership,
       };
     }
+    const skillCollisions = {};
+    for (const value of collisions.filter((collision) => collision.provider_id === provider.id)) {
+      skillCollisions[value.harness] = {
+        path: value.path,
+        reason: value.reason,
+        preserved: true,
+      };
+    }
     const previous = (existingLock?.exposures ?? existingLock?.skills ?? []).find(
       (skill) => skill.id === provider.id && skill.fingerprint === provider.fingerprint,
     );
     for (const [harness, installation] of Object.entries(previous?.installations ?? {})) {
-      if (!skillInstallations[harness]) skillInstallations[harness] = { ...installation };
+      if (!skillInstallations[harness] && !skillCollisions[harness]) {
+        skillInstallations[harness] = { ...installation };
+      }
+    }
+    for (const [harness, collision] of Object.entries(previous?.collisions ?? {})) {
+      if (!skillInstallations[harness] && !skillCollisions[harness]) {
+        skillCollisions[harness] = { ...collision };
+      }
     }
     return {
       id: provider.id,
@@ -66,6 +82,7 @@ export function createProviderLock({
       capabilities: provider.capabilities,
       active: true,
       installations: skillInstallations,
+      ...(Object.keys(skillCollisions).length > 0 ? { collisions: skillCollisions } : {}),
     };
   });
 

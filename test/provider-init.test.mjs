@@ -11,6 +11,7 @@ import { initialize } from '../src/init.mjs';
 import { stageProviderSources } from '../src/provider-fetch.mjs';
 import { validateProviderLock } from '../src/managed-project-state.mjs';
 import { inspectProject } from '../src/doctor.mjs';
+import { createProviderLock } from '../src/provider-plan.mjs';
 import { skillFingerprint } from '../src/skill-install.mjs';
 
 function git(cwd, args) {
@@ -298,6 +299,174 @@ async function snapshot(root) {
 function options(root, overrides = {}) {
   return { project: root, agent: 'both', profile: 'standard', dryRun: false, yes: true, ...overrides };
 }
+
+function collisionLockFixture() {
+  const provider = {
+    id: 'fixture-demo',
+    install_name: 'demo',
+    source_id: 'fixture-source',
+    fingerprint: 'a'.repeat(64),
+    capabilities: ['requirements-clarification'],
+  };
+  const source = {
+    id: 'fixture-source',
+    repository: 'https://example.invalid/fixture.git',
+    ref: 'commit:bbbbbbb',
+    commit: 'b'.repeat(40),
+    license: 'MIT',
+    license_evidence: {
+      mode: 'readme-declaration',
+      path: 'README.md',
+      sha256: 'c'.repeat(64),
+    },
+    skills: [{
+      id: provider.id,
+      install_name: provider.install_name,
+      fingerprint: provider.fingerprint,
+      capabilities: provider.capabilities,
+    }],
+  };
+  const catalogInstallations = [{
+    provider_id: provider.id,
+    path: '.vibetether/providers/catalog/fixture-source/demo',
+    ownership: 'vibetether',
+  }];
+  return { provider, source, catalogInstallations };
+}
+
+test('provider locks record preserved collisions without verified installation ownership', () => {
+  const { provider, source, catalogInstallations } = collisionLockFixture();
+  const lock = createProviderLock({
+    profile: 'standard',
+    sources: [source],
+    providers: [provider],
+    installations: [],
+    collisions: [{
+      provider_id: provider.id,
+      harness: 'codex',
+      path: '.agents/skills/demo',
+      reason: 'different-preexisting-skill',
+    }],
+    catalogInstallations,
+  });
+
+  assert.deepEqual(lock.exposures[0].installations, {});
+  assert.deepEqual(lock.exposures[0].collisions, {
+    codex: {
+      path: '.agents/skills/demo',
+      reason: 'different-preexisting-skill',
+      preserved: true,
+    },
+  });
+  assert.deepEqual(validateProviderLock(lock).exposures[0].collisions, lock.exposures[0].collisions);
+});
+
+test('current collisions suppress stale managed installation inheritance', () => {
+  const { provider, source, catalogInstallations } = collisionLockFixture();
+  const previousExposure = {
+    ...provider,
+    active: true,
+    installations: {
+      codex: {
+        path: '.agents/skills/demo',
+        ownership: 'vibetether',
+      },
+    },
+  };
+  const lock = createProviderLock({
+    profile: 'standard',
+    sources: [source],
+    providers: [provider],
+    installations: [],
+    collisions: [{
+      provider_id: provider.id,
+      harness: 'codex',
+      path: '.agents/skills/demo',
+      reason: 'modified-managed-skill',
+    }],
+    catalogInstallations,
+    existingLock: {
+      schema_version: 2,
+      sources: [source],
+      catalog: [],
+      exposures: [previousExposure],
+      skills: [previousExposure],
+    },
+  });
+
+  assert.equal(lock.exposures[0].installations.codex, undefined);
+  assert.equal(lock.exposures[0].collisions.codex.reason, 'modified-managed-skill');
+});
+
+test('provider lock validation rejects unsafe or contradictory collision records', () => {
+  const { provider, source, catalogInstallations } = collisionLockFixture();
+  const valid = createProviderLock({
+    profile: 'standard',
+    sources: [source],
+    providers: [provider],
+    installations: [],
+    collisions: [{
+      provider_id: provider.id,
+      harness: 'codex',
+      path: '.agents/skills/demo',
+      reason: 'different-preexisting-skill',
+    }],
+    catalogInstallations,
+  });
+  for (const exposure of [valid.exposures[0], valid.skills[0]]) {
+    exposure.collisions = {
+      codex: {
+        path: '.agents/skills/demo',
+        reason: 'different-preexisting-skill',
+        preserved: true,
+      },
+    };
+  }
+  const cases = [
+    {
+      name: 'unsupported reason',
+      mutate(lock) {
+        lock.exposures[0].collisions.codex.reason = 'unknown';
+        lock.skills[0].collisions.codex.reason = 'unknown';
+      },
+    },
+    {
+      name: 'path mismatch',
+      mutate(lock) {
+        lock.exposures[0].collisions.codex.path = '.agents/skills/other';
+        lock.skills[0].collisions.codex.path = '.agents/skills/other';
+      },
+    },
+    {
+      name: 'unknown harness',
+      mutate(lock) {
+        lock.exposures[0].collisions.unknown = lock.exposures[0].collisions.codex;
+        lock.skills[0].collisions.unknown = lock.skills[0].collisions.codex;
+        delete lock.exposures[0].collisions.codex;
+        delete lock.skills[0].collisions.codex;
+      },
+    },
+    {
+      name: 'installation and collision',
+      mutate(lock) {
+        lock.exposures[0].installations.codex = {
+          path: '.agents/skills/demo',
+          ownership: 'vibetether',
+        };
+        lock.skills[0].installations.codex = {
+          path: '.agents/skills/demo',
+          ownership: 'vibetether',
+        };
+      },
+    },
+  ];
+
+  for (const value of cases) {
+    const lock = structuredClone(valid);
+    value.mutate(lock);
+    assert.equal(validateProviderLock(lock), null, value.name);
+  }
+});
 
 test('standard init installs complete providers and writes an advisory capability board and lock', async () => {
   const source = await upstream();
