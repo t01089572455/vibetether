@@ -13,7 +13,7 @@ Do not replace the coding agent's implementation ability. Control direction, aut
 
 ## Start Here
 
-1. Read the nearest project instruction file, `.vibetether/project.yaml`, `.vibetether/TRUTH.md`, the current checkpoint, the live `.vibetether/routes.local.yaml` overlay when present, applicable confirmed truth, and applicable experience.
+1. Read the nearest project instruction file, `.vibetether/project.yaml`, the manifest-declared `truth_index` (normally `.vibetether/TRUTH.md`), the current checkpoint, the live `.vibetether/routes.local.yaml` overlay when present, applicable confirmed truth, and applicable experience.
 2. Identify the approved goal, current lifecycle state, active task slice, observable signals, and evidence gap.
 3. Run the automatic work-readiness gate. Resolve discoverable facts and project-source conflicts before choosing an implementation action.
 4. At task entry and every phase transition or re-entry boundary, start a stateful route:
@@ -37,7 +37,7 @@ Do not replace the coding agent's implementation ability. Control direction, aut
      --truth-reason "Abandoning the method did not change confirmed project authority."
    ```
 
-7. If confirmed authority may have changed, close the route without the inline decision, then run `truth reconcile` with `candidate-pending`, `applied`, or `declined`. Reconciliation never edits `TRUTH.md` or bypasses user confirmation.
+7. If confirmed authority may have changed, close the route without the inline decision, then run `truth reconcile` with `candidate-pending`, `applied`, or `declined`. Reconciliation never edits the manifest-declared Truth Map or bypasses user confirmation.
 8. Record the selected path and material reason in `provider_selection`; then checkpoint the result and run the applicable evidence gate. Before a completion-like boundary, run the local launcher with `doctor --boundary <BOUNDARY>`.
 
 If no project manifest exists, run `vibetether init` or create one using [project-manifest.md](references/project-manifest.md) before long-running product work.
@@ -48,7 +48,7 @@ Treat the installed artifacts as one control plane, not a loose router:
 
 - host instructions trigger re-entry;
 - `intent.md` holds the user-owned outcome and boundaries;
-- `TRUTH.md` lists confirmed, candidate, and declined project sources;
+- the manifest-declared Truth Map, normally `TRUTH.md`, lists confirmed, candidate, and declined project sources;
 - `project.yaml` routes the control artifacts without duplicating their prose;
 - `capabilities.yaml` recommends methods and providers;
 - `state/current.yaml` makes the current phase and slice resumable;
@@ -56,7 +56,7 @@ Treat the installed artifacts as one control plane, not a loose router:
 - `experience-index.yaml` recalls workflows that have actually succeeded.
 - `bin/vibetether.mjs` gives the project one versioned CLI entry for route, reconciliation, and doctor commands.
 
-On a fresh install, do not scan repository documents into active truth. A user may edit `TRUTH.md` directly or ask the Agent to find candidates. Candidates are non-authoritative and must never guide implementation. The Agent may record a discoverable candidate with its role, scope, and reason, but active additions, removals, role changes, scope changes, and supersession require user confirmation. A document generated during an approved discussion is still a candidate until separately confirmed. A later command such as "continue with the new direction" does not silently activate the file; activation needs explicit approval of its governing path, role, scope, and any supersession, without requiring a magic phrase.
+On a fresh install, do not scan repository documents into active truth. A user may edit the manifest-declared Truth Map directly or ask the Agent to find candidates. The normal path is `.vibetether/TRUTH.md`. When a legacy project already uses that path as a prose authority document, preserve it byte-for-byte and use `.vibetether/TRUTH-MAP.md` as the canonical index instead. Candidates are non-authoritative and must never guide implementation. The Agent may record a discoverable candidate with its role, scope, and reason, but active additions, removals, role changes, scope changes, and supersession require user confirmation. A document generated during an approved discussion is still a candidate until separately confirmed. A later command such as "continue with the new direction" does not silently activate the file; activation needs explicit approval of its governing path, role, scope, and any supersession, without requiring a magic phrase.
 
 At task entry, read the host instructions, manifest, truth map, intent, checkpoint, then only the confirmed sources applicable to the active scope. At phase, goal, risk, authority, source, compaction, resume, handoff, merge, deployment, release, or publication boundaries, perform a full re-anchor. For an unchanged low-risk slice, compare known fingerprints and reread only affected sources; do not reload the whole corpus.
 

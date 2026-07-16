@@ -79,7 +79,7 @@ const preLocalCliSharedRules = [
   'Never persist credentials, private keys, one-time codes, private reasoning, or sensitive tool output. Run `vibetether doctor` before a completion-like state; a route record proves lifecycle disposition, not semantic correctness.',
 ].join('\n');
 
-const sharedRules = [
+const preManifestTruthIndexSharedRules = [
   '## VibeTether project control, routing, and experience recall',
   '',
   'Automatically apply the `vibe-tether` Skill at task entry, before consequential actions, after compaction, resume, handoff, repeated failure, goal or phase changes, and before completion, the next slice, merge, deployment, release, or publication.',
@@ -100,6 +100,11 @@ const sharedRules = [
   'Never persist credentials, private keys, one-time codes, private reasoning, or sensitive tool output. Before a completion, handoff, merge, deployment, release, or publication boundary, run `node .vibetether/bin/vibetether.mjs doctor --project . --boundary <BOUNDARY>`; a route record proves lifecycle disposition, not semantic correctness.',
 ].join('\n');
 
+const sharedRules = preManifestTruthIndexSharedRules.replace(
+  'Read `.vibetether/project.yaml`, `.vibetether/TRUTH.md`, `.vibetether/intent.md`, `.vibetether/state/current.yaml`, and then only the confirmed truth sources applicable to the current role and scope.',
+  'Read `.vibetether/project.yaml`, the `truth_index` path declared there (normally `.vibetether/TRUTH.md`), `.vibetether/intent.md`, `.vibetether/state/current.yaml`, and then only the confirmed truth sources applicable to the current role and scope.',
+);
+
 export const LEGACY_MANAGED_BODIES = new Set([
   legacySharedRules,
   preReadinessSharedRules,
@@ -107,6 +112,7 @@ export const LEGACY_MANAGED_BODIES = new Set([
   preExperienceRecallSharedRules,
   prePhaseHandshakeSharedRules,
   preLocalCliSharedRules,
+  preManifestTruthIndexSharedRules,
 ]);
 
 export const ADAPTERS = {

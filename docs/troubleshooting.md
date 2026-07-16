@@ -36,19 +36,19 @@ diagnosing ordinary project behavior.
 Use the documented Codeload tarball form:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.2 vibetether init --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.3 vibetether init --project .
 ```
 
 The shorter `github:t01089572455/vibetether` shorthand can make npm invoke Git
 or SSH and exit 128 before VibeTether is running. VibeTether cannot recover an
 acquisition failure that happens before its executable starts.
 
-`curl -I https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.2`
+`curl -I https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.3`
 tests package acquisition separately from later provider Git access.
 
 If `vibetether --version` unexpectedly reports an older release, check whether
 the command omitted the current README's cache key
-(`refs/heads/main?v=0.6.2`). npm can reuse a cached package or `npx` execution
+(`refs/heads/main?v=0.6.3`). npm can reuse a cached package or `npx` execution
 environment for the bare moving URL even with `--prefer-online` or `--force`.
 Copy the current README command or switch to the fixed release tag above, then
 verify the version before `init`.
@@ -80,7 +80,7 @@ Prompt, then rerun the same install:
 set "GIT_CONFIG_COUNT=1"
 set "GIT_CONFIG_KEY_0=http.sslBackend"
 set "GIT_CONFIG_VALUE_0=openssl"
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.2 vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.3 vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
 ```
 
 `GIT_SSL_BACKEND=openssl` alone does not configure Git's HTTP backend.
@@ -129,6 +129,18 @@ writes. Update the audited registry in a release; do not bypass the check.
 
 VibeTether edits only its exact marked block. Preserve user text, repair duplicate
 or reversed markers, and rerun `init --dry-run`.
+
+## Upgrade reports a missing canonical Truth Map section
+
+Release 0.6.2 treated every pre-existing `.vibetether/TRUTH.md` as the canonical
+machine index. Some older projects used that path for a user-authored prose truth
+register instead. Upgrade with the current release: it preserves a legacy
+manifest-declared prose file byte-for-byte and routes the canonical index to
+`.vibetether/TRUTH-MAP.md`.
+
+If the error names `.vibetether/TRUTH-MAP.md`, that alternate path is already
+occupied by non-canonical content. VibeTether stops before writing. Back up and
+rename the unrelated sidecar, then rerun the same update command.
 
 ## PowerShell blocks npm.ps1
 

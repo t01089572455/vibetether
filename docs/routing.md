@@ -16,8 +16,9 @@ The managed project instructions tell a cooperating host to reload VibeTether at
 - selection of the next slice;
 - completion, merge, release, or publication.
 
-Re-entry reloads `.vibetether/project.yaml`, `.vibetether/TRUTH.md`, the Intent
-Contract, the current checkpoint, only applicable confirmed truth sources,
+Re-entry reloads `.vibetether/project.yaml`, its declared `truth_index` (normally
+`.vibetether/TRUTH.md`), the Intent Contract, the current checkpoint, only
+applicable confirmed truth sources,
 `.vibetether/routes.local.yaml` when present, and matching Proven Path metadata.
 Candidates remain non-authoritative. This is more reliable than assuming the
 first prompt or an old conversation summary is still complete.
@@ -73,7 +74,7 @@ is active. It proves selection and disposition, not private reasoning or the
 semantic quality of the work.
 
 If confirmed authority may have changed, omit the inline decision. Move the
-relevant path through the user-confirmed `TRUTH.md` lifecycle, then record one
+relevant path through the user-confirmed Truth Map lifecycle, then record one
 matching disposition:
 
 ```sh
@@ -85,7 +86,7 @@ node .vibetether/bin/vibetether.mjs truth reconcile --project . \
 
 `truth reconcile` accepts `no-material-change`, `candidate-pending`, `applied`,
 or `declined`. It validates authority fingerprints and Truth Map membership; it
-does not edit `TRUTH.md`. Candidate paths may be regular files or project
+does not edit the Truth Map. Candidate paths may be regular files or project
 directories. Candidate and declined decisions require confirmed authority to
 remain unchanged; `applied` may re-anchor only its declared confirmed path.
 Additional confirmed-source or Intent changes require a separate consequential

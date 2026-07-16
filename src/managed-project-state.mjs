@@ -20,6 +20,7 @@ import {
   skillFingerprint,
 } from './skill-install.mjs';
 import { LOCAL_CLI_PATH } from './local-cli.mjs';
+import { isSupportedTruthIndexPath } from './truth-map.mjs';
 
 const LEGACY_GITIGNORE_BODY = '.vibetether/state/';
 const HASH = /^[a-f0-9]{64}$/;
@@ -256,6 +257,10 @@ async function verifiedManagedState(root) {
     const enabledHarnesses = validateManifest(manifest);
     if (!enabledHarnesses) return null;
     const allowedControlFiles = new Set(CONTROL_FILES);
+    if (manifest.truth_index !== undefined) {
+      if (!isSupportedTruthIndexPath(manifest.truth_index)) return null;
+      allowedControlFiles.add(portablePath(manifest.truth_index));
+    }
     if (manifest.cli !== undefined) {
       const cli = manifest.cli;
       if (!record(cli)

@@ -2,9 +2,11 @@
 
 ## Purpose
 
-Use `.vibetether/TRUTH.md` as the human-readable entry list for durable project authority. It answers which documents govern the active task; it does not copy their content and it does not make every repository document authoritative.
+Use the `truth_index` declared in `.vibetether/project.yaml` as the human-readable entry list for durable project authority. The normal path is `.vibetether/TRUTH.md`. It answers which documents govern the active task; it does not copy their content and it does not make every repository document authoritative.
 
 The project owns this file. VibeTether may create the initial blank scaffold, validate its structure, and help edit it. It must not silently discover or activate project documents.
+
+If a legacy project already used `.vibetether/TRUTH.md` as a prose authority document before the canonical index existed, initialization preserves that document byte-for-byte, routes `truth_index` to `.vibetether/TRUTH-MAP.md`, and keeps the legacy document as confirmed authority. Always follow the manifest route rather than assuming the filename.
 
 Do not put transient Git or task state here. Branch, HEAD, dirty files, active worktree, route instance, current phase, and exit evidence belong in `.vibetether/state/`, where VibeTether can compare them without turning implementation accidents into project authority.
 
@@ -23,7 +25,7 @@ At task entry or a full re-anchor:
 
 1. read the nearest host instructions;
 2. read `.vibetether/project.yaml` to locate control artifacts;
-3. read `.vibetether/TRUTH.md`;
+3. read the manifest-declared `truth_index`;
 4. read `.vibetether/intent.md` and the current checkpoint;
 5. select only confirmed entries whose role and scope apply;
 6. read those original documents;
@@ -82,4 +84,4 @@ node .vibetether/bin/vibetether.mjs truth reconcile --project . \
 node .vibetether/bin/vibetether.mjs doctor --project . --boundary ordinary --json
 ```
 
-Use `candidate-pending` while user confirmation is outstanding and `declined` only after the path appears in the matching Truth Map section. Candidate paths may be regular files or project directories. `candidate-pending` and `declined` cannot absorb changes to confirmed authority; `applied` may re-anchor only its declared confirmed path, so additional confirmed-source or Intent changes require a separate consequential route. Reconciliation validates the current section and records the decision; it does not modify `TRUTH.md`. Doctor validates structure, fingerprints, and path safety; it does not claim semantic understanding or user approval.
+Use `candidate-pending` while user confirmation is outstanding and `declined` only after the path appears in the matching Truth Map section. Candidate paths may be regular files or project directories. `candidate-pending` and `declined` cannot absorb changes to confirmed authority; `applied` may re-anchor only its declared confirmed path, so additional confirmed-source or Intent changes require a separate consequential route. Reconciliation validates the current section and records the decision; it does not modify the Truth Map. Doctor validates structure, fingerprints, and path safety; it does not claim semantic understanding or user approval.

@@ -28,7 +28,7 @@ Copy and paste this inside the project you want to control. Use it for a
 **first install** or a **compatible upgrade**. It follows the current `main`:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main?v=0.6.2 vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main?v=0.6.3 vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
 ```
 
 That is the **full reviewed setup**: VibeTether for Codex and Claude Code,
@@ -38,20 +38,20 @@ It does not install a global `vibetether` executable. Initialization creates the
 project-local launcher used by the shorter commands below.
 
 Re-run the command shown in the current README to upgrade a compatible project.
-The `?v=0.6.2` suffix refreshes npm's execution cache key while the archive still
+The `?v=0.6.3` suffix refreshes npm's execution cache key while the archive still
 follows `main`; it is not a source pin. VibeTether preserves project-owned truth
 and routing files and refuses unsafe Skill overwrites.
 
 Using Codex only? Use the same reviewed setup with `--agent codex`:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main?v=0.6.2 vibetether init --project . --agent codex --profile extended --bundle web --bundle production --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main?v=0.6.3 vibetether init --project . --agent codex --profile extended --bundle web --bundle production --yes
 ```
 
 Prefer prompts over flags? Run the guided setup:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main?v=0.6.2 vibetether init --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main?v=0.6.3 vibetether init --project .
 ```
 
 It explains each finite choice, recommends a safe default, and asks you to supply
@@ -140,7 +140,7 @@ VibeTether gives a new or existing project a beginner-readable control surface:
 | --- | --- |
 | `AGENTS.md` and/or `CLAUDE.md` | Tells Codex or Claude Code when to re-enter VibeTether |
 | `.vibetether/intent.md` | Records the user-owned goal, evidence, boundaries, and constraints |
-| `.vibetether/TRUTH.md` | Lists confirmed truth, candidates awaiting confirmation, and declined candidates |
+| Manifest `truth_index` (normally `.vibetether/TRUTH.md`) | Lists confirmed truth, candidates awaiting confirmation, and declined candidates |
 | `.vibetether/project.yaml` | Routes the control artifacts without copying their content |
 | `.vibetether/capabilities.yaml` | Shows scenarios, routes, fallbacks, outputs, and exit evidence |
 | `.vibetether/state/current.yaml` | Keeps the current phase and bounded slice resumable |
@@ -148,12 +148,11 @@ VibeTether gives a new or existing project a beginner-readable control surface:
 | `.vibetether/experience-index.yaml` | Points to reusable workflows that have actually succeeded |
 | `.vibetether/bin/vibetether.mjs` | Pins one project-local CLI entry to the matching versioned VibeTether release tag |
 
-Initialization creates a blank truth entry list. It may inspect repository
-evidence for setup recommendations, but it does not automatically activate
-project documents as confirmed truth, even when a file is named `PRD.md` or lives
-under `docs/adr/`. Existing projects can migrate previously active VibeTether
-sources, but newly discovered documents stay candidates until the user confirms
-them.
+Initialization creates a blank truth entry list at `.vibetether/TRUTH.md`. It may
+inspect repository evidence for setup recommendations, but it does not automatically
+activate project documents as confirmed truth. Existing projects can migrate active
+sources; if `.vibetether/TRUTH.md` is already a prose authority document, VibeTether
+preserves it byte-for-byte and records `.vibetether/TRUTH-MAP.md` as the index.
 
 The CLI maintains deterministic structure and validation. The Agent performs
 semantic discovery, selective reading, routing, and checkpoint updates. The user
@@ -169,7 +168,7 @@ confirmation.
 
 | Artifact | How to manage it |
 | --- | --- |
-| `.vibetether/TRUTH.md` | Edit directly or ask the Agent to propose candidates and confirm them one at a time |
+| Manifest `truth_index` (normally `.vibetether/TRUTH.md`) | Edit directly or ask the Agent to propose candidates and confirm them one at a time |
 | `.vibetether/intent.md` | Use the project-local `bootstrap` command below or ask the Agent to propose a directional update |
 | `.vibetether/routes.local.yaml` | Use the project-local `customize` command below or edit validated YAML directly |
 | Proven Path documents | Edit the referenced sanitized runbook; confirm before active indexing |
@@ -191,9 +190,11 @@ generated capability board, canonical Intent metadata, or runtime route state.
 
 ## Add project truth
 
-`.vibetether/TRUTH.md` is the entry list for documents that may govern the
-project. A new installation starts with an empty list. You can manage it without
-learning its format—just talk to the Agent.
+The `truth_index` path in `.vibetether/project.yaml` is the entry list for
+documents that may govern the project. It is normally `.vibetether/TRUTH.md`; a
+legacy prose collision may use `.vibetether/TRUTH-MAP.md` instead. A new
+installation starts with an empty list. You can manage it without learning its
+format—just talk to the Agent.
 
 ### Ask the Agent to configure it
 
@@ -202,11 +203,12 @@ Copy this into Codex or Claude:
 ```text
 Search this repository for candidate truth and specification documents, including
 instructions, product requirements, architecture, UI, testing, operations, and
-release documents. Inspect their contents. For each candidate, explain its role,
-scope, authority evidence, and conflicts. Add safe findings only under
-`Candidates awaiting confirmation` in `.vibetether/TRUTH.md`. Do not activate or
-use any source until I confirm its exact path, role, scope, and any supersession.
-Show me the candidate diff and ask me to confirm candidates one at a time.
+release documents. First read `.vibetether/project.yaml` and use its `truth_index`
+path. Inspect candidate contents. For each candidate, explain its role, scope,
+authority evidence, and conflicts. Add safe findings only under
+`Candidates awaiting confirmation` in that Truth Map. Do not activate or use any
+source until I confirm its exact path, role, scope, and any supersession. Show me
+the candidate diff and ask me to confirm candidates one at a time.
 ```
 
 The Agent may update the candidate list, but candidates remain non-authoritative
@@ -224,8 +226,9 @@ it, and run:
 
 ### Configure it manually
 
-Edit `.vibetether/TRUTH.md` directly. First add the proposal to the candidate
-section:
+Open `.vibetether/project.yaml`, find `truth_index`, and edit that file directly.
+For most projects it is `.vibetether/TRUTH.md`. First add the proposal to the
+candidate section:
 
 ```markdown
 ## Candidates awaiting confirmation
@@ -375,8 +378,8 @@ node .vibetether/bin/vibetether.mjs route abandon --project . \
 ```
 
 If confirmed authority may have changed, close the route without the inline
-Truth decision, update `TRUTH.md` only through the user-confirmed lifecycle, then
-record the result:
+Truth decision, update the manifest-declared Truth Map only through the
+user-confirmed lifecycle, then record the result:
 
 ```sh
 node .vibetether/bin/vibetether.mjs truth reconcile --project . \

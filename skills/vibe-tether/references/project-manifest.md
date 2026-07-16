@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Use `.vibetether/project.yaml` as a machine-readable index for the project control plane. `.vibetether/TRUTH.md` is the human-readable authority list. Do not copy product specifications into either file or create a parallel documentation tree.
+Use `.vibetether/project.yaml` as a machine-readable index for the project control plane. Its `truth_index` field points to the human-readable authority list, normally `.vibetether/TRUTH.md`. Do not copy product specifications into either file or create a parallel documentation tree.
 
 ## Minimal Schema
 
@@ -19,8 +19,8 @@ experience_index: .vibetether/experience-index.yaml
 cli:
   launcher: .vibetether/bin/vibetether.mjs
   launcher_sha256: 64-character managed fingerprint
-  package: https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.2
-  expected_version: 0.6.2
+  package: https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.3
+  expected_version: 0.6.3
 
 sources: # compatibility-only while older releases remain rollback-readable
   always:
@@ -68,7 +68,7 @@ conflicts:
 
 ## Initialization
 
-1. Create a blank, project-owned `.vibetether/TRUTH.md`; do not scan or activate repository documents.
+1. Create a blank, project-owned `.vibetether/TRUTH.md`; do not scan or activate repository documents. If a legacy manifest already declares a prose `.vibetether/TRUTH.md` as active truth, preserve it byte-for-byte and create the canonical index at `.vibetether/TRUTH-MAP.md`.
 2. Route the truth map, Intent Contract, capability board, checkpoint, provider lock, and experience index from the manifest.
 3. Let the user edit the truth map or ask the Agent to search and explain candidates later.
 4. Require user confirmation before a candidate becomes active truth.
@@ -92,7 +92,7 @@ Adapters may write only a bounded block:
 <!-- vibetether:start -->
 ## VibeTether
 
-Automatically apply VibeTether at task entry, consequential actions, phase transitions, resume, compaction recovery, and completion boundaries. Read `.vibetether/TRUTH.md` and only applicable confirmed sources. Candidates never guide implementation; active truth changes require user confirmation. Consult `.vibetether/capabilities.yaml`, treat provider routes as recommendations, and record the selected path. Use `node .vibetether/bin/vibetether.mjs route` with the real execution root, reconcile Truth after route exit, and pass a boundary-specific doctor check. Query `.vibetether/experience-index.yaml` before repeatable operational work. If experience conflicts with truth, ask the user. After verified success, create a sanitized Proven Path candidate and ask before active indexing. Record `experience_feedback`. Never persist secrets or private reasoning.
+Automatically apply VibeTether at task entry, consequential actions, phase transitions, resume, compaction recovery, and completion boundaries. Read `.vibetether/project.yaml`, its declared `truth_index`, and only applicable confirmed sources. Candidates never guide implementation; active truth changes require user confirmation. Consult `.vibetether/capabilities.yaml`, treat provider routes as recommendations, and record the selected path. Use `node .vibetether/bin/vibetether.mjs route` with the real execution root, reconcile Truth after route exit, and pass a boundary-specific doctor check. Query `.vibetether/experience-index.yaml` before repeatable operational work. If experience conflicts with truth, ask the user. After verified success, create a sanitized Proven Path candidate and ask before active indexing. Record `experience_feedback`. Never persist secrets or private reasoning.
 <!-- vibetether:end -->
 ```
 

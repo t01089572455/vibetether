@@ -6,7 +6,8 @@ meaning, not permission to govern implementation.
 
 ## The entry list
 
-`.vibetether/TRUTH.md` has three project-document states:
+The `truth_index` declared in `.vibetether/project.yaml` has three
+project-document states. Its normal path is `.vibetether/TRUTH.md`:
 
 - **Confirmed project truth** may govern work in its declared role and scope.
 - **Candidates awaiting confirmation** are proposals and remain non-authoritative.
@@ -15,13 +16,19 @@ meaning, not permission to govern implementation.
 The file also points to host bootstrap and control-plane artifacts. Those entries
 explain how VibeTether runs; they are not product decisions.
 
-Do not add transient execution facts to `TRUTH.md`. The current branch, HEAD,
+Do not add transient execution facts to the Truth Map. The current branch, HEAD,
 dirty files, worktree, route instance, phase, and exit evidence belong under
 `.vibetether/state/`; they describe what is happening now, not what the product
 must become.
 
 Initialization creates the blank list and does not scan or activate repository
 documents. You can edit it directly, or ask the Agent to help in ordinary language.
+
+For compatibility, a legacy project may already use `.vibetether/TRUTH.md` as a
+prose authority document. VibeTether preserves that file byte-for-byte, creates
+the canonical index at `.vibetether/TRUTH-MAP.md`, and records that alternate
+path in `project.yaml`. The legacy document remains confirmed truth. Always read
+the manifest route before editing the entry list.
 
 ## Find and activate candidates
 
@@ -70,7 +77,7 @@ documentation corpus before every local edit.
 
 ## Truth and successful experience
 
-`.vibetether/TRUTH.md` controls what the project requires.
+The manifest-declared Truth Map controls what the project requires.
 `.vibetether/experience-index.yaml` points to procedures that previously worked.
 A runbook may help execute current truth, but it cannot override product direction,
 architecture, visual direction, or current release policy.
@@ -100,7 +107,8 @@ dispositions. It does not pretend to prove semantic correctness or user approval
 After a route exits, the next route and completion-like boundaries require an
 explicit Truth disposition. The common unchanged case can be recorded inline on
 `route complete` or `route abandon`. If a candidate or active entry changed,
-update `TRUTH.md` only after the required user decision, then run:
+update the manifest-declared Truth Map only after the required user decision,
+then run:
 
 ```sh
 node .vibetether/bin/vibetether.mjs truth reconcile --project . \

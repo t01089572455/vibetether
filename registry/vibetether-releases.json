@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "current": {
-    "version": "0.6.2",
-    "fingerprint": "b5ca887b49ba04f054cffbf362649d895c925e22a825fc2cbe6eb343e0aca57b"
+    "version": "0.6.3",
+    "fingerprint": "af62d8dd70ca8228f15130843575f7dcc122692fee4604db6bbf062fddc5c856"
   },
   "history": [
     {
@@ -70,6 +70,12 @@
       "version": "0.6.1",
       "commit": "0ee562bfbfad9d49384655c23f2ba1c1c0e709bc",
       "fingerprint": "8e85be715fbc4845f3cbee772d69e87ce65602942f0a6617a5ae642840e3ba4c"
+    },
+    {
+      "id": "v0.6.2",
+      "version": "0.6.2",
+      "commit": "fe3de16620ff80df28152efdcdd546297763c82d",
+      "fingerprint": "b5ca887b49ba04f054cffbf362649d895c925e22a825fc2cbe6eb343e0aca57b"
     }
   ]
 }

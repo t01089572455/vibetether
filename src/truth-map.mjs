@@ -3,7 +3,12 @@ import path from 'node:path';
 import { isSensitiveArtifactPath } from './artifact-safety.mjs';
 
 export const TRUTH_INDEX_PATH = '.vibetether/TRUTH.md';
+export const LEGACY_TRUTH_MAP_SIDECAR_PATH = '.vibetether/TRUTH-MAP.md';
 export const TRUTH_MAP_OWNERSHIP_MARKER = '<!-- vibetether:truth-map-v1 -->';
+
+export function isSupportedTruthIndexPath(value) {
+  return value === TRUTH_INDEX_PATH || value === LEGACY_TRUTH_MAP_SIDECAR_PATH;
+}
 
 const SECTION_NAMES = Object.freeze({
   'Host bootstrap': 'hosts',
@@ -12,6 +17,13 @@ const SECTION_NAMES = Object.freeze({
   'Candidates awaiting confirmation': 'candidates',
   'Declined candidates': 'declined',
 });
+
+export function resemblesCanonicalTruthMap(source) {
+  if (typeof source !== 'string') return false;
+  if (source.includes(TRUTH_MAP_OWNERSHIP_MARKER)) return true;
+  if (/^# VibeTether Project Truth Map\s*$/m.test(source)) return true;
+  return Object.keys(SECTION_NAMES).some((section) => source.includes(`## ${section}`));
+}
 
 const CONTROL_POINTERS = Object.freeze([
   { path: '.vibetether/intent.md', role: 'intent-contract', scope: '.' },
@@ -29,6 +41,7 @@ const INFRASTRUCTURE_PATHS = new Set([
   '.vibetether/capabilities.yaml',
   '.vibetether/state/current.yaml',
   '.vibetether/experience-index.yaml',
+  LEGACY_TRUTH_MAP_SIDECAR_PATH,
 ]);
 
 function normalizeProjectPath(value) {

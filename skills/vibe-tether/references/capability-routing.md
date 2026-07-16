@@ -49,7 +49,7 @@ node .vibetether/bin/vibetether.mjs route abandon --project . \
 
 The handshake records a unique route instance, actual project-contained execution root, Git worktree/HEAD/content fingerprints when available, selection, route source, expected outputs, exit evidence, and bounded disposition evidence. It does not prove semantic correctness. `doctor` detects missing, pending, stale, unavailable, source-missing, ambiguous, execution-drift, launcher-integrity, version, and Truth-reconciliation problems. Automatic phase re-entry therefore depends on a cooperating host Agent following the managed project instructions.
 
-If confirmed authority may have changed, omit the inline Truth decision. After updating `.vibetether/TRUTH.md` through its user-confirmed lifecycle, record one explicit disposition:
+If confirmed authority may have changed, omit the inline Truth decision. After updating the manifest-declared Truth Map through its user-confirmed lifecycle, record one explicit disposition:
 
 ```bash
 node .vibetether/bin/vibetether.mjs truth reconcile --project . \

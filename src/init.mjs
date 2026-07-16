@@ -47,8 +47,11 @@ import {
 import { scanProject } from './project-scan.mjs';
 import {
   createTruthMap,
+  isSupportedTruthIndexPath,
+  LEGACY_TRUTH_MAP_SIDECAR_PATH,
   legacyManifestEntries,
   parseTruthMap,
+  resemblesCanonicalTruthMap,
   TRUTH_INDEX_PATH,
 } from './truth-map.mjs';
 import { stageProviderSources } from './provider-fetch.mjs';
@@ -372,6 +375,7 @@ export async function initialize(options, dependencies = {}) {
     LOCAL_CLI_PATH,
     EXPERIENCE_INDEX_PATH,
     TRUTH_INDEX_PATH,
+    LEGACY_TRUTH_MAP_SIDECAR_PATH,
     PROJECT_ROUTES_PATH,
   ]) {
     await rejectSymlinkPath(root, relativePath);
@@ -418,11 +422,33 @@ export async function initialize(options, dependencies = {}) {
       3,
     );
   }
-  if (manifest.truth_index !== undefined && manifest.truth_index !== TRUTH_INDEX_PATH) {
+  if (manifest.truth_index !== undefined && !isSupportedTruthIndexPath(manifest.truth_index)) {
     throw new CliError(
-      `Manifest conflict in .vibetether/project.yaml: truth_index must route to ${TRUTH_INDEX_PATH}.`,
+      `Manifest conflict in .vibetether/project.yaml: truth_index must route to ${TRUTH_INDEX_PATH} or ${LEGACY_TRUTH_MAP_SIDECAR_PATH}.`,
       3,
     );
+  }
+  const legacyTruthEntries = persistedManifest ? legacyManifestEntries(persistedManifest) : [];
+  let truthIndexPath = manifest.truth_index ?? TRUTH_INDEX_PATH;
+  const defaultTruthTarget = resolveInside(root, TRUTH_INDEX_PATH);
+  const defaultTruthOriginal = await readTextIfPresent(defaultTruthTarget);
+  if (manifest.truth_index === undefined && defaultTruthOriginal !== null) {
+    try {
+      parseTruthMap(defaultTruthOriginal);
+    } catch (error) {
+      const isDeclaredLegacyTruth = legacyTruthEntries.some((entry) => entry.path === TRUTH_INDEX_PATH);
+      if (!isDeclaredLegacyTruth || resemblesCanonicalTruthMap(defaultTruthOriginal)) {
+        throw new CliError(`Truth map conflict in ${TRUTH_INDEX_PATH}: ${error.message}`, 3);
+      }
+      const occupiedSidecar = await readTextIfPresent(resolveInside(root, LEGACY_TRUTH_MAP_SIDECAR_PATH));
+      if (occupiedSidecar !== null) {
+        throw new CliError(
+          `Truth map conflict in ${LEGACY_TRUTH_MAP_SIDECAR_PATH}: legacy migration sidecar already exists; back it up or move it before retrying.`,
+          3,
+        );
+      }
+      truthIndexPath = LEGACY_TRUTH_MAP_SIDECAR_PATH;
+    }
   }
   const projectRoutesTarget = resolveInside(root, PROJECT_ROUTES_PATH);
   const projectRoutesOriginal = await readTextIfPresent(projectRoutesTarget);
@@ -463,7 +489,7 @@ export async function initialize(options, dependencies = {}) {
     capability_board: '.vibetether/capabilities.yaml',
     provider_lock: '.vibetether/providers.lock.yaml',
     experience_index: EXPERIENCE_INDEX_PATH,
-    truth_index: TRUTH_INDEX_PATH,
+    truth_index: truthIndexPath,
   };
 
   const localCli = currentLocalCliBaseline();
@@ -499,19 +525,19 @@ export async function initialize(options, dependencies = {}) {
   }
   manifest.cli = { ...localCli.manifest };
 
-  const truthTarget = resolveInside(root, TRUTH_INDEX_PATH);
+  const truthTarget = resolveInside(root, truthIndexPath);
   const truthOriginal = await readTextIfPresent(truthTarget);
   let truthContent = truthOriginal;
   if (truthOriginal !== null) {
     try {
       parseTruthMap(truthOriginal);
     } catch (error) {
-      throw new CliError(`Truth map conflict in ${TRUTH_INDEX_PATH}: ${error.message}`, 3);
+      throw new CliError(`Truth map conflict in ${truthIndexPath}: ${error.message}`, 3);
     }
   } else if (persistedManifest && persistedManifest.truth_index === undefined) {
     truthContent = createTruthMap({
       harnesses: adapters,
-      confirmed: legacyManifestEntries(persistedManifest),
+      confirmed: legacyTruthEntries,
     });
     delete manifest.truth_index_ownership;
   } else {
@@ -566,7 +592,7 @@ export async function initialize(options, dependencies = {}) {
     content: localCli.content,
   });
   textPlans.push({
-    relativePath: TRUTH_INDEX_PATH,
+    relativePath: truthIndexPath,
     target: truthTarget,
     original: truthOriginal,
     content: truthContent,
@@ -1113,5 +1139,9 @@ export async function initialize(options, dependencies = {}) {
   const truthNotice = manifestOriginal === null
     ? `Project truth is intentionally empty. Edit ${TRUTH_INDEX_PATH}, or ask the Agent to search for candidates and confirm activation one at a time.\n`
     : '';
-  return `${recoveryPrefix}VibeTether initialized ${root} for ${adapters.join(' + ')} using the ${options.profile} profile with ${availableProviderCount} of ${providers.length} curated provider Skill(s) available.\n${truthNotice}${doctorNotice}${collisionNotice}${warnings ? `Warnings:\n${warnings}\n` : ''}`;
+  const truthMigrationNotice = persistedManifest?.truth_index === undefined
+      && truthIndexPath === LEGACY_TRUTH_MAP_SIDECAR_PATH
+    ? `Preserved legacy project truth at ${TRUTH_INDEX_PATH}; the canonical Truth Map is now ${LEGACY_TRUTH_MAP_SIDECAR_PATH}.\n`
+    : '';
+  return `${recoveryPrefix}VibeTether initialized ${root} for ${adapters.join(' + ')} using the ${options.profile} profile with ${availableProviderCount} of ${providers.length} curated provider Skill(s) available.\n${truthNotice}${truthMigrationNotice}${doctorNotice}${collisionNotice}${warnings ? `Warnings:\n${warnings}\n` : ''}`;
 }

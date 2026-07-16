@@ -40,7 +40,7 @@ authority_snapshot:
     kind: file
     sha256: 64-character content fingerprint
   truth_index:
-    path: .vibetether/TRUTH.md
+    path: .vibetether/TRUTH.md # or the alternate path declared by project.yaml
     kind: file
     sha256: 64-character content fingerprint
   confirmed_projection_sha256: 64-character confirmed-entry fingerprint
