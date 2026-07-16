@@ -47,6 +47,48 @@ test('initialization rolls back earlier text and Skill writes when a later opera
   assert.equal(await exists(secondSkill), false);
 });
 
+test('rollback never mutates a preserved collision target', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-collision-transaction-'));
+  const instructions = path.join(root, 'AGENTS.md');
+  const collision = path.join(root, '.agents', 'skills', 'demo');
+  const laterSkill = path.join(root, '.agents', 'skills', 'later');
+  const customBytes = '---\nname: demo\ndescription: User-owned demo.\n---\n';
+  await writeFile(instructions, '# Original\n', 'utf8');
+  await mkdir(collision, { recursive: true });
+  await writeFile(path.join(collision, 'SKILL.md'), customBytes, 'utf8');
+
+  await assert.rejects(
+    applyInitialization(
+      root,
+      [{ target: instructions, original: '# Original\n', content: '# Changed\n' }],
+      [
+        {
+          relativePath: '.agents/skills/demo',
+          target: collision,
+          needsInstall: false,
+          kind: 'collision',
+          install: async () => {
+            throw new Error('collision target must never enter the installer');
+          },
+        },
+        {
+          relativePath: '.agents/skills/later',
+          target: laterSkill,
+          needsInstall: true,
+          install: async () => {
+            throw new Error('injected later provider failure');
+          },
+        },
+      ],
+    ),
+    /injected later provider failure/,
+  );
+
+  assert.equal(await readFile(instructions, 'utf8'), '# Original\n');
+  assert.equal(await readFile(path.join(collision, 'SKILL.md'), 'utf8'), customBytes);
+  assert.equal(await exists(laterSkill), false);
+});
+
 test('initialization restores a replaced legacy Skill when a later install fails', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-upgrade-transaction-'));
   const legacySkill = path.join(root, '.agents', 'skills', 'vibe-tether');

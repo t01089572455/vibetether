@@ -9,6 +9,7 @@ import YAML from 'yaml';
 import { main } from '../src/cli.mjs';
 import { initialize } from '../src/init.mjs';
 import { stageProviderSources } from '../src/provider-fetch.mjs';
+import { removeManagedBlock } from '../src/files.mjs';
 import { validateProviderLock } from '../src/managed-project-state.mjs';
 import { inspectProject } from '../src/doctor.mjs';
 import { createProviderLock } from '../src/provider-plan.mjs';
@@ -1533,4 +1534,132 @@ test('identical user-installed providers are reused without claiming ownership',
   await initialize(options(target, { agent: 'codex' }), { loadRegistry: async () => registry(source) });
   const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
   assert.equal(lock.skills[0].installations.codex.ownership, 'preexisting');
+});
+
+test('ordinary provider upgrades preserve user-owned control data and custom Skill bytes', async () => {
+  const source = await completeUpstream();
+  const target = await project('user-data-preservation');
+  const dependencies = { loadRegistry: async () => twoExposureRegistry(source) };
+  await writeFile(path.join(target, 'README.md'), '# Existing project\n', 'utf8');
+  await initialize(options(target, { agent: 'both' }), dependencies);
+
+  const agentsPath = path.join(target, 'AGENTS.md');
+  const claudePath = path.join(target, 'CLAUDE.md');
+  const intentPath = path.join(target, '.vibetether', 'intent.md');
+  const truthPath = path.join(target, '.vibetether', 'TRUTH.md');
+  const manifestPath = path.join(target, '.vibetether', 'project.yaml');
+  const checkpointPath = path.join(target, '.vibetether', 'state', 'current.yaml');
+  const handshakePath = path.join(target, '.vibetether', 'state', 'route-handshake.yaml');
+  const experiencePath = path.join(target, '.vibetether', 'experience-index.yaml');
+  const routesPath = path.join(target, '.vibetether', 'routes.local.yaml');
+  const customProvider = path.join(target, '.agents', 'skills', 'demo');
+  const projectHelper = path.join(target, '.agents', 'skills', 'project-helper');
+  const experienceArtifact = path.join(target, 'docs', 'operations', 'custom-install.md');
+  const customTruth = path.join(target, 'docs', 'custom-truth.md');
+
+  await writeFile(agentsPath, `# User Codex rules\r\n\r\n${await readFile(agentsPath, 'utf8')}`, 'utf8');
+  await writeFile(claudePath, `# User Claude rules\r\n\r\n${await readFile(claudePath, 'utf8')}`, 'utf8');
+  await writeFile(intentPath, `${await readFile(intentPath, 'utf8')}\nUser-owned intent note.\n`, 'utf8');
+  await writeFile(
+    truthPath,
+    (await readFile(truthPath, 'utf8')).replace(
+      'Unconfirmed candidates do not guide implementation.',
+      'Unconfirmed candidates do not guide implementation.\n\nUser-owned truth-map note.',
+    ),
+    'utf8',
+  );
+  await mkdir(path.dirname(customTruth), { recursive: true });
+  await writeFile(customTruth, '# Custom truth\n', 'utf8');
+  const manifest = YAML.parse(await readFile(manifestPath, 'utf8'));
+  manifest.project_routes = '.vibetether/routes.local.yaml';
+  manifest.custom_extension = { owner: 'user', preserve: true };
+  manifest.sources.custom = ['docs/custom-truth.md'];
+  await writeFile(manifestPath, YAML.stringify(manifest), 'utf8');
+  const checkpoint = YAML.parse(await readFile(checkpointPath, 'utf8'));
+  checkpoint.approved_decisions = ['Preserve this user decision'];
+  checkpoint.evidence_collected = ['Preserve this user evidence'];
+  await writeFile(checkpointPath, YAML.stringify(checkpoint), 'utf8');
+  await writeFile(
+    handshakePath,
+    'schema_version: 1\nstatus: satisfied\nuser_evidence: preserve-this-runtime-record\n',
+    'utf8',
+  );
+  await mkdir(path.dirname(experienceArtifact), { recursive: true });
+  await writeFile(experienceArtifact, '# Custom install path\n', 'utf8');
+  await writeFile(experiencePath, YAML.stringify({
+    schema_version: 1,
+    entries: [{
+      id: 'custom-install',
+      use_when: ['custom-install'],
+      systems: ['windows'],
+      artifacts: ['docs/operations/custom-install.md'],
+      verified_at: '2026-07-16',
+      revalidate_when: ['environment-changes'],
+      status: 'proven',
+    }],
+  }), 'utf8');
+  await mkdir(projectHelper, { recursive: true });
+  await writeFile(
+    path.join(projectHelper, 'SKILL.md'),
+    '---\nname: project-helper\ndescription: User-owned helper.\n---\n',
+    'utf8',
+  );
+  await writeFile(routesPath, YAML.stringify({
+    schema_version: 1,
+    routes: [{
+      id: 'project-helper-alternative',
+      phases: ['DISCOVER'],
+      capability: 'requirements-clarification',
+      when_any: ['project-helper-requested'],
+      skill: 'project-helper',
+      role: 'alternative',
+      use_when: ['Use the project-owned helper when explicitly requested.'],
+      expected_outputs: ['approved_goal'],
+      exit_evidence: ['The project-specific goal is approved.'],
+    }],
+  }), 'utf8');
+  await writeFile(
+    path.join(customProvider, 'SKILL.md'),
+    '---\nname: demo\ndescription: User-owned replacement.\n---\n',
+    'utf8',
+  );
+  await writeFile(path.join(customProvider, 'guide.md'), '# User-owned provider guide\n', 'utf8');
+
+  const instructionPaths = [agentsPath, claudePath];
+  const preservedPaths = [
+    intentPath,
+    truthPath,
+    checkpointPath,
+    handshakePath,
+    experiencePath,
+    routesPath,
+  ];
+  const before = new Map(await Promise.all(
+    [...instructionPaths, ...preservedPaths].map(async (value) => [value, await readFile(value, 'utf8')]),
+  ));
+  const customProviderBefore = await snapshot(customProvider);
+
+  await initialize(options(target, { agent: 'both' }), dependencies);
+
+  for (const value of preservedPaths) {
+    assert.equal(await readFile(value, 'utf8'), before.get(value), value);
+  }
+  assert.equal(
+    removeManagedBlock(await readFile(agentsPath, 'utf8')),
+    removeManagedBlock(before.get(agentsPath)),
+  );
+  assert.equal(
+    removeManagedBlock(await readFile(claudePath, 'utf8')),
+    removeManagedBlock(before.get(claudePath)),
+  );
+  assert.deepEqual(await snapshot(customProvider), customProviderBefore);
+  const upgradedManifest = YAML.parse(await readFile(manifestPath, 'utf8'));
+  assert.deepEqual(upgradedManifest.custom_extension, { owner: 'user', preserve: true });
+  assert.deepEqual(upgradedManifest.sources.custom, ['docs/custom-truth.md']);
+  assert.equal(upgradedManifest.project_routes, '.vibetether/routes.local.yaml');
+  const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
+  const demo = lock.exposures.find((skill) => skill.id === 'fixture-demo');
+  assert.equal(demo.installations.codex, undefined);
+  assert.equal(demo.collisions.codex.reason, 'modified-managed-skill');
+  assert.equal(demo.installations.claude.ownership, 'vibetether');
 });
