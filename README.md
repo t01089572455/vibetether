@@ -97,7 +97,9 @@ The installed project instructions tell a cooperating host Agent to perform the
 same re-check at task entry, consequential phase changes, compaction, resume,
 handoff, repeated failure, the next slice, completion, merge, release, and
 publication. That **phase re-entry** helps keep a long Goal-mode task from treating
-an old summary as current authority.
+an old summary as current authority. It is behavioral guidance, not a host hook.
+The stateful `route` ledger is optional and uses the complete portable commands
+below; VibeTether does not install a global `vibetether` executable.
 
 ## Features
 
@@ -109,7 +111,7 @@ an old summary as current authority.
 | 🗺️ | **User-owned truth map** | Keeps confirmed, candidate, and declined documents visible without silently activating them |
 | ⚓ | **Project-truth re-anchor** | Guides a cooperating Agent to re-read applicable confirmed rules before consequential actions |
 | 🧩 | **Automatic, inspectable Skill routing** | Maps observable task signals to one curated installed recommendation or declared fallback; selection remains advisory |
-| 🤝 | **Stateful phase handshake** | Records route selection, required output, evidence, completion, or abandonment |
+| 🤝 | **Stateful phase handshake** | The portable CLI can record route selection, required output, evidence, completion, or abandonment |
 | 📍 | **Long-task checkpoints** | Carries the current objective and slice through compaction, resume, and handoff |
 | 🎯 | **Smallest Verifiable Slice** | Defines the smallest verifiable outcome that advances the approved goal and keeps direct or delegated work inside it—without limiting Subagent use |
 | 🔁 | **Proven Path recall** | Reads a matching successful runbook before rediscovering an operational workflow |
@@ -279,10 +281,11 @@ If the route no longer fits:
 npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether route abandon --project . --reason "The governing product decision changed."
 ```
 
-The installed `AGENTS.md`/`CLAUDE.md` block tells the host agent to perform this
-handshake at long-task boundaries. A record proves that a route was selected and
-disposed; it does not expose private reasoning or pretend to prove semantic
-correctness. Read the [routing guide](docs/routing.md) for the complete model.
+The installed `AGENTS.md`/`CLAUDE.md` block tells the host agent to re-anchor at
+long-task boundaries. Use the portable commands above when you also want a
+stateful route record. A record proves that a route was selected and disposed;
+it does not expose private reasoning or pretend to prove semantic correctness.
+Read the [routing guide](docs/routing.md) for the complete model.
 
 ## Add your own Skills
 

@@ -171,6 +171,9 @@ test('public command documentation keeps the portable CLI runnable after setup',
   assert.match(readme, /cooperating Agent/i);
   assert.match(readme, /model names.*not.*compatibility/i);
   assert.match(readme, /attempts recovery after the host releases/i);
+  assert.match(readme, /behavioral guidance, not a host hook/i);
+  assert.match(readme, /does not install a global `vibetether` executable/i);
+  assert.match(readme, /portable commands above when you also want a\s+stateful route record/is);
   assert.doesNotMatch(readme, /Add project truth in 60 seconds/i);
   assert.doesNotMatch(readme, /Proven workflows do not disappear/i);
 });
