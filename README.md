@@ -166,7 +166,7 @@ Common guided operations:
 ```sh
 npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether bootstrap --project .
 npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether customize --project .
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether doctor --project . --json
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether doctor --project . --json
 ```
 
 Edit project prose outside VibeTether's markers in `AGENTS.md` or `CLAUDE.md`.
@@ -270,13 +270,13 @@ Start and close one phase route explicitly:
 
 ```sh
 npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether route --project . --phase PLAN --capability planning --signal multi-step-change --agent codex
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether route complete --project . --evidence "The approved plan names bounded slices and verification."
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether route complete --project . --evidence "The approved plan names bounded slices and verification."
 ```
 
 If the route no longer fits:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether route abandon --project . --reason "The governing product decision changed."
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether route abandon --project . --reason "The governing product decision changed."
 ```
 
 The installed `AGENTS.md`/`CLAUDE.md` block tells the host agent to perform this
@@ -344,7 +344,7 @@ Skill, but project instruction discovery and phase re-entry are host-dependent.
 
 ```sh
 npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether doctor --project . --json
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether capabilities --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether capabilities --project .
 ```
 
 For repository contributors, the offline acceptance tour is:

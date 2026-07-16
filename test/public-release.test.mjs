@@ -154,6 +154,16 @@ test('public command documentation keeps the portable CLI runnable after setup',
       /^\s*vibetether\s+(?:bootstrap|capabilities|customize|doctor|route|uninstall|init)\b/m,
       `${file} must not assume a globally installed vibetether command`,
     );
+    const portableInvocations = document
+      .split(/\r?\n/)
+      .filter((line) => /^\s*npx\s+--yes\b.*\bvibetether\b/.test(line));
+    for (const invocation of portableInvocations) {
+      assert.equal(
+        invocation.trimStart().startsWith(codeload),
+        true,
+        `${file} must use the reviewed Codeload package form for every npx vibetether command`,
+      );
+    }
   }
 
   const readme = await text('README.md');

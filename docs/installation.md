@@ -67,8 +67,8 @@ npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/r
 
 ```sh
 npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether init --project . --agent both --profile standard --dry-run
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether doctor --project . --json
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether capabilities --project .
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether doctor --project . --json
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether capabilities --project .
 ```
 
 The dry-run writes nothing. Re-running `init` is the supported update and repair
@@ -99,7 +99,7 @@ Always preview first:
 
 ```sh
 npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether uninstall --project . --dry-run
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether uninstall --project . --yes
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether uninstall --project . --yes
 ```
 
 Only unchanged VibeTether-owned files and managed blocks are removed. Intent,
