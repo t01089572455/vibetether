@@ -112,6 +112,43 @@ test('different pre-existing providers stop instead of being overwritten', async
   assert.equal(await readFile(path.join(value.target, 'SKILL.md'), 'utf8'), 'custom provider\n');
 });
 
+test('optional provider conflicts can be preserved without claiming ownership', async () => {
+  const value = await fixture();
+  await mkdir(value.target, { recursive: true });
+  await writeFile(path.join(value.target, 'SKILL.md'), 'custom provider\n', 'utf8');
+
+  const plan = await inspectDirectoryInstall(
+    value.source,
+    value.target,
+    '.agents/skills/demo',
+    { preserveConflict: true },
+  );
+
+  assert.deepEqual(plan, {
+    needsInstall: false,
+    collision: 'different-preexisting-skill',
+  });
+  assert.equal(await readFile(path.join(value.target, 'SKILL.md'), 'utf8'), 'custom provider\n');
+});
+
+test('optional provider conflict reports a formerly managed target separately', async () => {
+  const value = await fixture();
+  await mkdir(value.target, { recursive: true });
+  await writeFile(path.join(value.target, 'SKILL.md'), 'user modified managed provider\n', 'utf8');
+
+  const plan = await inspectDirectoryInstall(
+    value.source,
+    value.target,
+    '.agents/skills/demo',
+    { preserveConflict: true, previouslyManaged: true },
+  );
+
+  assert.deepEqual(plan, {
+    needsInstall: false,
+    collision: 'modified-managed-skill',
+  });
+});
+
 test('an exact declared legacy fingerprint is upgradeable while other differences remain blocked', async () => {
   const value = await fixture();
   await mkdir(value.target, { recursive: true });

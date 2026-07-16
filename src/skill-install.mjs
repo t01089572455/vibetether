@@ -122,6 +122,14 @@ export async function inspectDirectoryInstall(source, target, relativePath, opti
       if (options.upgradeFingerprints?.has(installed)) {
         return { needsInstall: true, ownership: 'vibetether', replacesExisting: true };
       }
+      if (options.preserveConflict === true) {
+        return {
+          needsInstall: false,
+          collision: options.previouslyManaged
+            ? 'modified-managed-skill'
+            : 'different-preexisting-skill',
+        };
+      }
       throw new CliError(`Refusing to overwrite different or modified installed Skill at ${relativePath}. Back up or remove it first.`, 3);
     }
     return { needsInstall: false, ownership: 'preexisting' };
