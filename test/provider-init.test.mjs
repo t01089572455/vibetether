@@ -59,6 +59,39 @@ async function completeUpstream() {
   };
 }
 
+async function motionUpstream() {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vibetether-init-motion-upstream-'));
+  const names = [
+    'motion-design',
+    'gsap-core',
+    'gsap-frameworks',
+    'gsap-performance',
+    'gsap-plugins',
+    'gsap-react',
+    'gsap-scrolltrigger',
+    'gsap-timeline',
+    'gsap-utils',
+  ];
+  for (const name of names) {
+    await mkdir(path.join(root, 'skills', name), { recursive: true });
+    await writeFile(path.join(root, 'skills', name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name}.\n---\n`, 'utf8');
+  }
+  await writeFile(path.join(root, 'LICENSE'), 'MIT fixture license\n', 'utf8');
+  git(root, ['init', '-q']);
+  git(root, ['config', 'user.name', 'VibeTether Tests']);
+  git(root, ['config', 'user.email', 'tests@example.invalid']);
+  git(root, ['add', '.']);
+  git(root, ['commit', '-qm', 'motion fixture provider']);
+  return {
+    root,
+    names,
+    commit: git(root, ['rev-parse', 'HEAD']),
+    fingerprints: Object.fromEntries(await Promise.all(
+      names.map(async (name) => [name, await skillFingerprint(path.join(root, 'skills', name))]),
+    )),
+  };
+}
+
 function registry(source) {
   return {
     schema_version: 1,
@@ -149,6 +182,89 @@ function completeRegistry(source) {
   value.profiles.standard.catalog_sources = ['fixture-source'];
   value.profiles.extended.catalog_sources = [];
   return value;
+}
+
+function motionRegistry(source) {
+  const skill = (name, exposure, policy, role) => ({
+    id: `fixture-${name}`,
+    install_name: name,
+    path: `skills/${name}`,
+    fingerprint: source.fingerprints[name],
+    catalog_status: 'audited',
+    workflow_role: role,
+    invocation_policy: policy,
+    exposure,
+    capabilities: [name === 'motion-design' ? 'frontend-product-design' : 'frontend-engineering'],
+    conflicts: [],
+    fallback: name === 'motion-design' ? 'vibetether-built-in-ui-contract' : 'vibetether-built-in-frontend-engineering',
+    required_outputs: [],
+    exit_evidence: [],
+    ...(name === 'motion-design' ? {
+      when_any: ['animation'],
+      route_priority: 105,
+      use_when: ['Set motion direction before implementation.'],
+    } : name === 'gsap-core' ? {
+      when_any: ['motion'],
+      route_priority: 115,
+      use_when: ['Implement approved motion.'],
+    } : {
+      auto_covered_by: ['gsap-core'],
+    }),
+  });
+  return {
+    schema_version: 2,
+    runtime_auto_install: false,
+    sources: [{
+      id: 'fixture-motion-source',
+      repository: source.root,
+      ref: `commit:${source.commit.slice(0, 7)}`,
+      commit: source.commit,
+      license: 'MIT',
+      license_path: 'LICENSE',
+      catalog_mode: 'complete',
+      skill_root: 'skills',
+      catalog_group: 'web',
+      license_evidence: { mode: 'full-text', path: 'LICENSE' },
+      skills: source.names.map((name) => skill(
+        name,
+        name === 'motion-design' ? 'extended' : 'bundle',
+        name === 'motion-design' || name === 'gsap-core'
+          ? 'advisory-auto-eligible'
+          : 'upstream-explicit-alias',
+        name === 'motion-design' || name === 'gsap-core' ? 'policy' : 'domain',
+      )),
+    }],
+    profiles: {
+      core: { skills: [] },
+      standard: { skills: [] },
+      extended: {
+        extends: 'standard',
+        skills: ['fixture-motion-design'],
+        catalog_sources: ['fixture-motion-source'],
+      },
+    },
+    bundles: {
+      web: { catalog_sources: ['fixture-motion-source'] },
+    },
+    readiness_gate: {
+      mode: 'automatic',
+      dimensions: ['user-and-outcome'],
+      implementation_requires: 'READY_FOR_IMPLEMENT_ONE',
+    },
+    capability_catalog: [
+      {
+        id: 'frontend-product-design', phases: ['DESIGN'], purpose: 'Set intentional UI direction.',
+        invoke_when: ['user-visible-ui'], required_inputs: [], required_outputs: ['visual_direction'],
+        exit_evidence: ['The visual direction is confirmed.'], fallback: 'vibetether-built-in-ui-contract',
+      },
+      {
+        id: 'frontend-engineering', phases: ['EXECUTE_ONE'], purpose: 'Implement approved UI behaviour.',
+        invoke_when: ['user-visible-ui'], required_inputs: [], required_outputs: ['implemented_states'],
+        exit_evidence: ['The intended states are implemented.'], fallback: 'vibetether-built-in-frontend-engineering',
+      },
+    ],
+    routes: [],
+  };
 }
 
 async function project(name) {
@@ -260,6 +376,31 @@ test('complete catalogs are cached while competing routers remain outside host d
   assert.equal(lock.catalog.find((skill) => skill.install_name === 'router').workflow_role, 'competing-router');
   assert.equal(lock.catalog.every((skill) => skill.installation.ownership === 'vibetether'), true);
   assert.equal(lock.exposures[0].installations.codex.path, '.agents/skills/demo');
+});
+
+test('extended Web initialization exposes all reviewed motion Skills and writes their advisory routes', async () => {
+  const source = await motionUpstream();
+  const target = await project('motion-web');
+  await initialize(options(target, {
+    agent: 'codex',
+    profile: 'extended',
+    bundles: ['web'],
+  }), { loadRegistry: async () => motionRegistry(source) });
+
+  for (const name of source.names) {
+    assert.equal(await exists(path.join(target, '.agents', 'skills', name, 'SKILL.md')), true, `${name} is exposed`);
+  }
+
+  const board = YAML.parse(await readFile(path.join(target, '.vibetether', 'capabilities.yaml'), 'utf8'));
+  const providers = new Map(board.providers.map((provider) => [provider.skill, provider]));
+  assert.equal(providers.get('motion-design').installations.codex, '.agents/skills/motion-design');
+  assert.equal(providers.get('gsap-core').installations.codex, '.agents/skills/gsap-core');
+  assert.equal(board.routes.some((route) => (
+    route.recommendation.skill === 'motion-design' && route.workflow_role === 'policy'
+  )), true);
+  assert.equal(board.routes.some((route) => (
+    route.recommendation.skill === 'gsap-core' && route.workflow_role === 'policy'
+  )), true);
 });
 
 test('complete-catalog dry-run lists catalog and exposure decisions without fetching', async () => {

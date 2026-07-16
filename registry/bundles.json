@@ -39,10 +39,12 @@
     "extended": {
       "extends": "standard",
       "skills": [
-        "anthropic-frontend-design"
+        "anthropic-frontend-design",
+        "lottiefiles-motion-design"
       ],
       "catalog_sources": [
-        "anthropic-skills-9d2f1ae"
+        "anthropic-skills-9d2f1ae",
+        "lottiefiles-motion-design-skill"
       ]
     }
   },
@@ -575,12 +577,15 @@
     "catalogs/karpathy.json",
     "catalogs/anthropic.json",
     "catalogs/vercel.json",
-    "catalogs/addy.json"
+    "catalogs/addy.json",
+    "catalogs/greensock.json",
+    "catalogs/lottiefiles.json"
   ],
   "bundles": {
     "web": {
       "catalog_sources": [
-        "vercel-agent-skills-f8a72b9"
+        "vercel-agent-skills-f8a72b9",
+        "greensock-gsap-skills"
       ],
       "description": "React, React Native, Web UI, and Vercel specialists selected from repository evidence."
     },

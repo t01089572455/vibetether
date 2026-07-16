@@ -1,4 +1,4 @@
-import { lstat, mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
@@ -21,6 +21,15 @@ function resolveSourcePath(root, relativePath, label) {
 const TRANSIENT_FETCH_FAILURE = /(?:TLS connect error|unexpected eof|SSL_read|connection (?:was )?reset|recv failure|failed to connect|timed out|could not resolve host|remote end hung up unexpectedly|early EOF|requested URL returned error:\s*(?:502|503|504))/i;
 const SCHANNEL_FAILURE = /schannel:[\s\S]*(?:AcquireCredentialsHandle|SEC_E_NO_CREDENTIALS|failed to receive handshake|SSL\/TLS connection failed)/i;
 const RETRY_DELAYS = [200, 600];
+const CODELOAD_ARCHIVE_LIMIT = 100 * 1024 * 1024;
+
+export class ProviderGitTransportError extends CliError {
+  constructor(message) {
+    super(message, 3);
+    this.name = 'ProviderGitTransportError';
+    this.transientFetchExhausted = true;
+  }
+}
 
 function blockingSleep(milliseconds) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
@@ -72,9 +81,8 @@ export function runProviderGit(cwd, hooksPath, args, execute = spawnSync, retryO
   }
 
   if (exhaustedTransient) {
-    throw new CliError(
+    throw new ProviderGitTransportError(
       `Provider git fetch failed after 3 attempts because the pinned upstream transport was interrupted. Retry the same command; no project files were changed. Last error: ${failure}`,
-      3,
     );
   }
   throw new CliError(`Provider git ${args[0]} failed: ${failure}`, 3);
@@ -82,6 +90,67 @@ export function runProviderGit(cwd, hooksPath, args, execute = spawnSync, retryO
 
 function runGit(cwd, hooksPath, args) {
   return runProviderGit(cwd, hooksPath, args);
+}
+
+export function githubCodeloadArchiveUrl(source) {
+  if (!/^[a-f0-9]{40}$/i.test(String(source?.commit ?? ''))) return null;
+  let parsed;
+  try {
+    parsed = new URL(source?.repository);
+  } catch {
+    return null;
+  }
+  if (
+    parsed.protocol !== 'https:'
+    || parsed.hostname !== 'github.com'
+    || parsed.username
+    || parsed.password
+    || parsed.port
+    || parsed.search
+    || parsed.hash
+  ) return null;
+  const segments = parsed.pathname.split('/').filter(Boolean);
+  if (segments.length !== 2) return null;
+  const [owner, rawRepository] = segments;
+  const repository = rawRepository.endsWith('.git') ? rawRepository.slice(0, -4) : rawRepository;
+  if (!/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repository)) return null;
+  return `https://codeload.github.com/${owner}/${repository}/tar.gz/${source.commit.toLowerCase()}`;
+}
+
+async function stageGithubCodeloadSource({ source, repositoryRoot, archiveUrl }) {
+  if (typeof fetch !== 'function') {
+    throw new CliError('Provider Git transport failed and this Node runtime has no Codeload fetch fallback.', 3);
+  }
+  let response;
+  try {
+    response = await fetch(archiveUrl, { redirect: 'error' });
+  } catch (error) {
+    throw new CliError(`Provider Git transport failed and Codeload fallback could not download ${source.id}: ${error.message}`, 3);
+  }
+  if (!response.ok) {
+    throw new CliError(`Provider Git transport failed and Codeload fallback returned HTTP ${response.status} for ${source.id}.`, 3);
+  }
+  const archive = Buffer.from(await response.arrayBuffer());
+  if (archive.length === 0 || archive.length > CODELOAD_ARCHIVE_LIMIT) {
+    throw new CliError(`Provider Codeload archive for ${source.id} has an unsafe size.`, 3);
+  }
+  const archivePath = path.join(repositoryRoot, '.vibetether-provider.tar.gz');
+  await writeFile(archivePath, archive);
+  try {
+    const result = spawnSync(
+      'tar',
+      ['-xzf', archivePath, '--strip-components=1', '-C', repositoryRoot],
+      { cwd: repositoryRoot, encoding: 'utf8' },
+    );
+    if (result.error) {
+      throw new CliError(`Provider Codeload fallback requires tar: ${result.error.message}`, 3);
+    }
+    if (result.status !== 0) {
+      throw new CliError(`Provider Codeload fallback could not unpack ${source.id}: ${(result.stderr || result.stdout || 'tar failed').trim()}`, 3);
+    }
+  } finally {
+    await rm(archivePath, { force: true }).catch(() => {});
+  }
 }
 
 async function assertRegularFile(target, label) {
@@ -138,16 +207,28 @@ export async function stageProviderSources(sources, options = {}) {
   const repositories = [];
   const skills = [];
   const warnings = [];
+  const sourceGit = options.runGit ?? runGit;
+  const stageCodeload = options.stageCodeload ?? stageGithubCodeloadSource;
 
   try {
     for (const [index, source] of sources.entries()) {
       const repositoryRoot = path.join(stagingRoot, `source-${index}`);
       await mkdir(repositoryRoot, { recursive: true });
-      runGit(repositoryRoot, hooksPath, ['init', '-q']);
-      runGit(repositoryRoot, hooksPath, ['remote', 'add', 'origin', source.repository]);
-      runGit(repositoryRoot, hooksPath, ['fetch', '--depth', '1', 'origin', source.commit]);
-      runGit(repositoryRoot, hooksPath, ['checkout', '--detach', '-q', 'FETCH_HEAD']);
-      const actualCommit = runGit(repositoryRoot, hooksPath, ['rev-parse', 'HEAD']).toLowerCase();
+      sourceGit(repositoryRoot, hooksPath, ['init', '-q']);
+      sourceGit(repositoryRoot, hooksPath, ['remote', 'add', 'origin', source.repository]);
+      let actualCommit;
+      try {
+        sourceGit(repositoryRoot, hooksPath, ['fetch', '--depth', '1', 'origin', source.commit]);
+        sourceGit(repositoryRoot, hooksPath, ['checkout', '--detach', '-q', 'FETCH_HEAD']);
+        actualCommit = sourceGit(repositoryRoot, hooksPath, ['rev-parse', 'HEAD']).toLowerCase();
+      } catch (error) {
+        const archiveUrl = error instanceof ProviderGitTransportError
+          ? githubCodeloadArchiveUrl(source)
+          : null;
+        if (!archiveUrl) throw error;
+        await stageCodeload({ source, repositoryRoot, archiveUrl });
+        actualCommit = source.commit.toLowerCase();
+      }
       if (actualCommit !== source.commit.toLowerCase()) {
         throw new CliError(
           `Provider commit mismatch for ${source.id}: expected ${source.commit}, received ${actualCommit}.`,

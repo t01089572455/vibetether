@@ -186,6 +186,12 @@ test('README exposes route customization and the stateful handshake', async () =
   assert.match(readme, /vibetether route --project \. --phase PLAN --capability planning/);
   assert.match(readme, /vibetether route complete --project \. --evidence/);
   assert.match(readme, /vibetether route abandon --project \. --reason/);
+  assert.match(readme, /\.vibetether\/state\/route-handshake\.yaml/);
+  assert.match(readme, /only.*(?:route|portable).*command.*(?:writes|run)|(?:route|portable).*command.*only.*(?:writes|run)/is);
+  assert.match(readme, /latest route (?:disposition|snapshot).*(?:not|rather than).*history|not.*(?:background|automatic).*history/is);
+  assert.match(readme, /route phase.*match.*(?:current|semantic).*checkpoint|(?:current|semantic).*checkpoint.*match.*route phase/is);
+  assert.match(readme, /inspect.*installed.*Skill.*propose.*route.*confirm|propose.*route.*confirm.*installed.*Skill/is);
+  assert.match(readme, /motion-design.*gsap-core|gsap-core.*motion-design/is);
 });
 
 test('README stays focused and delegates complete inventories and operations', async () => {
@@ -242,13 +248,15 @@ test('Proven Path guide documents first success, recall, deduplication, and secr
   assert.match(guide, /build|deploy|environment|publish/i);
 });
 
-test('provider guide owns complete curated inventory and discovery behavior', async () => {
+test('provider guide owns complete curated inventory, motion specialists, and discovery behavior', async () => {
   const guide = await text('docs/providers.md');
-  for (const source of ['mattpocock/skills', 'obra/superpowers', 'andrej-karpathy-skills', 'anthropics/skills', 'vercel-labs/agent-skills', 'addyosmani/agent-skills']) {
+  for (const source of ['mattpocock/skills', 'obra/superpowers', 'andrej-karpathy-skills', 'anthropics/skills', 'vercel-labs/agent-skills', 'addyosmani/agent-skills', 'greensock/gsap-skills', 'lottiefiles/motion-design-skill']) {
     assert.match(guide, new RegExp(source.replace('/', '\\/'), 'i'));
   }
   assert.match(guide, /53 complete upstream Skills/i);
   assert.match(guide, /21 exposed Skills/i);
+  assert.match(guide, /motion-design.*extended|extended.*motion-design/is);
+  assert.match(guide, /gsap-core.*web|web.*gsap-core/is);
   assert.match(guide, /catalog-only.*outside host discovery/is);
   assert.match(guide, /exact commit/i);
   assert.match(guide, /does not search GitHub by star count/i);
@@ -277,6 +285,8 @@ test('troubleshooting distinguishes package acquisition, provider TLS, and host 
   assert.match(guide, /Codeload.*tarball/is);
   assert.match(guide, /github:.*(?:SSH|exit 128)|(?:SSH|exit 128).*github:/is);
   assert.match(guide, /TLS.*retry|retry.*TLS/is);
+  assert.match(guide, /Codeload.*fallback|fallback.*Codeload/is);
+  assert.match(guide, /exact[- ]commit.*(?:fingerprint|license)|(?:fingerprint|license).*exact[- ]commit/is);
   assert.match(guide, /verified.*catalog.*without.*network|cached.*catalog/is);
   assert.match(guide, /EPERM|EACCES/);
   assert.match(guide, /first install.*SKILL\.md.*last|SKILL\.md.*last.*first install/is);

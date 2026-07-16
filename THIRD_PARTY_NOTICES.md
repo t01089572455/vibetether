@@ -69,6 +69,26 @@ The exact pinned README declaration and SHA-256 are recorded in the provider reg
 
 Competing router `using-agent-skills` remains catalog-only. Automatic production detection exposes only matching CI/CD or migration specialists; explicit Production bundle selection exposes the approved set above.
 
+## greensock/gsap-skills
+
+- Source: <https://github.com/greensock/gsap-skills>
+- Commit: `aed9cfd3277740755f6bfc1155c7aa645403b760`
+- Catalog: all 8 Skill directories found at the reviewed commit
+- License: MIT, `full-text`
+- Web bundle exposure: `gsap-core`, `gsap-frameworks`, `gsap-performance`, `gsap-plugins`, `gsap-react`, `gsap-scrolltrigger`, `gsap-timeline`, and `gsap-utils`
+
+`gsap-core` is the advisory motion implementation overlay for explicit animation signals. The remaining official Skills stay installed and visible as focused aliases; they do not compete for ordinary frontend ownership.
+
+## lottiefiles/motion-design-skill
+
+- Source: <https://github.com/lottiefiles/motion-design-skill>
+- Commit: `f9a8a041b85185ee4881b3471d3415e939aac772`
+- Catalog: complete `motion-design` Skill
+- License: MIT, `full-text`
+- Extended exposure: advisory design overlay for explicit UI-motion signals
+
+`motion-design` guides timing, easing, choreography, and reduced-motion decisions before implementation. It does not replace the project-approved visual direction.
+
 ## Runtime dependency
 
 The VibeTether CLI depends on the `yaml` npm package, which is licensed under ISC. Its resolved version and integrity are recorded in `package-lock.json`.

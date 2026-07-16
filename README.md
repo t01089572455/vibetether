@@ -36,6 +36,12 @@ specialists. The reliable Codeload form avoids npm's Git/SSH package path.
 It does not install a global `vibetether` executable, so copy each complete
 portable command below.
 
+It also installs the reviewed motion set: `motion-design` from the `extended`
+profile plus eight official `gsap-*` Skills from the Web bundle. Initialization
+caches their pinned sources, exposes them to the selected host, and renders their
+availability and routes in `.vibetether/capabilities.yaml`—they are not merely
+copied folders that the router cannot see.
+
 Using Codex only? Use the same reviewed setup with `--agent codex`:
 
 ```sh
@@ -287,19 +293,77 @@ stateful route record. A record proves that a route was selected and disposed;
 it does not expose private reasoning or pretend to prove semantic correctness.
 Read the [routing guide](docs/routing.md) for the complete model.
 
+### What the optional CLI record writes
+
+Automatic phase re-entry is behavioral guidance in `AGENTS.md` or `CLAUDE.md`,
+not a background daemon or host hook. Only a portable `route` command writes
+`.vibetether/state/route-handshake.yaml` and synchronizes
+`.vibetether/state/current.yaml`. `route complete` records bounded evidence and
+safe project-relative artifacts; `route abandon` records a material reason.
+Without those commands, there is no stateful CLI record. The file is the latest
+route disposition, not automatic background history or proof that the work is
+semantically correct.
+
+The route phase must match the current semantic checkpoint phase in
+`.vibetether/state/current.yaml`. When work is genuinely entering a new phase,
+the cooperating Agent re-anchors and updates that checkpoint first, then starts
+the matching `route` handshake. This stops a `PLAN` command from quietly being
+recorded while the resumable project state still says `DISCOVER`.
+
+For the full reviewed setup, `motion-design` becomes a **design overlay** for
+motion signals such as `animation` or `micro-interaction`; `gsap-core` becomes
+an **implementation overlay** for `motion`, `gsap`, or scroll-animation signals.
+The other installed GSAP Skills stay visible as focused aliases. Ordinary React
+or frontend work alone does not automatically select a GSAP overlay.
+
 ## Add your own Skills
 
-Install a project Skill under `.agents/skills/` or `.claude/skills/`, then run:
+VibeTether can route a Skill you installed yourself, including one it does not
+recommend or distribute. It never downloads an arbitrary Skill during active
+work: install or copy one reviewed `SKILL.md` directory under
+`.agents/skills/<skill-name>/` and/or `.claude/skills/<skill-name>/`, then run:
 
 ```sh
 npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether customize --project .
 ```
 
-The guided editor writes `.vibetether/routes.local.yaml`. A local route can be a
-signal-specific `primary`, an `alternative`, or an additive `overlay`. It extends
-the reviewed board; it cannot weaken authority, readiness, evidence, security,
-permission, destructive-data, or release gates. If a local primary is missing,
-VibeTether names the problem and falls back to the curated route.
+The guided editor lists installed project Skills and asks for one existing
+phase/capability, route role, observable signals, outputs, and exit evidence.
+Confirm the preview to write `.vibetether/routes.local.yaml`, then inspect the
+result with `capabilities` or a signal-matched `route` command. A local route can
+be a signal-specific `primary`, an `alternative`, or an additive `overlay`.
+
+Prefer to ask your Agent? Copy this request into the project:
+
+> Inspect my installed project Skills. For each relevant candidate, explain its
+> source and role. Propose the smallest useful VibeTether route with phase,
+> capability, observable signals, role, expected output, and exit evidence. Show
+> the `routes.local.yaml` diff and wait for my confirmation before writing it.
+
+For example, after installing a `motion-audit` Skill, a confirmed local overlay
+could look like this:
+
+```yaml
+schema_version: 1
+routes:
+  - id: project-motion-audit
+    phases: [DESIGN]
+    capability: frontend-product-design
+    when_any: [motion-audit-requested]
+    skill: motion-audit
+    role: overlay
+    use_when:
+      - Audit approved UI motion for clarity, accessibility, and restraint.
+    expected_outputs: [motion-audit]
+    exit_evidence:
+      - The motion audit identifies tested improvements or confirms no change is needed.
+```
+
+Project-local routes are re-read live. They extend the reviewed board but cannot
+weaken authority, readiness, evidence, security, permission, destructive-data,
+or release gates. If a local primary is missing, VibeTether names the problem
+and falls back to the curated route. The [routing guide](docs/routing.md) has the
+complete schema and verification sequence.
 
 ## Preserve proven workflows
 
@@ -323,8 +387,10 @@ user for a durable decision and update.
 - `core`: the provider-free control loop and built-in fallbacks.
 - `standard`: complete pinned Matt Pocock, Superpowers, and Karpathy catalogs,
   with only compatible specialists exposed.
-- `extended`: `standard` plus Anthropic's `frontend-design`.
-- `--bundle web`: signal-matched Vercel Web specialists.
+- `extended`: `standard` plus Anthropic's `frontend-design` and LottieFiles'
+  `motion-design` overlay.
+- `--bundle web`: signal-matched Vercel Web specialists plus GreenSock's eight
+  official `gsap-*` Skills; only explicit motion signals route `gsap-core`.
 - `--bundle production`: approved CI/CD, migration, security, observability,
   performance, and release specialists.
 

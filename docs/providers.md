@@ -19,6 +19,8 @@ content into a project. No provider is downloaded during active work.
 | `anthropics/skills` | `9d2f1ae187231d8199c64b5b762e1bdf2244733d` | selected `frontend-design` | Apache-2.0 full text |
 | `vercel-labs/agent-skills` | `f8a72b9603728bb92a217a879b7e62e43ad76c81` | 9 Skills | MIT README declaration |
 | `addyosmani/agent-skills` | `98967c45a42b88d6b8fb3a88b7ff6273920763d6` | 24 Skills | MIT full text |
+| `greensock/gsap-skills` | `aed9cfd3277740755f6bfc1155c7aa645403b760` | 8 Skills | MIT full text |
+| `lottiefiles/motion-design-skill` | `f9a8a041b85185ee4881b3471d3415e939aac772` | 1 Skill | MIT full text |
 
 A README declaration is recorded with a warning when the pinned upstream lacks
 the expected complete root license text. VibeTether does not fabricate license
@@ -67,11 +69,14 @@ silently stacked into the same control loop.
 
 ## Extended and optional bundles
 
-`extended` adds Anthropic `frontend-design` without replacing VibeTether's
-product-direction gate. The `web` bundle catalogs all 9 pinned Vercel Skills and
-exposes only repository- or signal-matched Web specialists. The `production`
-bundle catalogs all 24 pinned Addy Osmani Skills and exposes only approved
-production specialists.
+`extended` adds Anthropic `frontend-design` plus LottieFiles `motion-design`.
+`motion-design` is an advisory overlay for deliberate UI-motion signals; it does
+not replace VibeTether's product-direction gate. The `web` bundle catalogs all 9
+pinned Vercel Skills plus all 8 official GreenSock Skills. Its `gsap-core`
+overlay appears only for explicit motion, animation, GSAP, or scroll signals;
+the remaining `gsap-*` Skills are installed, visible aliases for focused work.
+The `production` bundle catalogs all 24 pinned Addy Osmani Skills and exposes
+only approved production specialists.
 
 An explicit bundle is an installation decision, not permission to deploy,
 migrate data, change secrets, merge, release, or publish.

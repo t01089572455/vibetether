@@ -28,6 +28,15 @@ backoff. On Windows, a Schannel-specific failure switches later provider attempt
 to OpenSSL. Authentication, missing repository, commit, fingerprint, and license
 errors are not retried as transient.
 
+For a pinned public GitHub provider, an exhausted transient Git fetch then uses
+an exact-commit Codeload archive fallback. VibeTether still validates the full
+catalog inventory, required license evidence, and every declared Skill
+fingerprint before the provider can be installed. The fallback is deliberately
+not used for authentication failures, non-GitHub sources, changed commits, or
+integrity failures. If extraction itself reports that `tar` is unavailable,
+enable a standard `tar` command or resolve the normal Git transport and rerun
+the same command.
+
 After a successful fetch, the lock, commit, catalog path, fingerprints, and
 license evidence form a verified cached catalog. Repeating an unchanged
 initialization reuses it without provider network access.

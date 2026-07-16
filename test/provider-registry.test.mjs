@@ -4,6 +4,7 @@ import {
   buildRoutingDocument,
   loadProviderRegistry,
   matchingRoutes,
+  resolveCatalogSources,
   resolveExposurePlan,
   resolveProfileProviders,
   resolveRoute,
@@ -111,6 +112,7 @@ test('catalog selection and exposure planning keep supply separate from automati
     'obra-superpowers-v5.1.0',
     'multica-karpathy-2c60614',
     'vercel-agent-skills-f8a72b9',
+    'greensock-gsap-skills',
   ]);
   assert.equal(standard.some((provider) => provider.install_name === 'karpathy-guidelines'), true);
   assert.equal(standard.some((provider) => provider.install_name === 'using-superpowers'), false);
@@ -296,6 +298,79 @@ test('extended adds one UI domain provider without replacing the design workflow
   });
   assert.equal(inlineExecution.provider, 'executing-plans');
   assert.equal(delegatedExecution.provider, 'subagent-driven-development');
+});
+
+test('extended Web setup installs reviewed motion specialists and routes them only for motion signals', async () => {
+  const registry = await loadProviderRegistry();
+  const sources = new Map(registry.sources.map((source) => [source.id, source]));
+  const motionSource = sources.get('lottiefiles-motion-design-skill');
+  const gsapSource = sources.get('greensock-gsap-skills');
+
+  assert.equal(motionSource.repository, 'https://github.com/lottiefiles/motion-design-skill.git');
+  assert.equal(motionSource.license, 'MIT');
+  assert.equal(motionSource.skills.length, 1);
+  assert.equal(gsapSource.repository, 'https://github.com/greensock/gsap-skills.git');
+  assert.equal(gsapSource.license, 'MIT');
+  assert.deepEqual(gsapSource.skills.map((skill) => skill.install_name).sort(), [
+    'gsap-core',
+    'gsap-frameworks',
+    'gsap-performance',
+    'gsap-plugins',
+    'gsap-react',
+    'gsap-scrolltrigger',
+    'gsap-timeline',
+    'gsap-utils',
+  ]);
+
+  const catalogs = resolveCatalogSources(registry, 'extended', ['web']).map((source) => source.id);
+  assert.equal(catalogs.includes('lottiefiles-motion-design-skill'), true);
+  assert.equal(catalogs.includes('greensock-gsap-skills'), true);
+
+  const providers = resolveExposurePlan(registry, 'extended', {
+    bundles: ['web'],
+    explicit_bundles: ['web'],
+    signals: [],
+  });
+  const names = providers.map((provider) => provider.install_name);
+  assert.equal(names.includes('motion-design'), true);
+  for (const name of gsapSource.skills.map((skill) => skill.install_name)) {
+    assert.equal(names.includes(name), true, `extended Web setup is missing ${name}`);
+  }
+
+  const exposures = providers.map((provider) => ({
+    ...provider,
+    active: true,
+    installations: { codex: { path: `.agents/skills/${provider.install_name}`, ownership: 'vibetether' } },
+  }));
+  const board = createCapabilityBoard(registry, 'extended', {
+    exposures,
+    skills: exposures,
+    bundles: ['web'],
+  }, ['codex']);
+
+  const motionDesign = resolveBoardRoute(board, {
+    phase: 'DESIGN',
+    capability: 'frontend-product-design',
+    signals: ['animation'],
+    harness: 'codex',
+  });
+  assert.equal(motionDesign.overlays.some((route) => route.skill === 'motion-design'), true);
+
+  const motionImplementation = resolveBoardRoute(board, {
+    phase: 'EXECUTE_ONE',
+    capability: 'frontend-engineering',
+    signals: ['motion'],
+    harness: 'codex',
+  });
+  assert.equal(motionImplementation.overlays.some((route) => route.skill === 'gsap-core'), true);
+
+  const ordinaryReact = resolveBoardRoute(board, {
+    phase: 'EXECUTE_ONE',
+    capability: 'frontend-engineering',
+    signals: ['react'],
+    harness: 'codex',
+  });
+  assert.equal(ordinaryReact.overlays.some((route) => route.skill.startsWith('gsap-')), false);
 });
 
 test('unknown profiles and unmatched required routes fail closed', async () => {

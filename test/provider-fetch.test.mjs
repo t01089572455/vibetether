@@ -1,11 +1,16 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
-import { runProviderGit, stageProviderSources } from '../src/provider-fetch.mjs';
+import {
+  ProviderGitTransportError,
+  githubCodeloadArchiveUrl,
+  runProviderGit,
+  stageProviderSources,
+} from '../src/provider-fetch.mjs';
 import { skillFingerprint } from '../src/skill-install.mjs';
 
 function git(cwd, args) {
@@ -337,6 +342,51 @@ test('retries a common OpenSSL connection-reset transport failure', () => {
     'ok',
   );
   assert.equal(calls, 2);
+});
+
+test('derives a Codeload archive only for a fixed public GitHub commit', () => {
+  assert.equal(
+    githubCodeloadArchiveUrl({
+      repository: 'https://github.com/greensock/gsap-skills.git',
+      commit: 'aed9cfd3277740755f6bfc1155c7aa645403b760',
+    }),
+    'https://codeload.github.com/greensock/gsap-skills/tar.gz/aed9cfd3277740755f6bfc1155c7aa645403b760',
+  );
+  assert.equal(githubCodeloadArchiveUrl({ repository: 'https://example.com/skills.git', commit: 'a'.repeat(40) }), null);
+  assert.equal(githubCodeloadArchiveUrl({ repository: 'https://github.com/owner/repo.git', commit: 'main' }), null);
+  assert.equal(githubCodeloadArchiveUrl({ repository: 'https://github.com/owner/repo.git?x=1', commit: 'a'.repeat(40) }), null);
+});
+
+test('uses the Codeload fallback only after an exhausted transient Git fetch and still verifies provider content', async () => {
+  const fixture = await fixtureRepository('codeload-fallback');
+  const stagedSource = source(fixture, { repository: 'https://github.com/owner/fixture-provider.git' });
+  let fallbackCalls = 0;
+  let fetchCalls = 0;
+  const staged = await stageProviderSources([stagedSource], {
+    runGit(cwd, hooksPath, args) {
+      if (args[0] === 'fetch') {
+        fetchCalls += 1;
+        throw new ProviderGitTransportError('Provider git fetch failed after 3 attempts because the pinned upstream transport was interrupted.');
+      }
+      return runProviderGit(cwd, hooksPath, args);
+    },
+    async stageCodeload({ source: provider, repositoryRoot, archiveUrl }) {
+      fallbackCalls += 1;
+      assert.equal(provider.id, 'fixture-source');
+      assert.equal(archiveUrl, `https://codeload.github.com/owner/fixture-provider/tar.gz/${fixture.commit}`);
+      await cp(path.join(fixture.root, 'skills'), path.join(repositoryRoot, 'skills'), { recursive: true });
+      await cp(path.join(fixture.root, 'LICENSE'), path.join(repositoryRoot, 'LICENSE'));
+    },
+  });
+  try {
+    assert.equal(fetchCalls, 1);
+    assert.equal(fallbackCalls, 1);
+    assert.equal(staged.repositories[0].commit, fixture.commit);
+    assert.equal(await skillFingerprint(staged.skills[0].source_path), fixture.fingerprint);
+    assert.equal(await readFile(staged.repositories[0].license_path, 'utf8'), 'MIT fixture license\n');
+  } finally {
+    await staged.cleanup();
+  }
 });
 
 test('does not retry non-transient or non-fetch Git failures', () => {

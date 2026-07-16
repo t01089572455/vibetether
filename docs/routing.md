@@ -36,6 +36,11 @@ Start an inspectable route handshake:
 npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether route --project . --phase PLAN --capability planning --signal multi-step-change --agent codex
 ```
 
+The route phase must match the current semantic checkpoint phase in
+`.vibetether/state/current.yaml`. At a real phase transition, re-anchor and
+update that checkpoint first; then run the matching route command. This prevents
+a new route from silently disagreeing with the resumable project state.
+
 The result names the recommendation, selected Skill or built-in fallback,
 selection source, detected signals, required outputs, and exit evidence. An
 alternative can be selected only with a material reason:
@@ -59,6 +64,21 @@ npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/r
 The handshake prevents silently entering a different phase while the old route
 is active. It proves selection and disposition, not private reasoning or the
 semantic quality of the work.
+
+### What the CLI writes—and what it does not
+
+The complete portable `route` command writes the current route snapshot to
+`.vibetether/state/route-handshake.yaml` and synchronizes provider selection in
+`.vibetether/state/current.yaml`. `route complete` replaces that snapshot's
+active status with `satisfied` plus bounded evidence and optional safe
+project-relative artifacts; `route abandon` replaces it with `abandoned` and a
+material reason. The file is the latest route disposition, not a background
+history or semantic proof.
+
+No portable command means no CLI route snapshot. The phase re-entry instructions
+in `AGENTS.md` or `CLAUDE.md` remain behavioral guidance that a cooperating host
+Agent follows; VibeTether cannot secretly run a daemon, force a host to reread a
+file, or claim that every Agent action created a record.
 
 ## Automatic phase example
 
@@ -111,6 +131,18 @@ The file is re-read live; safe edits do not require reinitialization. Schema,
 path, Skill name, capability, phase, duplicate-ID, and competing-primary errors
 fail closed. A missing local primary is reported and falls back to the curated
 route rather than blocking all work.
+
+### Agent-assisted project routes
+
+You can let an Agent discover candidates without granting it silent authority.
+Ask it: “Inspect my installed project Skills, explain each relevant candidate's
+source and role, propose one smallest-scope route with phase, capability,
+observable signals, role, output, and exit evidence, show the
+`routes.local.yaml` diff, and wait for my confirmation before writing.”
+
+The Agent may read the resulting live board with `capabilities` and propose a
+signal-matched `route` handshake. User confirmation is still required before it
+writes or replaces project-owned route configuration.
 
 ## Authority and safety
 
