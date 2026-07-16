@@ -257,16 +257,31 @@ export function createCapabilityBoard(registry, profile, lock, harnesses) {
       const definition = definitions.get(skill.id) ?? {};
       const providerRoutes = routes.filter((route) => route.recommendation.skill === skill.install_name);
       const availableIn = harnesses.filter((harness) => skill.installations?.[harness]);
+      const blockedIn = Object.fromEntries(
+        harnesses
+          .filter((harness) => skill.collisions?.[harness])
+          .map((harness) => [harness, skill.collisions[harness].reason]),
+      );
+      const selectionStatus = skill.active === false
+        ? 'inactive-not-recommended'
+        : availableIn.length === harnesses.length
+          ? 'eligible'
+          : availableIn.length > 0 && Object.keys(blockedIn).length > 0
+            ? 'partially-available'
+            : Object.keys(blockedIn).length > 0
+              ? 'blocked-by-name-collision'
+              : 'eligible';
       return {
         skill: skill.install_name,
         provider_id: skill.id,
         source_id: skill.source_id,
         active: skill.active,
-        selection_status: skill.active ? 'eligible' : 'inactive-not-recommended',
+        selection_status: selectionStatus,
         invocation_policy: definition.invocation_policy ?? 'advisory-auto-eligible',
         auto_covered_by: definition.auto_covered_by ?? [],
         capabilities: skill.capabilities ?? [],
         available_in: availableIn,
+        ...(Object.keys(blockedIn).length > 0 ? { blocked_in: blockedIn } : {}),
         installations: Object.fromEntries(
           availableIn.map((harness) => [harness, skill.installations[harness].path]),
         ),

@@ -577,9 +577,16 @@ test('safe same-name collision preserves the user Skill and installs other revie
   const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
   const demo = lock.exposures.find((skill) => skill.id === 'fixture-demo');
   const router = lock.exposures.find((skill) => skill.id === 'fixture-router');
+  const board = YAML.parse(await readFile(path.join(target, '.vibetether', 'capabilities.yaml'), 'utf8'));
+  const demoBoard = board.providers.find((skill) => skill.provider_id === 'fixture-demo');
   assert.equal(demo.installations.codex, undefined);
   assert.equal(demo.collisions.codex.reason, 'different-preexisting-skill');
   assert.equal(router.installations.codex.ownership, 'vibetether');
+  assert.equal(demoBoard.selection_status, 'blocked-by-name-collision');
+  assert.deepEqual(demoBoard.available_in, []);
+  assert.deepEqual(demoBoard.blocked_in, {
+    codex: 'different-preexisting-skill',
+  });
   assert.match(output, /Preserved Skill name collisions/i);
   assert.match(output, /\.agents\/skills\/demo/);
 });
@@ -629,9 +636,18 @@ test('collision in one harness still installs the reviewed provider in the other
   );
   const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
   const demo = lock.exposures.find((skill) => skill.id === 'fixture-demo');
+  const board = YAML.parse(await readFile(path.join(target, '.vibetether', 'capabilities.yaml'), 'utf8'));
+  const demoBoard = board.providers.find((skill) => skill.provider_id === 'fixture-demo');
+  const demoRoute = board.routes.find((route) => route.recommendation.skill === 'demo');
   assert.equal(demo.installations.codex, undefined);
   assert.equal(demo.collisions.codex.reason, 'different-preexisting-skill');
   assert.equal(demo.installations.claude.ownership, 'vibetether');
+  assert.equal(demoBoard.selection_status, 'partially-available');
+  assert.deepEqual(demoBoard.available_in, ['claude']);
+  assert.deepEqual(demoBoard.blocked_in, {
+    codex: 'different-preexisting-skill',
+  });
+  assert.deepEqual(demoRoute.recommendation.available_in, ['claude']);
 });
 
 test('extended Web initialization exposes all reviewed motion Skills and writes their advisory routes', async () => {
