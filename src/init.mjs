@@ -1046,7 +1046,8 @@ export async function initialize(options, dependencies = {}) {
       existingLock,
     });
     availableProviderCount = lock.exposures.filter((skill) => (
-      skill.active && Object.keys(skill.installations ?? {}).length > 0
+      skill.active
+      && adapters.some((adapter) => Object.hasOwn(skill.installations ?? {}, adapter))
     )).length;
     const board = createCapabilityBoard(registry, options.profile, lock, adapters);
     if (projectRoutesDocument) validateProjectRoutes(projectRoutesDocument, board);

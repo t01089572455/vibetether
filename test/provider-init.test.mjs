@@ -657,6 +657,85 @@ test('collision in one harness still installs the reviewed provider in the other
     codex: 'different-preexisting-skill',
   });
   assert.deepEqual(demoRoute.recommendation.available_in, ['claude']);
+
+  const codexOnlyOutput = await initialize(options(target, { agent: 'codex' }), {
+    loadRegistry: async () => twoExposureRegistry(source),
+  });
+  assert.match(codexOnlyOutput, /with 1 of 2 curated provider Skill\(s\) available/i);
+});
+
+test('Claude-only collision preserves the custom Skill and reports reviewed availability honestly', async () => {
+  const source = await completeUpstream();
+  const target = await project('claude-only-collision');
+  const customSkill = path.join(target, '.claude', 'skills', 'demo');
+  const customBytes = '---\nname: demo\ndescription: User-owned Claude demo.\n---\n';
+  await mkdir(customSkill, { recursive: true });
+  await writeFile(path.join(customSkill, 'SKILL.md'), customBytes, 'utf8');
+
+  const output = await initialize(options(target, { agent: 'claude' }), {
+    loadRegistry: async () => twoExposureRegistry(source),
+  });
+
+  assert.equal(await readFile(path.join(customSkill, 'SKILL.md'), 'utf8'), customBytes);
+  assert.equal(await exists(path.join(target, '.claude', 'skills', 'router', 'SKILL.md')), true);
+  const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
+  const demo = lock.exposures.find((skill) => skill.id === 'fixture-demo');
+  const board = YAML.parse(await readFile(path.join(target, '.vibetether', 'capabilities.yaml'), 'utf8'));
+  const demoBoard = board.providers.find((skill) => skill.provider_id === 'fixture-demo');
+  assert.equal(demo.installations.claude, undefined);
+  assert.equal(demo.collisions.claude.reason, 'different-preexisting-skill');
+  assert.equal(demoBoard.selection_status, 'blocked-by-name-collision');
+  assert.deepEqual(demoBoard.available_in, []);
+  assert.deepEqual(demoBoard.blocked_in, {
+    claude: 'different-preexisting-skill',
+  });
+  assert.match(output, /with 1 of 2 curated provider Skill\(s\) available/i);
+});
+
+test('collisions in both harnesses preserve both custom Skills and keep the reviewed route blocked', async () => {
+  const source = await completeUpstream();
+  const target = await project('both-harness-collisions');
+  const customBytes = {
+    codex: '---\nname: demo\ndescription: User-owned Codex demo.\n---\n',
+    claude: '---\nname: demo\ndescription: User-owned Claude demo.\n---\n',
+  };
+  const customPaths = {
+    codex: path.join(target, '.agents', 'skills', 'demo'),
+    claude: path.join(target, '.claude', 'skills', 'demo'),
+  };
+  for (const harness of ['codex', 'claude']) {
+    await mkdir(customPaths[harness], { recursive: true });
+    await writeFile(path.join(customPaths[harness], 'SKILL.md'), customBytes[harness], 'utf8');
+  }
+
+  const output = await initialize(options(target, { agent: 'both' }), {
+    loadRegistry: async () => twoExposureRegistry(source),
+  });
+
+  for (const harness of ['codex', 'claude']) {
+    assert.equal(
+      await readFile(path.join(customPaths[harness], 'SKILL.md'), 'utf8'),
+      customBytes[harness],
+    );
+  }
+  assert.equal(await exists(path.join(target, '.agents', 'skills', 'router', 'SKILL.md')), true);
+  assert.equal(await exists(path.join(target, '.claude', 'skills', 'router', 'SKILL.md')), true);
+  const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
+  const demo = lock.exposures.find((skill) => skill.id === 'fixture-demo');
+  const board = YAML.parse(await readFile(path.join(target, '.vibetether', 'capabilities.yaml'), 'utf8'));
+  const demoBoard = board.providers.find((skill) => skill.provider_id === 'fixture-demo');
+  const demoRoute = board.routes.find((route) => route.recommendation.skill === 'demo');
+  assert.deepEqual(demo.installations, {});
+  assert.equal(demo.collisions.codex.reason, 'different-preexisting-skill');
+  assert.equal(demo.collisions.claude.reason, 'different-preexisting-skill');
+  assert.equal(demoBoard.selection_status, 'blocked-by-name-collision');
+  assert.deepEqual(demoBoard.available_in, []);
+  assert.deepEqual(demoBoard.blocked_in, {
+    codex: 'different-preexisting-skill',
+    claude: 'different-preexisting-skill',
+  });
+  assert.deepEqual(demoRoute.recommendation.available_in, []);
+  assert.match(output, /with 1 of 2 curated provider Skill\(s\) available/i);
 });
 
 test('doctor rejects unsafe or contradictory provider collision metadata', async () => {

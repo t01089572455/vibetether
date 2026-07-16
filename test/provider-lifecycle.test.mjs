@@ -227,6 +227,27 @@ test('uninstall preserves identical providers that existed before VibeTether', a
   assert.equal(await exists(path.join(provider, 'SKILL.md')), true);
 });
 
+test('uninstall preserves a different same-name Skill recorded as a collision', async () => {
+  const source = await fixture();
+  const target = await mkdtemp(path.join(os.tmpdir(), 'vibetether-provider-lifecycle-uninstall-collision-'));
+  const provider = path.join(target, '.agents', 'skills', 'demo');
+  const customBytes = '---\nname: demo\ndescription: User-owned same-name Skill.\n---\n';
+  await mkdir(provider, { recursive: true });
+  await writeFile(path.join(provider, 'SKILL.md'), customBytes, 'utf8');
+
+  await initialize(
+    { project: target, agent: 'codex', profile: 'standard', dryRun: false, yes: true },
+    { loadRegistry: async () => registry(source) },
+  );
+  const lock = YAML.parse(await readFile(path.join(target, '.vibetether', 'providers.lock.yaml'), 'utf8'));
+  assert.equal(lock.exposures[0].installations.codex, undefined);
+  assert.equal(lock.exposures[0].collisions.codex.reason, 'different-preexisting-skill');
+
+  await uninstall({ project: target, dryRun: false, yes: true });
+
+  assert.equal(await readFile(path.join(provider, 'SKILL.md'), 'utf8'), customBytes);
+});
+
 test('reinit preserves a modified managed provider and relinquishes uninstall ownership', async () => {
   const { source, target, provider } = await initialized('modified-managed');
   const customized = `${await readFile(path.join(provider, 'SKILL.md'), 'utf8')}\nUser customization.\n`;

@@ -149,6 +149,23 @@ test('optional provider conflict reports a formerly managed target separately', 
   });
 });
 
+test('optional provider preservation rejects a non-directory target', async () => {
+  const value = await fixture();
+  await mkdir(path.dirname(value.target), { recursive: true });
+  await writeFile(value.target, 'not a Skill directory\n', 'utf8');
+
+  await assert.rejects(
+    () => inspectDirectoryInstall(
+      value.source,
+      value.target,
+      '.agents/skills/demo',
+      { preserveConflict: true },
+    ),
+    /cannot verify installed Skill.*not a directory/i,
+  );
+  assert.equal(await readFile(value.target, 'utf8'), 'not a Skill directory\n');
+});
+
 test('an exact declared legacy fingerprint is upgradeable while other differences remain blocked', async () => {
   const value = await fixture();
   await mkdir(value.target, { recursive: true });

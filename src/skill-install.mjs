@@ -88,6 +88,10 @@ async function fingerprintEntry(root, relativePath, hash, { portable = false } =
 }
 
 async function directoryFingerprint(root, options) {
+  const entry = await lstat(root);
+  if (!entry.isDirectory()) {
+    throw new Error(`Skill path is not a directory: ${root}`);
+  }
   const hash = createHash('sha256');
   await fingerprintEntry(root, '', hash, options);
   return hash.digest('hex');
