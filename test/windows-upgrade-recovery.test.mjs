@@ -19,6 +19,8 @@ import { loadProviderRegistry } from '../src/provider-registry.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const public021 = '1f6444567873b5d1abd3371c45df19db23054ec9';
+const public023 = '56ea83e8e0feb7a086eff8e792225b418b41137b';
+const public030 = '572839e16656ec20d2767b6d5bdf09b8afa1f976';
 
 function git(args, { encoding = 'utf8' } = {}) {
   const result = spawnSync('git', args, { cwd: repository, encoding });
@@ -241,6 +243,55 @@ test('a still-locked recovery remains deferred without consuming either verified
   assert.equal((await inspectVibeTetherIdentity(state.target)).state, 'legacy');
   assert.equal((await inspectVibeTetherIdentity(state.paths.previous)).state, 'legacy');
   assert.equal((await inspectVibeTetherIdentity(state.paths.pending)).state, 'current');
+});
+
+test('a verified canonical target supersedes a stale pending transaction instead of blocking current init', async () => {
+  for (const scenario of [
+    { name: 'different-legacy', targetCommit: public023, expectedState: 'legacy' },
+    { name: 'already-current', targetCommit: 'current', expectedState: 'current' },
+  ]) {
+    const root = await mkdtemp(path.join(os.tmpdir(), `vibetether-stale-pending-${scenario.name}-`));
+    const harness = 'claude';
+    const paths = skillUpgradePaths(root, harness);
+    const target = path.join(root, '.claude', 'skills', 'vibe-tether');
+    await materializeSkillAtCommit(public021, paths.previous);
+    await materializeSkillAtCommit(public030, paths.pending);
+    if (scenario.targetCommit === 'current') await cp(sourceSkill, target, { recursive: true });
+    else await materializeSkillAtCommit(scenario.targetCommit, target);
+    const previous = await inspectVibeTetherIdentity(paths.previous);
+    const replacement = await inspectVibeTetherIdentity(paths.pending);
+    const before = await inspectVibeTetherIdentity(target);
+    await mkdir(path.dirname(paths.manifest), { recursive: true });
+    await writeFile(paths.manifest, YAML.stringify({
+      schema_version: 1,
+      harness,
+      target: '.claude/skills/vibe-tether',
+      previous: {
+        identity: previous.installed,
+        state: 'legacy',
+        path: paths.relative.previous,
+      },
+      replacement: {
+        identity: replacement.installed,
+        path: paths.relative.pending,
+      },
+      retired_path: paths.relative.retired,
+      state: 'waiting-for-host-release',
+      created_at: '2026-07-15T06:37:41.248Z',
+      updated_at: '2026-07-15T13:09:35.180Z',
+      waiting_step: 'recover-retire-active-skill',
+      lock_code: 'EPERM',
+    }), 'utf8');
+
+    const [report] = await recoverSkillUpgrades({ root, adapters: [harness] });
+
+    assert.equal(report.status, 'superseded');
+    assert.equal(report.sourceIdentity, before.installed);
+    assert.equal((await inspectVibeTetherIdentity(target)).state, scenario.expectedState);
+    for (const artifact of [paths.manifest, paths.previous, paths.pending, paths.retired]) {
+      assert.equal(await missing(artifact), true, artifact);
+    }
+  }
 });
 
 async function legacyCandidate(root, name, commit = public021) {

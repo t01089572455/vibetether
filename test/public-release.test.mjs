@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -7,8 +7,10 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const latestCodeload = 'npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether';
-const pinnedCodeload = 'npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.0 vibetether';
+const packageMetadata = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+const bareMainCodeload = 'npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main vibetether';
+const latestCodeload = `npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/heads/main?v=${packageMetadata.version} vibetether`;
+const pinnedCodeload = 'npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.1 vibetether';
 const publicCliDocs = [
   'README.md',
   'docs/installation.md',
@@ -18,7 +20,7 @@ const publicCliDocs = [
 ];
 
 async function text(relativePath) {
-  return readFile(path.join(root, relativePath), 'utf8');
+  return readFileSync(path.join(root, relativePath), 'utf8');
 }
 
 test('README opens with the user problem and puts the latest install before explanation', async () => {
@@ -45,6 +47,22 @@ test('README presents the current-main command as both first install and upgrade
   assert.doesNotMatch(setup, /refs\/tags\/v0\.6\.0/);
   assert.doesNotMatch(setup, /npm may cache|moving.*main.*cache|cache.*moving.*main/is);
   assert.doesNotMatch(setup, /reviewed motion set|eight official `gsap-\*`/i);
+});
+
+test('public moving-main commands use the package-version cache key', async () => {
+  for (const file of ['README.md', 'docs/installation.md']) {
+    const document = await text(file);
+    assert.match(
+      document,
+      new RegExp(latestCodeload.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+      `${file} should publish the current package-version cache key`,
+    );
+    assert.doesNotMatch(
+      document,
+      new RegExp(bareMainCodeload.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+      `${file} must not publish npm's stale bare moving-main package URL`,
+    );
+  }
 });
 
 test('README makes a strong but honest long-task claim', async () => {
@@ -370,7 +388,7 @@ test('package metadata points to the public repository', async () => {
   assert.equal(pkg.repository.url, 'git+https://github.com/t01089572455/vibetether.git');
   assert.equal(pkg.homepage, 'https://github.com/t01089572455/vibetether#readme');
   assert.equal(pkg.bugs.url, 'https://github.com/t01089572455/vibetether/issues');
-  assert.equal(pkg.version, '0.6.0');
+  assert.equal(pkg.version, '0.6.1');
   assert.ok(evalReadme.includes(`The current \`${pkg.version}\` package`));
   for (const entry of [
     'docs/operations',
@@ -468,5 +486,5 @@ test('release history reproduces every registered canonical fingerprint', () => 
     encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /release compatibility: valid \(9 historical identities\)/i);
+  assert.match(result.stdout, /release compatibility: valid \(10 historical identities\)/i);
 });

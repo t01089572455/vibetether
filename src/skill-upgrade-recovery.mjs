@@ -411,10 +411,22 @@ async function recoverPendingTransaction(root, harness, operationOverrides = {})
   if (!oldIdentityAvailable && targetIdentity?.installed !== prepared.transaction.previous.identity) {
     throw new CliError('Pending Skill recovery is unrecoverable because no verified previous copy remains.', 3);
   }
-  if (targetIdentity) {
-    if (targetIdentity.installed !== prepared.transaction.previous.identity) {
+  if (targetIdentity && targetIdentity.installed !== prepared.transaction.previous.identity) {
+    if (!['legacy', 'current'].includes(targetIdentity.state)) {
       throw new CliError('Pending Skill recovery found an unexpected canonical target identity.', 3);
     }
+    if (await exists(prepared.paths.retired, prepared.operations)) {
+      throw new CliError('Pending Skill recovery found an unexpected retired target copy.', 3);
+    }
+    return {
+      kind: 'pending-skill-upgrade',
+      harness,
+      status: 'superseded',
+      sourceIdentity: targetIdentity.installed,
+      cleanupWarnings: await cleanupApplied(prepared),
+    };
+  }
+  if (targetIdentity) {
     if (await exists(prepared.paths.retired, prepared.operations)) {
       throw new CliError('Pending Skill recovery found an unexpected retired target copy.', 3);
     }
