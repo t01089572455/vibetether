@@ -5,7 +5,7 @@ import path from 'node:path';
 import { conflictError } from './errors.mjs';
 import {
   atomicJson, boundedText, canonicalJson, copyVerifiedDirectory, exists, hashTree, sha256File,
-  readJsonFile, readTextIfPresent, safeRelative, transactionalWrites,
+  readJsonFile, readTextIfPresent, safeRelative, sha256Text, transactionalWrites,
 } from './files.mjs';
 import { cacheHome, stateHome } from './paths.mjs';
 import { createManifest, createSkillsLock, discoverContract } from './contract.mjs';
@@ -20,6 +20,7 @@ import { ADAPTERS, managedBlock, selectedAdapters } from './adapters.mjs';
 import { MANAGED_END, MANAGED_START } from './constants.mjs';
 import { attachWorktree } from './worktree.mjs';
 import { writeCurrentProjection } from './runtime.mjs';
+import { emptyOutcomeRegistry, renderInitialProgress } from './outcomes.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const migrationRoot = (id) => path.join(stateHome(), 'migrations', id);
@@ -603,6 +604,7 @@ export async function migrate(options = {}, runtimeHooks = {}) {
     const packs = legacyProviderPacks(legacyManifestSource);
     const migratedRouting = await migrateLegacyRoutes(root, options.agent ?? 'both', oldRoutes, oldProviderLock, packs);
     const manifest = createManifest({ control_mode: options.control_mode ?? 'team', truth_index: truthIndex });
+    const outcomes = emptyOutcomeRegistry('goal_project_delivery', `sha256:${sha256Text(intent)}`);
     const entrySkill = await readFile(path.join(packageRoot, 'skills', 'vibe-tether', 'SKILL.md'), 'utf8');
     const deepSkill = await readFile(path.join(packageRoot, 'skills', 'vibe-tether-deep', 'SKILL.md'), 'utf8');
     const plans = [
@@ -613,6 +615,8 @@ export async function migrate(options = {}, runtimeHooks = {}) {
       { target: path.join(root, ...manifest.skills_lock.split('/')), content: canonicalJson(migratedRouting.skills) },
       { target: path.join(root, ...manifest.routes.split('/')), content: canonicalJson(migratedRouting.routes) },
       { target: path.join(root, ...manifest.launcher.split('/')), content: renderProjectLauncher(manifest.vibetether_version), mode: 0o755 },
+      { target: path.join(root, ...manifest.outcome_index.split('/')), content: canonicalJson(outcomes) },
+      { target: path.join(root, ...manifest.progress_projection.split('/')), content: renderInitialProgress(outcomes) },
     ];
     for (const adapter of selectedAdapters(options.agent ?? 'both')) {
       const config = ADAPTERS[adapter];

@@ -3,7 +3,8 @@ import { lstat } from 'node:fs/promises';
 import path from 'node:path';
 import {
   VERSION, PROJECT_MANIFEST, DEFAULT_EXPERIENCE, DEFAULT_INTENT, DEFAULT_LAUNCHER,
-  DEFAULT_ROUTES, DEFAULT_SKILLS_LOCK, DEFAULT_TRUTH, HOTSET_MAX, SHORTLIST_MAX,
+  DEFAULT_ROUTES, DEFAULT_SKILLS_LOCK, DEFAULT_TRUTH, DEFAULT_OUTCOMES, DEFAULT_PROGRESS,
+  HOTSET_MAX, SHORTLIST_MAX,
 } from './constants.mjs';
 import { conflictError } from './errors.mjs';
 import {
@@ -12,12 +13,14 @@ import {
 } from './files.mjs';
 import { gitIdentity } from './git.mjs';
 import { findTrackedProject, stateHome } from './paths.mjs';
+import { validateOutcomeRegistry } from './outcomes.mjs';
 
 const CONTROL_MODES = new Set(['team', 'hybrid', 'local']);
 const AUTO_POLICIES = new Set(['stable-only', 'stable-and-beta', 'explicit-only']);
 const MANIFEST_KEYS = new Set([
   'schema_version', 'vibetether_version', 'project_id', 'control_generation', 'control_mode',
   'intent', 'truth_index', 'experience_index', 'skills_lock', 'routes', 'launcher', 'created_at',
+  'outcome_index', 'progress_projection',
 ]);
 const LOCK_KEYS = new Set(['schema_version', 'auto_activate', 'shortlist_max', 'hotset_max', 'packs', 'pins', 'disabled', 'preferences', 'hotset']);
 const PIN_KEYS = new Set(['id', 'object_hash', 'fingerprint', 'source', 'version', 'license']);
@@ -31,7 +34,7 @@ function semver(value) {
 
 export function createManifest({ project_id = randomUUID(), control_mode = 'team', truth_index = DEFAULT_TRUTH, created_at = new Date().toISOString() } = {}) {
   return {
-    schema_version: 1,
+    schema_version: 2,
     vibetether_version: VERSION,
     project_id,
     control_generation: randomUUID(),
@@ -42,6 +45,8 @@ export function createManifest({ project_id = randomUUID(), control_mode = 'team
     skills_lock: DEFAULT_SKILLS_LOCK,
     routes: DEFAULT_ROUTES,
     launcher: DEFAULT_LAUNCHER,
+    outcome_index: DEFAULT_OUTCOMES,
+    progress_projection: DEFAULT_PROGRESS,
     created_at,
   };
 }
@@ -49,12 +54,18 @@ export function createManifest({ project_id = randomUUID(), control_mode = 'team
 export function validateManifest(manifest) {
   if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) throw conflictError('Project manifest must be a JSON object.', 'INVALID_CONTRACT');
   only(manifest, MANIFEST_KEYS, 'Project manifest');
-  if (manifest.schema_version !== 1) throw conflictError('Project manifest schema_version must be 1.', 'INVALID_CONTRACT');
+  if (![1, 2].includes(manifest.schema_version)) throw conflictError('Project manifest schema_version must be 1 or 2.', 'INVALID_CONTRACT');
   if (!semver(manifest.vibetether_version)) throw conflictError('Project manifest requires a semantic vibetether_version.', 'INVALID_CONTRACT');
   if (typeof manifest.project_id !== 'string' || !/^[0-9a-f-]{16,64}$/i.test(manifest.project_id)) throw conflictError('Project manifest project_id is invalid.', 'INVALID_CONTRACT');
   if (typeof manifest.control_generation !== 'string' || !/^[0-9a-f-]{16,64}$/i.test(manifest.control_generation)) throw conflictError('Project manifest control_generation is invalid.', 'INVALID_CONTRACT');
   if (!CONTROL_MODES.has(manifest.control_mode)) throw conflictError('Project manifest control_mode is invalid.', 'INVALID_CONTRACT');
   for (const field of ['intent', 'truth_index', 'experience_index', 'skills_lock', 'routes', 'launcher']) manifest[field] = safeRelative(manifest[field], `Manifest ${field}`);
+  if (manifest.schema_version === 2) {
+    manifest.outcome_index = safeRelative(manifest.outcome_index, 'Manifest outcome_index');
+    manifest.progress_projection = safeRelative(manifest.progress_projection, 'Manifest progress_projection');
+  } else if (manifest.outcome_index !== undefined || manifest.progress_projection !== undefined) {
+    throw conflictError('Schema-1 manifest cannot declare schema-2 Outcome assets.', 'INVALID_CONTRACT');
+  }
   if (!Number.isFinite(Date.parse(manifest.created_at))) throw conflictError('Project manifest created_at is invalid.', 'INVALID_CONTRACT');
   return manifest;
 }
@@ -133,7 +144,13 @@ export async function loadContract(root) {
   const experience = await readProjectJson(resolvedRoot, manifest.experience_index, 'Experience index');
   const skills = validateSkillsLock(await readProjectJson(resolvedRoot, manifest.skills_lock, 'Skills lock'));
   const routes = await readProjectJson(resolvedRoot, manifest.routes, 'Project routes', { allowMissing: true });
-  return { root: resolvedRoot, manifest, intentSource, truthSource, experience, skills, routes };
+  const outcomes = manifest.schema_version === 2
+    ? validateOutcomeRegistry(await readProjectJson(resolvedRoot, manifest.outcome_index, 'Outcome registry'))
+    : null;
+  const progressSource = manifest.schema_version === 2
+    ? await readProjectText(resolvedRoot, manifest.progress_projection, 'Progress projection')
+    : null;
+  return { root: resolvedRoot, manifest, intentSource, truthSource, experience, skills, routes, outcomes, progressSource };
 }
 
 export async function discoverContract(start = process.cwd()) {

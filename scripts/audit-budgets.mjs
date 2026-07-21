@@ -24,7 +24,11 @@ for(const args of [['init','-q'],['config','user.email','budget@example.com'],['
 }
 await initialize({project:root,agent:'codex',control_mode:'team',goal:'Keep a long-running task aligned.',success_evidence:'Fresh checks prove the bounded outcome.',confirmed:true,yes:true});
 const context=await discoverContract(root);
-const files=['.vibetether/project.json',context.manifest.intent,context.manifest.truth_index,context.manifest.experience_index,context.manifest.skills_lock,context.manifest.routes,context.manifest.launcher];
+const files=[
+  '.vibetether/project.json',context.manifest.intent,context.manifest.truth_index,
+  context.manifest.experience_index,context.manifest.skills_lock,context.manifest.routes,
+  context.manifest.launcher,context.manifest.outcome_index,context.manifest.progress_projection,
+];
 let contractBytes=0; for(const relative of files) contractBytes+=(await lstat(path.join(root,...relative.split('/')))).size;
 const entryBytes=(await lstat(path.join(packageRoot,'skills','vibe-tether','SKILL.md'))).size;
 const deepEntryBytes=(await lstat(path.join(packageRoot,'skills','vibe-tether-deep','SKILL.md'))).size;
@@ -38,7 +42,7 @@ for(const relative of ['.vibetether/providers','.vibetether/state','.vibetether/
 }
 const checks={
   contract_bytes:{actual:contractBytes,limit:TRACKED_CONTRACT_BUDGET_BYTES,pass:contractBytes<=TRACKED_CONTRACT_BUDGET_BYTES},
-  contract_files:{actual:files.length,limit:7,pass:files.length<=7},
+  contract_files:{actual:files.length,limit:9,pass:files.length<=9},
   entry_skill_bytes:{actual:entryBytes,limit:ENTRY_SKILL_BUDGET_BYTES,pass:entryBytes<=ENTRY_SKILL_BUDGET_BYTES},
   deep_entry_skill_bytes:{actual:deepEntryBytes,limit:ENTRY_SKILL_BUDGET_BYTES,pass:deepEntryBytes<=ENTRY_SKILL_BUDGET_BYTES},
   managed_block_bytes:{actual:managedBytes,limit:MANAGED_BLOCK_BUDGET_BYTES,pass:managedBytes<=MANAGED_BLOCK_BUDGET_BYTES},

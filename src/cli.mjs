@@ -27,7 +27,7 @@ import { parseIntent } from './intent.mjs';
 import { classifyTaskText } from './task-classifier.mjs';
 import { answerDeepQuestion, grantDeepPermit, prepareDeep, readDeepState, revokeDeepPermit } from './deep.mjs';
 
-const HELP=`VibeTether 1.0.0-rc.3 — long-task control kernel and cold Skill broker
+const HELP=`VibeTether ${VERSION} — long-task control kernel and cold Skill broker
 
 Usage:
   vibetether init [--interactive] [--project PATH] [--agent codex|claude|both] [--profile core|standard|extended] [--bundle web|production] [--control-mode team|hybrid|local]

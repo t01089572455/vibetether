@@ -15,6 +15,8 @@ import { renderProjectLauncher } from './launcher.mjs';
 import { cacheRuntimePackage } from './release-cache.mjs';
 import { emptyTruthMap, renderTruthMap, authoritySnapshot, parseTruthMap } from './truth.mjs';
 import { attachWorktree } from './worktree.mjs';
+import { emptyOutcomeRegistry, renderInitialProgress } from './outcomes.mjs';
+import { sha256Text } from './files.mjs';
 
 const packageRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 
@@ -29,6 +31,8 @@ function selectedPacks(options = {}) {
 
 function initialAssets(manifest,options) {
   const confirmed=options.confirmed===true&&Boolean(options.goal)&&Boolean(options.success_evidence);
+  const goalRevision=`sha256:${sha256Text(canonicalJson({goal:options.goal??'',success_evidence:options.success_evidence??''}))}`;
+  const outcomes=emptyOutcomeRegistry('goal_project_delivery',goalRevision);
   return {
     [manifest.intent]:renderIntent({status:confirmed?'confirmed':'draft',goal:options.goal??'',success_evidence:options.success_evidence??'',scope_boundaries:options.scope_boundaries??[],constraints:options.constraints??[]}),
     [manifest.truth_index]:renderTruthMap(emptyTruthMap()),
@@ -36,6 +40,8 @@ function initialAssets(manifest,options) {
     [manifest.skills_lock]:canonicalJson(createSkillsLock({ packs: selectedPacks(options) })),
     [manifest.routes]:canonicalJson({schema_version:1,routes:[]}),
     [manifest.launcher]:renderProjectLauncher(manifest.vibetether_version),
+    [manifest.outcome_index]:canonicalJson(outcomes),
+    [manifest.progress_projection]:renderInitialProgress(outcomes),
     '.vibetether/project.json':canonicalJson(manifest),
   };
 }
@@ -105,7 +111,7 @@ export async function initialize(options={},runtimeHooks={}) {
     if (manifest.control_mode!==mode) throw conflictError('Changing control_mode requires explicit migration.','INVALID_CONTRACT');
   } else manifest=createManifest({control_mode:mode});
   if (!existing && mode!=='local') {
-    const protectedAssets=['.vibetether/intent.md','.vibetether/TRUTH.md','.vibetether/TRUTH-MAP.md','.vibetether/experience.json','.vibetether/experience-index.yaml','.vibetether/skills.lock.json','.vibetether/routes.json','.vibetether/vt.mjs'];
+    const protectedAssets=['.vibetether/intent.md','.vibetether/TRUTH.md','.vibetether/TRUTH-MAP.md','.vibetether/experience.json','.vibetether/experience-index.yaml','.vibetether/skills.lock.json','.vibetether/routes.json','.vibetether/vt.mjs','.vibetether/outcomes.json','.vibetether/PROGRESS.md'];
     const collisions=[];
     for (const relative of protectedAssets) if (await exists(path.join(root,...relative.split('/')))) collisions.push(relative);
     if (collisions.length) throw conflictError(`Pre-existing VibeTether assets require migration or manual review: ${collisions.join(', ')}`,'FILE_COLLISION');
@@ -126,7 +132,7 @@ export async function initialize(options={},runtimeHooks={}) {
   return transactionalWrites(plans,async()=>{
     const context={...(await loadContract(contractRoot)),executionRoot:root,tracked:mode!=='local',shared:false};
     if (mode!=='local') {
-      const contractFiles=[manifest.intent,manifest.truth_index,manifest.experience_index,manifest.skills_lock,manifest.routes,manifest.launcher,'.vibetether/project.json'];
+      const contractFiles=[manifest.intent,manifest.truth_index,manifest.experience_index,manifest.skills_lock,manifest.routes,manifest.launcher,manifest.outcome_index,manifest.progress_projection,'.vibetether/project.json'];
       let bytes=0; for (const relative of contractFiles) bytes+=Buffer.byteLength(await readFile(path.join(root,...relative.split('/'))));
       if (bytes>TRACKED_CONTRACT_BUDGET_BYTES) throw conflictError(`Tracked Contract exceeds ${TRACKED_CONTRACT_BUDGET_BYTES} bytes.`,'CONTRACT_TOO_LARGE');
     }

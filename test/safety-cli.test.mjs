@@ -12,13 +12,14 @@ import { authoritySnapshot, parseTruthMap } from '../src/truth.mjs';
 import { attachWorktree } from '../src/worktree.mjs';
 import { readCurrent } from '../src/runtime.mjs';
 import { safeRelative, writeProjectText } from '../src/files.mjs';
+import { VERSION } from '../src/constants.mjs';
 
 const sourceRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 
 test('real CLI subprocess reports version, creates a Contract, and returns machine-readable context',async()=>{
   const f=await fixture('cli-e2e');
   const env={VIBETETHER_STATE_HOME:f.state,VIBETETHER_CACHE_HOME:f.cache,VIBETETHER_CONFIG_HOME:f.config};
-  const version=cli(sourceRoot,['--version'],env); assert.equal(version.status,0); assert.equal(version.stdout.trim(),'1.0.0-rc.3');
+  const version=cli(sourceRoot,['--version'],env); assert.equal(version.status,0); assert.equal(version.stdout.trim(),VERSION);
   const init=cli(sourceRoot,['init','--project',f.root,'--agent','codex','--goal','CLI goal','--success-evidence','CLI evidence','--confirmed','--yes','--json'],env);
   assert.equal(init.status,0,init.stderr); assert.equal(JSON.parse(init.stdout).status,'initialized');
   const context=cli(sourceRoot,['context','--project',f.root,'--boundary','task-entry','--json'],env);
