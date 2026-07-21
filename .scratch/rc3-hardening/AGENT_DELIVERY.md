@@ -18,7 +18,7 @@ Risk: high
 
 ## Scope
 
-Harden the exact RC.3 artifact on an isolated integration branch until its adaptive and deep task entry, authority checks, user-decision gates, evidence-bound completion, success capture, Windows behavior, migration and rollback, provider activation, install, upgrade, and uninstall paths have reproducible tests and truthful release evidence. The immediate output is a reviewable integration branch, not a formal release.
+Harden the exact RC.3 artifact on an isolated integration branch until its adaptive and deep task entry, authority checks, user-decision gates, evidence-bound completion, success capture, Windows behavior, migration and rollback, provider activation, install, upgrade, and uninstall paths have reproducible tests and truthful release evidence. Add a compact Goal and Outcome Coverage Contract so a satisfied slice cannot be promoted into whole-goal or release completion while required parent outcomes remain open. The immediate output is a reviewable integration branch, not a formal release.
 
 ## Non-Scope
 
@@ -27,6 +27,7 @@ Harden the exact RC.3 artifact on an isolated integration branch until its adapt
 - Do not add a daemon, database, remote registry service, multi-package release topology, custom trust framework, or unrelated product feature.
 - Do not claim universal routing accuracy, guaranteed host invocation, token savings, independent review, or Windows support without matching evidence.
 - Do not redesign the public product direction or remove the adaptive/deep two-entry beginner experience.
+- Do not turn outcome coverage into a daemon, database, remote project manager, or LoveBuddy-specific ledger.
 
 ## Must Preserve
 
@@ -36,6 +37,7 @@ Harden the exact RC.3 artifact on an isolated integration branch until its adapt
 - Stable Truth identity separated from revision digest; candidates remain non-authoritative until user confirmation.
 - Rich community capability catalog remains cold; one primary Provider controls a step.
 - Completion is tied to required outputs, exit evidence, final bytes, current authority, and success-capture disposition.
+- Slice, goal, and release completion remain distinct; user-governed required outcomes and their acceptance definitions cannot be omitted by selecting a smaller route.
 - First reusable success becomes a sanitized candidate, never automatically authoritative experience.
 - v0.6.3 assets, user modifications, managed host files, and rollback bytes are protected from silent overwrite or deletion.
 - Windows, linked worktree, short-path, file-lock, and interrupted-transaction behavior must fail safely and offer a recovery action.
@@ -64,13 +66,14 @@ Harden the exact RC.3 artifact on an isolated integration branch until its adapt
 
 ## Change Budget and Slices
 
-- Budget: up to six independently reviewable commits before the first remote review branch; each commit must keep unrelated v0.6.3 and workspace changes untouched.
+- Budget: up to nine independently reviewable commits before the first remote review branch; each commit must keep unrelated v0.6.3 and workspace changes untouched. The expansion from six is explicitly authorized by the user to include the newly reviewed Goal/Outcome Coverage failure mode.
 - Slice 1: Windows path canonicalization, global-test isolation, and accurate test aggregation.
 - Slice 2: task classification, one-question deep readiness, decision receipts, and permit scope binding.
 - Slice 3: evidence/permit/lease compare-and-set completion, final-byte seal, and non-bypassable success capture.
 - Slice 4: migration, upgrade, rollback, uninstall, file-lock, worktree-prune, and interrupted-transaction recovery.
 - Slice 5: Provider immutable verification, complete resource activation, permission environment, archive limits, and cache recovery.
 - Slice 6: exact-package install journeys, live v0.6.3 migration/rollback, route held-out evaluation, fault injection, Windows/Ubuntu Node matrices, documentation, and review.
+- Slice 7: Goal/Outcome Coverage Contract, runtime projection, route-to-outcome binding, layered Doctor boundaries, migration/rollback coverage, longitudinal false-completion evaluation, and exact-package proof.
 - Checkpoint: after every slice, run its focused tests, `npm run check`, inspect the diff against this packet, and commit only the bounded slice.
 
 ## Acceptance Criteria
