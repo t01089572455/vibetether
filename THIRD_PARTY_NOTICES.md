@@ -4,6 +4,8 @@ VibeTether 1.0.0-rc.3 has no npm runtime dependencies. The source package **does
 
 The packaged Provider sources are recorded in `registry/community-provenance.json` with the requested release/ref, resolved immutable commit, license evidence, and project-relative Provider paths. Full license texts available from the pinned source are retained under `registry/licenses/`. For two sources where the pinned upstream evidence available to this package is only a README or Skill declaration rather than a complete license text, VibeTether retains metadata-only declaration evidence but does **not** redistribute their Provider bytes in this archive. Those sources require a separate user-initiated import and license review. VibeTether does not fabricate missing license text.
 
+Every redistributed Provider entry in `registry/providers.json` also records a normalized SHA-256 for its complete declared closure (`SKILL.md`, references, license files, and scripts). The release audit and runtime activation independently recompute that digest; they do not replace the expected value with whatever bytes happen to be present at load time.
+
 | Source | Resolved commit | License | Pack |
 | --- | --- | --- | --- |
 | `mattpocock/skills` | `d574778f94cf620fcc8ce741584093bc650a61d3` | MIT | standard |

@@ -1,12 +1,13 @@
-import { mkdir, readFile, readdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { conflictError } from './errors.mjs';
 import {
-  assertSafeId, atomicJson, boundedText, copyVerifiedDirectory, hashTree, readJsonFile,
-  rejectAbsoluteSymlinkChain, safeRelative, withFileLock,
+  assertSafeId, atomicJson, boundedText, readJsonFile,
+  rejectAbsoluteSymlinkChain, withFileLock,
 } from './files.mjs';
 import { cacheHome } from './paths.mjs';
 import { validateProviderCard } from './provider-registry.mjs';
+import { inspectProviderTree, materializeProviderClosure } from './provider-integrity.mjs';
 
 export function providerObjectPath(objectHash) { return path.join(cacheHome(),'providers','objects',objectHash); }
 export function providerCardPath(id) { return path.join(cacheHome(),'providers','cards',`${id}.json`); }
@@ -24,23 +25,6 @@ function frontmatter(source) {
   return fields;
 }
 
-async function discoverFiles(root) {
-  const resources=[]; const scripts=[];
-  async function walk(directory,prefix='') {
-    const entries=await readdir(directory,{withFileTypes:true});
-    for (const entry of entries.sort((a,b)=>a.name.localeCompare(b.name))) {
-      const relative=prefix?`${prefix}/${entry.name}`:entry.name;
-      const target=path.join(directory,entry.name);
-      if (entry.isSymbolicLink()) throw conflictError(`Provider contains symbolic link: ${relative}`,'SYMLINK_PATH');
-      if (entry.isDirectory()) await walk(target,relative);
-      else if (entry.isFile()&&relative!=='SKILL.md') {
-        if (relative.startsWith('scripts/')) scripts.push(relative); else resources.push(relative);
-      } else if (!entry.isFile()) throw conflictError(`Provider contains unsupported file type: ${relative}`,'UNSAFE_PROVIDER');
-    }
-  }
-  await walk(root); return {resources,scripts};
-}
-
 export async function importProvider(options) {
   const id=assertSafeId(options.id,'Provider id');
   const source=await rejectAbsoluteSymlinkChain(path.resolve(options.source),{allowMissing:false});
@@ -48,10 +32,11 @@ export async function importProvider(options) {
   if (!skillSource) throw conflictError('Provider source is missing SKILL.md.','INVALID_PROVIDER');
   const meta=frontmatter(skillSource);
   if (meta.name!==id) throw conflictError(`Provider id ${id} does not match SKILL.md name ${meta.name}.`,'INVALID_PROVIDER');
-  const fingerprint=await hashTree(source);
+  const inspection=await inspectProviderTree(source);
+  const fingerprint=inspection.digest;
   const objectPath=providerObjectPath(fingerprint);
-  await copyVerifiedDirectory(source,objectPath,fingerprint);
-  const {resources,scripts}=await discoverFiles(objectPath);
+  const resources=inspection.resources;
+  const scripts=inspection.scripts;
   const capabilities=(options.capabilities??[]).map((item)=>assertSafeId(item,'Provider capability'));
   const phases=(options.phases??[]).map((item)=>String(item).toUpperCase());
   if (!capabilities.length||!phases.length) throw conflictError('Provider import requires at least one capability and phase.','INVALID_PROVIDER');
@@ -63,12 +48,13 @@ export async function importProvider(options) {
     negative_triggers:(options.negative_triggers??[]).map((item)=>String(item)),
     hosts:options.hosts??['codex','claude'],operating_systems:options.operating_systems??['linux','darwin','win32'],
     permissions:{network:options.network===true,external_write:options.external_write===true,code_write:options.code_write===true},
-    context_bytes:Buffer.byteLength(skillSource,'utf8'),
+    context_bytes:inspection.context_bytes,
     quality:{trigger_precision:0,trigger_recall:0,output_gain:0,evaluated_at:new Date(0).toISOString()},
     description:meta.description,path:objectPath,resources,scripts,
     worker_recommended:Buffer.byteLength(skillSource,'utf8')>12*1024,
     created_at:new Date().toISOString(),updated_at:new Date().toISOString(),
   });
+  await materializeProviderClosure({...card,resolved_path:source},objectPath);
   await mkdir(path.dirname(providerCardPath(id)),{recursive:true});
   return withFileLock(providerLockPath(id),async()=>{
     const prior=await readJsonFile(providerCardPath(id),'Provider card',{allowMissing:true});

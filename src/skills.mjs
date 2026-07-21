@@ -1,19 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { conflictError } from './errors.mjs';
 import {
-  assertSafeId, atomicText, boundedText, containsSecret, hashTree, portableTextEqual, readRegularFileChunk,
+  assertSafeId, boundedText, containsSecret, readRegularFileChunk,
   rejectAbsoluteSymlinkChain, resolveInside,
 } from './files.mjs';
 import { loadProviderRegistry } from './provider-registry.mjs';
 import { readProviderCard, updateProviderCard } from './provider-cache.mjs';
-import { loadProviderStats, readReceipt, readRoute, writeReceipt } from './runtime.mjs';
+import { activationMaterializationPath, loadProviderStats, readReceipt, readRoute, writeReceipt } from './runtime.mjs';
 import { ADAPTERS } from './adapters.mjs';
+import { materializeProviderClosure, verifyProviderSource } from './provider-integrity.mjs';
 
 function activationPath(paths,id) { return path.join(paths.activations,`${id}.json`); }
+function activationRoot(paths,id) { return activationMaterializationPath(paths,id); }
 async function providerById(id) {
   const registry=await loadProviderRegistry();
   const provider=registry.providers.find((item)=>item.id===id);
@@ -77,23 +79,30 @@ export async function promoteProvider(id) {
 export async function activateSkill(context,paths,route) {
   const provider=await providerById(route.selected.id);
   if (provider.fingerprint!==route.selected.fingerprint||provider.object_hash!==route.selected.object_hash) throw conflictError('Selected Provider identity changed before activation.','PROVIDER_FINGERPRINT');
-  const actual=await hashTree(provider.resolved_path);
-  if (actual!==provider.fingerprint) throw conflictError('Selected Provider cache bytes changed.','PROVIDER_FINGERPRINT');
-  const skillPath=path.join(provider.resolved_path,'SKILL.md');
+  const id=`act-${randomUUID()}`;
+  const materializedRoot=activationRoot(paths,id);
+  await materializeProviderClosure(provider,materializedRoot);
+  const skillPath=path.join(materializedRoot,'SKILL.md');
   await rejectAbsoluteSymlinkChain(skillPath,{allowMissing:false});
   const instructions=await readFile(skillPath,'utf8');
-  const id=`act-${randomUUID()}`;
   const envelope={
     provider:provider.id,capability:route.capability,phase:route.phase,slice:route.slice,
     authority_digest:route.authority_start,allowed_permissions:route.permissions,
     prohibited:['change project direction','activate project truth','broaden the approved slice','merge, deploy, release, or publish without authorization'],
     required_outputs:route.required_outputs,exit_evidence:route.exit_evidence,
   };
-  const receipt=await writeReceipt(activationPath(paths,id),{
-    schema_version:1,id,provider_id:provider.id,provider_fingerprint:provider.fingerprint,
-    provider_object_hash:provider.object_hash,route_id:route.id,authority_digest:route.authority_start,
-    created_at:new Date().toISOString(),expires_at:new Date(Date.now()+30*60*1000).toISOString(),scope_envelope:envelope,
-  });
+  let receipt;
+  try {
+    receipt=await writeReceipt(activationPath(paths,id),{
+      schema_version:1,id,provider_id:provider.id,provider_fingerprint:provider.fingerprint,
+      provider_object_hash:provider.object_hash,provider_content_sha256:provider.fingerprint,
+      materialized_key:path.basename(materializedRoot),route_id:route.id,authority_digest:route.authority_start,
+      created_at:new Date().toISOString(),expires_at:new Date(Date.now()+30*60*1000).toISOString(),scope_envelope:envelope,
+    });
+  } catch (error) {
+    await rm(materializedRoot,{recursive:true,force:true}).catch(()=>{});
+    throw error;
+  }
   return {
     activation_id:id,
     receipt_digest:receipt.digest,
@@ -101,6 +110,7 @@ export async function activateSkill(context,paths,route) {
     scope_envelope:envelope,
     mode:provider.worker_recommended||Buffer.byteLength(instructions,'utf8')>16*1024?'worker':'inline',
     instructions:provider.worker_recommended||Buffer.byteLength(instructions,'utf8')>16*1024?null:instructions,
+    materialized_root:materializedRoot,
     skill_handle:`skill:${id}:entry`,
     resources:provider.resources.map((item)=>`skill:${id}:resource:${item}`),
   };
@@ -124,16 +134,29 @@ async function requireActiveActivation(paths,receipt) {
   if (route.authority_start!==receipt.authority_digest) throw conflictError('Provider activation authority no longer matches the active step.','INVALID_ACTIVATION');
   return route;
 }
-export async function removeActivation(paths,id) { await rm(activationPath(paths,id),{force:true}); }
+export async function removeActivation(paths,id) {
+  await Promise.all([
+    rm(activationPath(paths,id),{force:true}),
+    rm(activationRoot(paths,id),{recursive:true,force:true}),
+  ]);
+}
+
+async function materializedProvider(paths,receipt,provider) {
+  if (provider.fingerprint!==receipt.provider_fingerprint||provider.object_hash!==receipt.provider_object_hash) throw conflictError('Activated Provider no longer matches its receipt.','PROVIDER_FINGERPRINT');
+  if (receipt.materialized_key!==path.basename(activationRoot(paths,receipt.id))||receipt.provider_content_sha256!==provider.fingerprint) throw conflictError('Activated Provider materialization receipt is invalid.','PROVIDER_FINGERPRINT');
+  const root=activationRoot(paths,receipt.id);
+  await verifyProviderSource({...provider,resolved_path:root});
+  return root;
+}
 
 export async function readSkillResource(paths,id,resource,{offset=0,limit=8192}={}) {
   const receipt=await loadActivation(paths,id);
   await requireActiveActivation(paths,receipt);
   const provider=await providerById(receipt.provider_id);
-  if (provider.fingerprint!==receipt.provider_fingerprint||provider.object_hash!==receipt.provider_object_hash) throw conflictError('Activated Provider no longer matches its receipt.','PROVIDER_FINGERPRINT');
+  const root=await materializedProvider(paths,receipt,provider);
   const requested=resource==='entry'?'SKILL.md':resource;
   if (requested!=='SKILL.md'&&!provider.resources.includes(requested)) throw conflictError('Resource was not declared by the activated Provider.','UNSAFE_RESOURCE');
-  const target=resolveInside(provider.resolved_path,requested,'Provider resource');
+  const target=resolveInside(root,requested,'Provider resource');
   return {provider_id:provider.id,resource:requested,...await readRegularFileChunk(target,{offset,limit})};
 }
 
@@ -141,9 +164,10 @@ export async function execSkillScript(paths,id,script,args=[]) {
   const receipt=await loadActivation(paths,id);
   await requireActiveActivation(paths,receipt);
   const provider=await providerById(receipt.provider_id);
+  const root=await materializedProvider(paths,receipt,provider);
   if (!provider.scripts.includes(script)) throw conflictError('Script was not declared by the activated Provider.','UNSAFE_RESOURCE');
   if (!Array.isArray(args)||args.some((item)=>typeof item!=='string'||containsSecret(item))) throw conflictError('Script arguments must be non-secret strings.','INVALID_VALUE');
-  const target=resolveInside(provider.resolved_path,script,'Provider script');
+  const target=resolveInside(root,script,'Provider script');
   await rejectAbsoluteSymlinkChain(target,{allowMissing:false});
   const ext=path.extname(target).toLowerCase();
   let command;
@@ -155,7 +179,7 @@ export async function execSkillScript(paths,id,script,args=[]) {
   for (const key of ['PATH','HOME','USERPROFILE','TMPDIR','TEMP','TMP','SystemRoot','ComSpec','PATHEXT']) {
     if (typeof process.env[key]==='string') allowedEnv[key]=process.env[key];
   }
-  const result=spawnSync(command[0],command.slice(1),{cwd:provider.resolved_path,encoding:'utf8',shell:false,windowsHide:true,maxBuffer:8*1024*1024,env:allowedEnv});
+  const result=spawnSync(command[0],command.slice(1),{cwd:root,encoding:'utf8',shell:false,windowsHide:true,maxBuffer:8*1024*1024,env:allowedEnv});
   return {provider_id:provider.id,script,exit_code:typeof result.status==='number'?result.status:null,stdout:String(result.stdout??'').slice(0,16384),stderr:String(result.stderr??'').slice(0,16384),error:result.error?String(result.error.message):null};
 }
 
@@ -166,15 +190,10 @@ function userSkillRoot(agent) {
 }
 export async function exposeProvider(context,providerId,{agent='codex',scope='user'}={}) {
   const provider=await providerById(providerId);
-  const skill=await readFile(path.join(provider.resolved_path,'SKILL.md'),'utf8');
   const root=scope==='project'?path.join(context.executionRoot,path.dirname(ADAPTERS[agent].skill)):userSkillRoot(agent);
-  const target=path.join(root,provider.id,'SKILL.md');
-  await mkdir(path.dirname(target),{recursive:true});
-  try {
-    const prior=await readFile(target,'utf8');
-    if (!portableTextEqual(prior,skill)) throw conflictError(`Refusing to overwrite modified exposed Skill: ${target}`,'FILE_COLLISION');
-  } catch (error) { if (error.code!=='ENOENT') throw error; }
-  await atomicText(target,skill,{mode:0o644});
+  const exposedRoot=path.join(root,provider.id);
+  await materializeProviderClosure(provider,exposedRoot);
+  const target=path.join(exposedRoot,'SKILL.md');
   return {provider_id:provider.id,agent,scope,path:target};
 }
 

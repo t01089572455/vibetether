@@ -384,17 +384,17 @@ git commit -m "fix: preserve user data through lifecycle failures"
 - Modify: `THIRD_PARTY_NOTICES.md`
 - Test: `test/rc4-provider-integrity.test.mjs`
 
-- [ ] **Step 1: Add tamper, missing-resource, archive, and environment tests**
+- [x] **Step 1: Add tamper, missing-resource, archive, and environment tests**
 
 Create a fixture Provider whose `SKILL.md` references `references/rules.md` and `scripts/check.mjs`. Assert activation materializes both, a one-byte source change fails the expected immutable digest, symlink/hardlink/device/traversal/ADS/reserved-name entries are rejected, and an undeclared secret environment variable is absent during execution.
 
-- [ ] **Step 2: Run the Provider regression and observe current partial activation**
+- [x] **Step 2: Run the Provider regression and observe current partial activation**
 
 Run: `node --test test/rc4-provider-integrity.test.mjs`
 
 Expected: FAIL because exposure currently copies only `SKILL.md` and packaged cards can validate a digest recomputed from their already changed bytes.
 
-- [ ] **Step 3: Separate expected identity from observed identity**
+- [x] **Step 3: Separate expected identity from observed identity**
 
 ```js
 const identity = {
@@ -410,11 +410,11 @@ if (identity.observed_content_sha256 !== identity.expected_content_sha256) {
 
 Do not populate the expected field from observed bytes at load time. Metadata-only sources remain selectable only through a licensed fallback whose full redistributed bytes are present.
 
-- [ ] **Step 4: Materialize a declared resource closure**
+- [x] **Step 4: Materialize a declared resource closure**
 
 Provider cards list relative resources. Validate each path, enforce file/count/size/depth limits, copy the closed set transactionally, and verify each output digest. Execution receives only the documented environment allowlist plus variables explicitly approved for that route.
 
-- [ ] **Step 5: Run Provider and release audits**
+- [x] **Step 5: Run Provider and release audits**
 
 Run: `node --test test/rc4-provider-integrity.test.mjs test/provider-packs.test.mjs test/skills.test.mjs`
 
@@ -422,7 +422,7 @@ Run: `npm.cmd run audit:release`
 
 Expected: PASS; every redistributed Provider has immutable expected content, license evidence, and a complete declared resource set.
 
-- [ ] **Step 6: Commit the Provider slice**
+- [x] **Step 6: Commit the Provider slice**
 
 ```bash
 git add src/provider-registry.mjs src/provider-cache.mjs src/skills.mjs scripts/audit-release.mjs registry/providers.json THIRD_PARTY_NOTICES.md test/rc4-provider-integrity.test.mjs

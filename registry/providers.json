@@ -11,8 +11,8 @@
       "version": "commit:98967c4",
       "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "0bf72f957700cf046e87cd0c7f9a1fe0a49ff952f6c1e6b4f722771c0c373842",
+      "fingerprint": "0bf72f957700cf046e87cd0c7f9a1fe0a49ff952f6c1e6b4f722771c0c373842",
       "capabilities": [
         "product-design"
       ],
@@ -68,8 +68,8 @@
       "version": "commit:98967c4",
       "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "f87d62a907720addd2ea1743104630fa99c1aea987f9ded83443f1d6286329e1",
+      "fingerprint": "f87d62a907720addd2ea1743104630fa99c1aea987f9ded83443f1d6286329e1",
       "capabilities": [
         "browser-verification"
       ],
@@ -124,8 +124,8 @@
       "version": "commit:98967c4",
       "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "50d7541c80b1e6b36223aefffe85d881ffd1a4e048d120383dc13a18549c739c",
+      "fingerprint": "50d7541c80b1e6b36223aefffe85d881ffd1a4e048d120383dc13a18549c739c",
       "capabilities": [
         "ci-cd"
       ],
@@ -180,8 +180,8 @@
       "version": "commit:98967c4",
       "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "59429beebabf495b97ea9ef90c491643e8f0db56ceea180a011ca452041d4ac7",
+      "fingerprint": "59429beebabf495b97ea9ef90c491643e8f0db56ceea180a011ca452041d4ac7",
       "capabilities": [
         "code-review"
       ],
@@ -237,8 +237,8 @@
       "version": "commit:98967c4",
       "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "a2c2d7d3d1c7d07345cf6b96e64f2cf79e518de9daa18ab801eac14904088e90",
+      "fingerprint": "a2c2d7d3d1c7d07345cf6b96e64f2cf79e518de9daa18ab801eac14904088e90",
       "capabilities": [
         "production-engineering"
       ],
@@ -294,8 +294,8 @@
       "version": "commit:98967c4",
       "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "ed9421ecc80d50903395030454a3cceda1fbfa4557392597eb319dc3082e2065",
+      "fingerprint": "ed9421ecc80d50903395030454a3cceda1fbfa4557392597eb319dc3082e2065",
       "capabilities": [
         "migration"
       ],
@@ -350,8 +350,8 @@
       "version": "commit:98967c4",
       "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "31b16d06838f564254fef67fcff60a143d4b0ca78135f292bf533eabcc237140",
+      "fingerprint": "31b16d06838f564254fef67fcff60a143d4b0ca78135f292bf533eabcc237140",
       "capabilities": [
         "document-alignment"
       ],
@@ -407,8 +407,8 @@
       "version": "commit:98967c4",
       "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "7bbc28191bf3344fe6ce8a3adc79ab0ec2b35b9e75bcdffd1054484d4b0aa697",
+      "fingerprint": "7bbc28191bf3344fe6ce8a3adc79ab0ec2b35b9e75bcdffd1054484d4b0aa697",
       "capabilities": [
         "frontend-engineering"
       ],
@@ -464,8 +464,8 @@
       "version": "commit:98967c4",
       "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "3baf6903b4185c95d347a229676df436a643db7dcea116d4b117829f56f3e8b6",
+      "fingerprint": "3baf6903b4185c95d347a229676df436a643db7dcea116d4b117829f56f3e8b6",
       "capabilities": [
         "branch-finish"
       ],
@@ -521,8 +521,8 @@
       "version": "commit:98967c4",
       "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "240e6a42081b5048dd1f361a16cec802fb3e764e89966e3a4fdae4f46c8e00e2",
+      "fingerprint": "240e6a42081b5048dd1f361a16cec802fb3e764e89966e3a4fdae4f46c8e00e2",
       "capabilities": [
         "implementation"
       ],
@@ -578,8 +578,8 @@
       "version": "commit:98967c4",
       "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "edd994ba3de322dc2672138fafb54f24e3add98abc4b6c694044c996586489fa",
+      "fingerprint": "edd994ba3de322dc2672138fafb54f24e3add98abc4b6c694044c996586489fa",
       "capabilities": [
         "observability"
       ],
@@ -634,8 +634,8 @@
       "version": "commit:98967c4",
       "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "83cd775b272847669daedd6dfdabfaa6c7887e127043ce323bacb341c6124ce6",
+      "fingerprint": "83cd775b272847669daedd6dfdabfaa6c7887e127043ce323bacb341c6124ce6",
       "capabilities": [
         "performance"
       ],
@@ -690,8 +690,8 @@
       "version": "commit:98967c4",
       "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "d21d46a7d2fc70600f3efb96a41663e9637e6506d92b332b25d9b31d30e838c7",
+      "fingerprint": "d21d46a7d2fc70600f3efb96a41663e9637e6506d92b332b25d9b31d30e838c7",
       "capabilities": [
         "security-review"
       ],
@@ -746,8 +746,8 @@
       "version": "commit:98967c4",
       "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "439070f56bf3b8547e7a490b077591739595a05d6f460c2882f0fd42f3f1e4ea",
+      "fingerprint": "439070f56bf3b8547e7a490b077591739595a05d6f460c2882f0fd42f3f1e4ea",
       "capabilities": [
         "release-verification"
       ],
@@ -802,8 +802,8 @@
       "version": "commit:9d2f1ae",
       "source": "https://github.com/anthropics/skills.git@9d2f1ae187231d8199c64b5b762e1bdf2244733d",
       "license": "Apache-2.0",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "16bdb3f5bd5be6743cb02dcf3e30dfd85ac6d8e1daf281ac47fc0139c3a1097e",
+      "fingerprint": "16bdb3f5bd5be6743cb02dcf3e30dfd85ac6d8e1daf281ac47fc0139c3a1097e",
       "capabilities": [
         "frontend-product-design"
       ],
@@ -837,7 +837,9 @@
       },
       "description": "Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one. Helps with aesthetic direction, typography, and making choices that don't read as templated defaults.",
       "path": "registry/community/anthropic-frontend-design",
-      "resources": [],
+      "resources": [
+        "LICENSE.txt"
+      ],
       "scripts": [],
       "worker_recommended": false,
       "evaluation": {
@@ -858,8 +860,8 @@
       "version": "v1.1.0",
       "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "7b975697c7e7d2151ec4bc4601aaa40a6ae846a577bd3e0144f482aae697215f",
+      "fingerprint": "7b975697c7e7d2151ec4bc4601aaa40a6ae846a577bd3e0144f482aae697215f",
       "capabilities": [
         "code-review"
       ],
@@ -915,8 +917,8 @@
       "version": "v1.1.0",
       "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "5d3f8ae0442c5d2e098576d6954aed8dd5b1be822d1637cfe624d54caa3af191",
+      "fingerprint": "5d3f8ae0442c5d2e098576d6954aed8dd5b1be822d1637cfe624d54caa3af191",
       "capabilities": [
         "codebase-orientation"
       ],
@@ -975,8 +977,8 @@
       "version": "v1.1.0",
       "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "3c8f6b18744eb9c257cadb544914b6e9808ddbec7b8d6c7dcef6547ae9ccf0db",
+      "fingerprint": "3c8f6b18744eb9c257cadb544914b6e9808ddbec7b8d6c7dcef6547ae9ccf0db",
       "capabilities": [
         "debugging"
       ],
@@ -1034,8 +1036,8 @@
       "version": "v1.1.0",
       "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "552905055e0f11a305b83469058cf9a66386d11094c8f2d151a747ebd6ce0d16",
+      "fingerprint": "552905055e0f11a305b83469058cf9a66386d11094c8f2d151a747ebd6ce0d16",
       "capabilities": [
         "domain-modeling"
       ],
@@ -1092,8 +1094,8 @@
       "version": "v1.1.0",
       "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "0c4422135dccfb42906121401e635863d27edf694944adc79facd99c75c50afc",
+      "fingerprint": "0c4422135dccfb42906121401e635863d27edf694944adc79facd99c75c50afc",
       "capabilities": [
         "explicit-requirements-interview"
       ],
@@ -1146,8 +1148,8 @@
       "version": "v1.1.0",
       "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "9ae74f0766e3b0e8eeec3c74624e029fc14837fcdb278b433ab6123b1da62350",
+      "fingerprint": "9ae74f0766e3b0e8eeec3c74624e029fc14837fcdb278b433ab6123b1da62350",
       "capabilities": [
         "explicit-document-alignment"
       ],
@@ -1200,8 +1202,8 @@
       "version": "v1.1.0",
       "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "3a8f678b7203c23b3fcaa8ccac79547e5e837cc4fe2011faab94c3addb9566d6",
+      "fingerprint": "3a8f678b7203c23b3fcaa8ccac79547e5e837cc4fe2011faab94c3addb9566d6",
       "capabilities": [
         "requirements-clarification",
         "document-alignment",
@@ -1263,8 +1265,8 @@
       "version": "v1.1.0",
       "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "d7cb5857888a2edceaffd85ee527e900c023efe52cca30607d916e6951ff621d",
+      "fingerprint": "d7cb5857888a2edceaffd85ee527e900c023efe52cca30607d916e6951ff621d",
       "capabilities": [
         "prototype"
       ],
@@ -1323,8 +1325,8 @@
       "version": "v1.1.0",
       "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "81a750a071b2a7197527ebfb37013e2cd435bd77f56ca3ef7b1c577102d8e5a0",
+      "fingerprint": "81a750a071b2a7197527ebfb37013e2cd435bd77f56ca3ef7b1c577102d8e5a0",
       "capabilities": [
         "research"
       ],
@@ -1380,8 +1382,8 @@
       "version": "v5.1.0",
       "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "47b333e9e5b7889cc6adbef933a695e4f85cb589b5322b1643630f6c87fa7f9c",
+      "fingerprint": "47b333e9e5b7889cc6adbef933a695e4f85cb589b5322b1643630f6c87fa7f9c",
       "capabilities": [
         "product-design"
       ],
@@ -1443,8 +1445,8 @@
       "version": "v5.1.0",
       "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "ac4726ccd3e3673360d6d55eb6daf00f9fea503daaf382478c8d0e3706e380d5",
+      "fingerprint": "ac4726ccd3e3673360d6d55eb6daf00f9fea503daaf382478c8d0e3706e380d5",
       "capabilities": [
         "parallel-execution"
       ],
@@ -1501,8 +1503,8 @@
       "version": "v5.1.0",
       "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "00c43d9de77a88cacd6942aaf47ee45b7e5f2d6b72bc6a162bd878de51038abe",
+      "fingerprint": "00c43d9de77a88cacd6942aaf47ee45b7e5f2d6b72bc6a162bd878de51038abe",
       "capabilities": [
         "plan-execution"
       ],
@@ -1555,8 +1557,8 @@
       "version": "v5.1.0",
       "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "d1566db2492ec5742bd63371bab4333da4717f6fd4bac4c9c220e64c7da17c92",
+      "fingerprint": "d1566db2492ec5742bd63371bab4333da4717f6fd4bac4c9c220e64c7da17c92",
       "capabilities": [
         "branch-finish",
         "release-verification"
@@ -1610,8 +1612,8 @@
       "version": "v5.1.0",
       "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "5323cd235e31b85ca7504ceb024aa6692a085d89c1756d870cb72e24f38d3959",
+      "fingerprint": "5323cd235e31b85ca7504ceb024aa6692a085d89c1756d870cb72e24f38d3959",
       "capabilities": [
         "review-feedback"
       ],
@@ -1667,8 +1669,8 @@
       "version": "v5.1.0",
       "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "66ad6f2dac73fb6337001505efb6ead14d52fd7dbffedbd49a9b556846674666",
+      "fingerprint": "66ad6f2dac73fb6337001505efb6ead14d52fd7dbffedbd49a9b556846674666",
       "capabilities": [
         "code-review"
       ],
@@ -1723,8 +1725,8 @@
       "version": "v5.1.0",
       "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "b099996c80c6ef223c19113b9b82d848e38f7fb9a08ab0d8d4d0a64c9eb95880",
+      "fingerprint": "b099996c80c6ef223c19113b9b82d848e38f7fb9a08ab0d8d4d0a64c9eb95880",
       "capabilities": [
         "plan-execution-with-subagents",
         "plan-execution"
@@ -1785,8 +1787,8 @@
       "version": "v5.1.0",
       "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "7cf241c79983ec01da4e59093b949663a67bfc10f7edb62940ed264b027ad05c",
+      "fingerprint": "7cf241c79983ec01da4e59093b949663a67bfc10f7edb62940ed264b027ad05c",
       "capabilities": [
         "debugging"
       ],
@@ -1850,8 +1852,8 @@
       "version": "v5.1.0",
       "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "f78ae3efa4ae41122b241131f70b6976ff01e13e4f089284f343dc06cb062065",
+      "fingerprint": "f78ae3efa4ae41122b241131f70b6976ff01e13e4f089284f343dc06cb062065",
       "capabilities": [
         "tdd"
       ],
@@ -1906,8 +1908,8 @@
       "version": "v5.1.0",
       "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "a0f2ac765c6cb5fa5f04b1fe7ae86b6a2b1bb6edcaae36a8ada1df2c7a955b45",
+      "fingerprint": "a0f2ac765c6cb5fa5f04b1fe7ae86b6a2b1bb6edcaae36a8ada1df2c7a955b45",
       "capabilities": [
         "git-isolation"
       ],
@@ -1963,8 +1965,8 @@
       "version": "v5.1.0",
       "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "614a0fe5a98519db4c3805ff946d4443af2394ea4d779fdf4e2ac372005ba8c5",
+      "fingerprint": "614a0fe5a98519db4c3805ff946d4443af2394ea4d779fdf4e2ac372005ba8c5",
       "capabilities": [
         "completion-verification"
       ],
@@ -2017,8 +2019,8 @@
       "version": "v5.1.0",
       "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "1c69a324266a453416d4e81a700c9fdfa912c31ef2959668306161ee02e78605",
+      "fingerprint": "1c69a324266a453416d4e81a700c9fdfa912c31ef2959668306161ee02e78605",
       "capabilities": [
         "planning"
       ],
@@ -2073,8 +2075,8 @@
       "version": "v5.1.0",
       "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "f6997f5c00718638101cf51934c596dd22c6589200d6d7373d6cb46c4da482a4",
+      "fingerprint": "f6997f5c00718638101cf51934c596dd22c6589200d6d7373d6cb46c4da482a4",
       "capabilities": [
         "skill-authoring"
       ],
@@ -2113,11 +2115,11 @@
       "path": "registry/community/superpowers-writing-skills",
       "resources": [
         "anthropic-best-practices.md",
+        "examples/CLAUDE_MD_TESTING.md",
         "graphviz-conventions.dot",
         "persuasion-principles.md",
         "render-graphs.js",
-        "testing-skills-with-subagents.md",
-        "examples/CLAUDE_MD_TESTING.md"
+        "testing-skills-with-subagents.md"
       ],
       "scripts": [],
       "worker_recommended": true,
@@ -2136,7 +2138,7 @@
       "version": "1.0.0-rc.3",
       "source": "vibetether",
       "license": "MIT",
-      "fingerprint": null,
+      "fingerprint": "7ba9f5e8dedb0a800e10277cc622d1f3f4e55f6614fb99b8c2babd8cc833e4f8",
       "capabilities": [
         "requirements-clarification"
       ],
@@ -2163,7 +2165,7 @@
         "external_write": false,
         "code_write": false
       },
-      "context_bytes": 1024,
+      "context_bytes": 440,
       "quality": {
         "trigger_precision": 1,
         "trigger_recall": 1,
@@ -2172,7 +2174,10 @@
       },
       "description": "Clarify one unresolved user-owned decision after investigating discoverable facts.",
       "path": "registry/builtins/vibetether-built-in-alignment",
-      "workflow_role": "primary"
+      "workflow_role": "primary",
+      "object_hash": "7ba9f5e8dedb0a800e10277cc622d1f3f4e55f6614fb99b8c2babd8cc833e4f8",
+      "resources": [],
+      "scripts": []
     },
     {
       "id": "vibetether-built-in-debugging",
@@ -2181,7 +2186,7 @@
       "version": "1.0.0-rc.3",
       "source": "vibetether",
       "license": "MIT",
-      "fingerprint": null,
+      "fingerprint": "2478132ddb874d9c6e8b150d7796b2e3247a4bc8af2e1eb8d21796e5e122824a",
       "capabilities": [
         "debugging"
       ],
@@ -2208,7 +2213,7 @@
         "external_write": false,
         "code_write": false
       },
-      "context_bytes": 1024,
+      "context_bytes": 420,
       "quality": {
         "trigger_precision": 1,
         "trigger_recall": 1,
@@ -2217,7 +2222,10 @@
       },
       "description": "Reproduce before changing code, isolate variables, and prove root cause.",
       "path": "registry/builtins/vibetether-built-in-debugging",
-      "workflow_role": "primary"
+      "workflow_role": "primary",
+      "object_hash": "2478132ddb874d9c6e8b150d7796b2e3247a4bc8af2e1eb8d21796e5e122824a",
+      "resources": [],
+      "scripts": []
     },
     {
       "id": "vibetether-built-in-design",
@@ -2226,7 +2234,7 @@
       "version": "1.0.0-rc.3",
       "source": "vibetether",
       "license": "MIT",
-      "fingerprint": null,
+      "fingerprint": "872c111c1a4867b08d0b4c6a2d01783234bc1887b972eb3e6966318aaa43bee6",
       "capabilities": [
         "product-design"
       ],
@@ -2253,7 +2261,7 @@
         "external_write": false,
         "code_write": false
       },
-      "context_bytes": 1024,
+      "context_bytes": 446,
       "quality": {
         "trigger_precision": 1,
         "trigger_recall": 1,
@@ -2262,7 +2270,10 @@
       },
       "description": "Present bounded alternatives and trade-offs without propagating an unapproved direction.",
       "path": "registry/builtins/vibetether-built-in-design",
-      "workflow_role": "primary"
+      "workflow_role": "primary",
+      "object_hash": "872c111c1a4867b08d0b4c6a2d01783234bc1887b972eb3e6966318aaa43bee6",
+      "resources": [],
+      "scripts": []
     },
     {
       "id": "vibetether-built-in-document-alignment",
@@ -2271,7 +2282,7 @@
       "version": "1.0.0-rc.3",
       "source": "vibetether",
       "license": "MIT",
-      "fingerprint": null,
+      "fingerprint": "ff3099b810fec74d663439395c26b13014b4c681240919274f577cee5eefdcfb",
       "capabilities": [
         "document-alignment"
       ],
@@ -2297,7 +2308,7 @@
         "external_write": false,
         "code_write": false
       },
-      "context_bytes": 1024,
+      "context_bytes": 430,
       "quality": {
         "trigger_precision": 1,
         "trigger_recall": 1,
@@ -2306,7 +2317,10 @@
       },
       "description": "Compare applicable sources and isolate the exact authority conflict.",
       "path": "registry/builtins/vibetether-built-in-document-alignment",
-      "workflow_role": "primary"
+      "workflow_role": "primary",
+      "object_hash": "ff3099b810fec74d663439395c26b13014b4c681240919274f577cee5eefdcfb",
+      "resources": [],
+      "scripts": []
     },
     {
       "id": "vibetether-built-in-implementation",
@@ -2315,7 +2329,7 @@
       "version": "1.0.0-rc.3",
       "source": "vibetether",
       "license": "MIT",
-      "fingerprint": null,
+      "fingerprint": "d4561ebc58245cd7af65f6eb223ff432bce5bb905347ec53cc43be14bf5bbdf8",
       "capabilities": [
         "implementation"
       ],
@@ -2342,7 +2356,7 @@
         "external_write": false,
         "code_write": true
       },
-      "context_bytes": 1024,
+      "context_bytes": 426,
       "quality": {
         "trigger_precision": 1,
         "trigger_recall": 1,
@@ -2351,7 +2365,10 @@
       },
       "description": "Make the smallest reversible change that satisfies the approved slice.",
       "path": "registry/builtins/vibetether-built-in-implementation",
-      "workflow_role": "primary"
+      "workflow_role": "primary",
+      "object_hash": "d4561ebc58245cd7af65f6eb223ff432bce5bb905347ec53cc43be14bf5bbdf8",
+      "resources": [],
+      "scripts": []
     },
     {
       "id": "vibetether-built-in-planning",
@@ -2360,7 +2377,7 @@
       "version": "1.0.0-rc.3",
       "source": "vibetether",
       "license": "MIT",
-      "fingerprint": null,
+      "fingerprint": "352769a6522400a79425ee8e4277ba2b56437e715fd6c3c0eb16a4470e1a2cdb",
       "capabilities": [
         "planning",
         "worktree-isolation"
@@ -2388,7 +2405,7 @@
         "external_write": false,
         "code_write": false
       },
-      "context_bytes": 1024,
+      "context_bytes": 412,
       "quality": {
         "trigger_precision": 1,
         "trigger_recall": 1,
@@ -2397,7 +2414,10 @@
       },
       "description": "Plan small slices with files, checks, stop conditions, and isolation.",
       "path": "registry/builtins/vibetether-built-in-planning",
-      "workflow_role": "primary"
+      "workflow_role": "primary",
+      "object_hash": "352769a6522400a79425ee8e4277ba2b56437e715fd6c3c0eb16a4470e1a2cdb",
+      "resources": [],
+      "scripts": []
     },
     {
       "id": "vibetether-built-in-recall",
@@ -2406,7 +2426,7 @@
       "version": "1.0.0-rc.3",
       "source": "vibetether",
       "license": "MIT",
-      "fingerprint": null,
+      "fingerprint": "b3edc8e8da49d1b63a92924631dd155a259db08183f047a12c2600bd0fd4741e",
       "capabilities": [
         "proven-path-recall"
       ],
@@ -2443,7 +2463,7 @@
         "external_write": false,
         "code_write": false
       },
-      "context_bytes": 1024,
+      "context_bytes": 424,
       "quality": {
         "trigger_precision": 1,
         "trigger_recall": 1,
@@ -2452,7 +2472,10 @@
       },
       "description": "Read only matching proven artifacts whose hashes and evidence remain current.",
       "path": "registry/builtins/vibetether-built-in-recall",
-      "workflow_role": "primary"
+      "workflow_role": "primary",
+      "object_hash": "b3edc8e8da49d1b63a92924631dd155a259db08183f047a12c2600bd0fd4741e",
+      "resources": [],
+      "scripts": []
     },
     {
       "id": "vibetether-built-in-release",
@@ -2461,7 +2484,7 @@
       "version": "1.0.0-rc.3",
       "source": "vibetether",
       "license": "MIT",
-      "fingerprint": null,
+      "fingerprint": "8e7f3a257cd82e842fba4a1ca951f108120fb7eb2bbe6bf8ec5f6b244d4d9a4a",
       "capabilities": [
         "release"
       ],
@@ -2488,7 +2511,7 @@
         "external_write": false,
         "code_write": false
       },
-      "context_bytes": 1024,
+      "context_bytes": 430,
       "quality": {
         "trigger_precision": 1,
         "trigger_recall": 1,
@@ -2497,7 +2520,10 @@
       },
       "description": "Require authorization, full gates, rollback, and reproducible release evidence.",
       "path": "registry/builtins/vibetether-built-in-release",
-      "workflow_role": "primary"
+      "workflow_role": "primary",
+      "object_hash": "8e7f3a257cd82e842fba4a1ca951f108120fb7eb2bbe6bf8ec5f6b244d4d9a4a",
+      "resources": [],
+      "scripts": []
     },
     {
       "id": "vibetether-built-in-review",
@@ -2506,7 +2532,7 @@
       "version": "1.0.0-rc.3",
       "source": "vibetether",
       "license": "MIT",
-      "fingerprint": null,
+      "fingerprint": "d8d48b8890156b634957bce2e8d86e216b7a980fb86a57d6829c3690dba3a0b0",
       "capabilities": [
         "review"
       ],
@@ -2532,7 +2558,7 @@
         "external_write": false,
         "code_write": false
       },
-      "context_bytes": 1024,
+      "context_bytes": 426,
       "quality": {
         "trigger_precision": 1,
         "trigger_recall": 1,
@@ -2541,7 +2567,10 @@
       },
       "description": "Review request, authority, diff, and raw evidence; report actionable findings.",
       "path": "registry/builtins/vibetether-built-in-review",
-      "workflow_role": "primary"
+      "workflow_role": "primary",
+      "object_hash": "d8d48b8890156b634957bce2e8d86e216b7a980fb86a57d6829c3690dba3a0b0",
+      "resources": [],
+      "scripts": []
     },
     {
       "id": "vibetether-built-in-surgical-change-policy",
@@ -2553,8 +2582,8 @@
       "version": "1.0.0-rc.3",
       "source": "VibeTether built-in",
       "license": "MIT",
-      "object_hash": null,
-      "fingerprint": null,
+      "object_hash": "392ede0407ab7c6bef1e7903b48b424892b6be7df1d132acb94987fd21f29e0c",
+      "fingerprint": "392ede0407ab7c6bef1e7903b48b424892b6be7df1d132acb94987fd21f29e0c",
       "capabilities": [
         "implementation"
       ],
@@ -2608,7 +2637,7 @@
       "version": "1.0.0-rc.3",
       "source": "vibetether",
       "license": "MIT",
-      "fingerprint": null,
+      "fingerprint": "2c493099de6fc48829fca0a3b72ff7f1a4e7d27a9f3cfec57ed5168e1fb33677",
       "capabilities": [
         "tdd"
       ],
@@ -2635,7 +2664,7 @@
         "external_write": false,
         "code_write": true
       },
-      "context_bytes": 1024,
+      "context_bytes": 426,
       "quality": {
         "trigger_precision": 1,
         "trigger_recall": 1,
@@ -2644,7 +2673,10 @@
       },
       "description": "Observe a failing check, implement the minimum change, then rerun focused checks.",
       "path": "registry/builtins/vibetether-built-in-tdd",
-      "workflow_role": "primary"
+      "workflow_role": "primary",
+      "object_hash": "2c493099de6fc48829fca0a3b72ff7f1a4e7d27a9f3cfec57ed5168e1fb33677",
+      "resources": [],
+      "scripts": []
     },
     {
       "id": "vibetether-built-in-verification",
@@ -2653,7 +2685,7 @@
       "version": "1.0.0-rc.3",
       "source": "vibetether",
       "license": "MIT",
-      "fingerprint": null,
+      "fingerprint": "88cf7ce41825193ccc35a4fb4be77545f95211b954ce1ecb80a0fc1d67d62ab6",
       "capabilities": [
         "verification"
       ],
@@ -2680,7 +2712,7 @@
         "external_write": false,
         "code_write": false
       },
-      "context_bytes": 1024,
+      "context_bytes": 442,
       "quality": {
         "trigger_precision": 1,
         "trigger_recall": 1,
@@ -2689,7 +2721,10 @@
       },
       "description": "Use fresh commands or artifacts and distinguish proxies from requested outcomes.",
       "path": "registry/builtins/vibetether-built-in-verification",
-      "workflow_role": "primary"
+      "workflow_role": "primary",
+      "object_hash": "88cf7ce41825193ccc35a4fb4be77545f95211b954ce1ecb80a0fc1d67d62ab6",
+      "resources": [],
+      "scripts": []
     }
   ]
 }

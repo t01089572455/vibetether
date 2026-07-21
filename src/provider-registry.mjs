@@ -3,8 +3,9 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { PROVIDER_CHANNELS } from './constants.mjs';
 import { conflictError } from './errors.mjs';
-import { assertSafeId, hashTree, readJsonFile, rejectAbsoluteSymlinkChain } from './files.mjs';
+import { assertSafeId, readJsonFile, rejectAbsoluteSymlinkChain, safeRelative } from './files.mjs';
 import { cacheHome } from './paths.mjs';
+import { assertProviderClosure, inspectProviderTree } from './provider-integrity.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CARD_KEYS = new Set([
@@ -37,6 +38,11 @@ export function validateProviderCard(card) {
   card.workflow_role = card.workflow_role ?? 'primary';
   if (!['primary','alternative','overlay'].includes(card.workflow_role)) throw conflictError(`Provider ${card.id} workflow_role is invalid.`, 'INVALID_PROVIDER');
   for (const field of ['positive_triggers','negative_triggers','hosts','operating_systems','resources','scripts']) card[field] = stringArray(card[field] ?? [], `Provider ${card.id} ${field}`, { allowEmpty: true });
+  card.resources = card.resources.map((item) => safeRelative(item, `Provider ${card.id} resource`));
+  card.scripts = card.scripts.map((item) => safeRelative(item, `Provider ${card.id} script`));
+  if (card.resources.some((item) => item === 'SKILL.md' || item.startsWith('scripts/'))) throw conflictError(`Provider ${card.id} resources are invalid.`, 'INVALID_PROVIDER');
+  if (card.scripts.some((item) => !item.startsWith('scripts/'))) throw conflictError(`Provider ${card.id} scripts must be under scripts/.`, 'INVALID_PROVIDER');
+  if (new Set([...card.resources, ...card.scripts]).size !== card.resources.length + card.scripts.length) throw conflictError(`Provider ${card.id} declares duplicate closure paths.`, 'INVALID_PROVIDER');
   if (!card.permissions || typeof card.permissions !== 'object' || Array.isArray(card.permissions)) throw conflictError(`Provider ${card.id} permissions must be an object.`, 'INVALID_PROVIDER');
   only(card.permissions, PERMISSION_KEYS, `Provider ${card.id} permissions`);
   for (const key of PERMISSION_KEYS) if (typeof card.permissions[key] !== 'boolean') throw conflictError(`Provider ${card.id} permission ${key} must be boolean.`, 'INVALID_PROVIDER');
@@ -48,11 +54,7 @@ export function validateProviderCard(card) {
   if (!Number.isFinite(Date.parse(card.quality.evaluated_at))) throw conflictError(`Provider ${card.id} quality evaluated_at is invalid.`, 'INVALID_PROVIDER');
   if (typeof card.description !== 'string' || !card.description.trim() || Buffer.byteLength(card.description, 'utf8') > 1000) throw conflictError(`Provider ${card.id} description is invalid.`, 'INVALID_PROVIDER');
   if (typeof card.path !== 'string' || !card.path.trim()) throw conflictError(`Provider ${card.id} path is invalid.`, 'INVALID_PROVIDER');
-  if (card.builtin) {
-    if (card.object_hash !== null && card.object_hash !== undefined && !/^[a-f0-9]{64}$/.test(card.object_hash)) throw conflictError(`Provider ${card.id} object_hash is invalid.`, 'INVALID_PROVIDER');
-  } else {
-    if (!/^[a-f0-9]{64}$/.test(card.object_hash ?? '') || !/^[a-f0-9]{64}$/.test(card.fingerprint ?? '')) throw conflictError(`External Provider ${card.id} requires object_hash and fingerprint.`, 'INVALID_PROVIDER');
-  }
+  if (!/^[a-f0-9]{64}$/.test(card.object_hash ?? '') || !/^[a-f0-9]{64}$/.test(card.fingerprint ?? '') || card.object_hash !== card.fingerprint) throw conflictError(`Provider ${card.id} requires one immutable expected content digest.`, 'INVALID_PROVIDER');
   return card;
 }
 
@@ -79,9 +81,8 @@ async function externalCards() {
     const card = validateProviderCard(await readJsonFile(path.join(directory, entry.name), 'Provider card'));
     const objectRoot = path.join(cacheHome(), 'providers', 'objects', card.object_hash);
     await rejectAbsoluteSymlinkChain(objectRoot, { allowMissing: false });
-    const actual = await hashTree(objectRoot);
-    if (actual !== card.fingerprint || actual !== card.object_hash) throw conflictError(`Provider cache object is corrupt: ${card.id}`, 'PROVIDER_FINGERPRINT');
-    cards.push({ ...card, resolved_path: objectRoot });
+    const inspection = assertProviderClosure(card, await inspectProviderTree(objectRoot));
+    cards.push({ ...card, resolved_path: objectRoot, observed_content_sha256: inspection.digest });
   }
   return cards;
 }
@@ -100,8 +101,8 @@ async function loadPackagedRegistry() {
     const card = validateProviderCard(raw);
     const resolved = path.resolve(packageRoot, card.path);
     await rejectAbsoluteSymlinkChain(resolved, { allowMissing: false });
-    const fingerprint = await hashTree(resolved);
-    providers.push({ ...card, fingerprint, object_hash: fingerprint, resolved_path: resolved });
+    const inspection = assertProviderClosure(card, await inspectProviderTree(resolved));
+    providers.push({ ...card, resolved_path: resolved, observed_content_sha256: inspection.digest });
   }
   return { capabilities, providers };
 }

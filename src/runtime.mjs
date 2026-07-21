@@ -50,6 +50,11 @@ export function runtimePaths(context, identity = null) {
   };
 }
 
+export function activationMaterializationPath(paths, id) {
+  const key = sha256Text(`${paths.project_id}\0${paths.clone_id}\0${paths.worktree_id}\0${id}`).slice(0, 32);
+  return path.join(stateHome(), 'activations', key);
+}
+
 export function initialCurrent(context, paths, authorityDigest) {
   return {
     schema_version: SCHEMA_VERSION,
@@ -201,7 +206,10 @@ async function breakLeaseUnlocked(paths, reason='Writer lease was explicitly bro
     current.next_action='Review the interrupted step, then prepare and confirm a fresh bounded path.';
     current.updated_at=new Date().toISOString();
     await writeStepState(paths,route,current);
-    if (activationId) await rm(path.join(paths.activations,`${activationId}.json`),{force:true});
+    if (activationId) await Promise.all([
+      rm(path.join(paths.activations,`${activationId}.json`),{force:true}),
+      rm(activationMaterializationPath(paths,activationId),{recursive:true,force:true}),
+    ]);
     await appendRuntimeEvent(paths,{type:'lease-broken',route_id:route.id,permit_id:route.implementation_permit_id??null,reason:boundedReason});
   }
   await rm(paths.lease,{force:true});
