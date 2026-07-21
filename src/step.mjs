@@ -281,15 +281,17 @@ export async function startStep(options={}) {
   const signals=[...new Set((options.signals??[]).map((item)=>normalizeSignal(boundedText(item,256,'Step signal'))).filter(Boolean))];
   const classification=options.classification??classifyTaskText(taskText,{intentStatus:value.intent.status,currentPhase:current.phase});
   const deepRequired=options.deep===true||classification.deep_requested===true||current.task_mode==='deep';
-  const deepState=await validateDeepPermit(value.context,value.runtime,value.authority,{required:deepRequired,slice:deepRequired?slice:null});
+  const permissions={network:options.network===true,external_write:options.external_write===true,code_write:options.code_write===true};
+  if (routePhase==='EXECUTE_ONE'&&permissions.code_write!==true) throw conflictError('EXECUTE_ONE requires explicit code-write permission.','PERMISSION_REQUIRED');
+  let deepState=await validateDeepPermit(value.context,value.runtime,value.authority,{required:deepRequired,slice:deepRequired?slice:null});
   let userDecisionReason = deepState?.permit?.reason ?? null;
   if (classification.needs_user_decision===true&&!deepState) {
     if (!options.confirmed_by_user) throw conflictError('This task requires an explicit user decision before implementation. Prepare/confirm direction or use Deep mode with an Implementation Permit.','USER_DECISION_REQUIRED');
     userDecisionReason = boundedText(options.decision_reason, 1000, 'User decision reason');
   }
-  const permissions={network:options.network===true,external_write:options.external_write===true,code_write:options.code_write===true};
-  if (routePhase==='EXECUTE_ONE'&&permissions.code_write!==true) throw conflictError('EXECUTE_ONE requires explicit code-write permission.','PERMISSION_REQUIRED');
   const successChecks=normalizeSuccessChecks(options.success_checks,successEvidence,{phase:routePhase,codeWrite:permissions.code_write,approvedPaths});
+  const permitEnvelope={task_text:taskText,phase:routePhase,capability,provider_id:options.provider??null,scope_paths:approvedPaths,permissions,success_evidence:successEvidence,success_checks:successChecks};
+  if (deepRequired) deepState=await validateDeepPermit(value.context,value.runtime,value.authority,{required:true,slice,envelope:permitEnvelope});
   const routeId=`route-${randomUUID()}`;
   await acquireLease(value.runtime.paths,routeId);
   let activation=null;
@@ -297,8 +299,11 @@ export async function startStep(options={}) {
     const registry=await loadProviderRegistry(); const routes=value.context.routes?validateRoutes(value.context.routes,registry.capabilities,registry.providers):null;
     const stats=await loadProviderStats(value.runtime.paths);
     const broker=brokerSkills(registry,{phase:routePhase,capability,signals,agent:options.agent??'codex',provider:options.provider??null,permissions},value.context.skills,routes,stats);
+    if (deepRequired) {
+      deepState=await validateDeepPermit(value.context,value.runtime,value.authority,{required:true,slice,envelope:{...permitEnvelope,provider_id:broker.selected.id}});
+    }
     const skillsDigest=skillsLockDigest(value.context.skills); const executionStart=await executionSnapshot(value.context.executionRoot);
-    const route={schema_version:1,id:routeId,status:'active',phase:routePhase,capability,slice,approved_paths:approvedPaths,success_evidence:successEvidence,success_checks:successChecks,signals,permissions,classification,task_mode:deepRequired?'deep':'adaptive',start_card_id:deepState?.start_card?.id??null,implementation_permit_id:deepState?.permit?.id??null,user_decision_confirmed:options.confirmed_by_user===true||Boolean(deepState),user_decision_reason:userDecisionReason,required_outputs:broker.required_outputs,exit_evidence:broker.exit_evidence,output_contract:null,governance_writes:[],authority_start:value.authority.authority_digest,authority_snapshot:value.authority,skills_digest:skillsDigest,provider:broker.selected,shortlist:broker.shortlist,activation_id:null,execution_start:executionStart,execution_end:null,evidence_ids:[],truth_reconciliation:{status:'pending',candidate_path:null,reason:null},created_at:new Date().toISOString(),updated_at:new Date().toISOString(),abandonment_reason:null};
+    const route={schema_version:1,id:routeId,status:'active',phase:routePhase,capability,task_text:taskText,slice,approved_paths:approvedPaths,success_evidence:successEvidence,success_checks:successChecks,signals,permissions,classification,task_mode:deepRequired?'deep':'adaptive',start_card_id:deepState?.start_card?.id??null,implementation_permit_id:deepState?.permit?.id??null,user_decision_confirmed:options.confirmed_by_user===true||Boolean(deepState),user_decision_reason:userDecisionReason,required_outputs:broker.required_outputs,exit_evidence:broker.exit_evidence,output_contract:null,governance_writes:[],authority_start:value.authority.authority_digest,authority_snapshot:value.authority,skills_digest:skillsDigest,provider:broker.selected,shortlist:broker.shortlist,activation_id:null,execution_start:executionStart,execution_end:null,evidence_ids:[],truth_reconciliation:{status:'pending',candidate_path:null,reason:null},created_at:new Date().toISOString(),updated_at:new Date().toISOString(),abandonment_reason:null};
     activation=await activateSkill(value.context,value.runtime.paths,{...route,selected:broker.selected}); route.activation_id=activation.activation_id;
     const next={...current,goal:value.intent.goal,phase:routePhase,slice,authority_digest:value.authority.authority_digest,control_generation:value.context.manifest.control_generation,route_instance_id:routeId,task_mode:route.task_mode,deep_start_card_id:route.start_card_id,implementation_permit_id:route.implementation_permit_id,next_action:`Execute only this slice: ${slice}`,open_risks:[],evidence_ids:[],updated_at:new Date().toISOString(),status:'active'};
     await writeStepState(value.runtime.paths,route,next); await appendRuntimeEvent(value.runtime.paths,{type:'step-started',route_id:routeId,phase:routePhase,capability,provider:broker.selected.id});
@@ -312,7 +317,20 @@ export async function finishStep(options={}) {
   if (!route||route.status!=='active') throw conflictError('An active step is required.','ACTIVE_STEP_REQUIRED');
   if (route.task_mode === 'deep') {
     try {
-      const deepState = await validateDeepPermit(value.context, value.runtime, value.authority, { required: true, slice: route.slice });
+      const deepState = await validateDeepPermit(value.context, value.runtime, value.authority, {
+        required: true,
+        slice: route.slice,
+        envelope: {
+          task_text: route.task_text,
+          phase: route.phase,
+          capability: route.capability,
+          provider_id: route.provider?.id,
+          scope_paths: route.approved_paths,
+          permissions: route.permissions,
+          success_evidence: route.success_evidence,
+          success_checks: route.success_checks,
+        },
+      });
       if (deepState.permit.id !== route.implementation_permit_id) {
         throw conflictError('The active route is not bound to the current Implementation Permit.', 'IMPLEMENTATION_PERMIT_STALE');
       }

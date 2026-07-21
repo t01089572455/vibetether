@@ -41,6 +41,9 @@ const heldOut=[
 ];
 
 const adversarialControlled=[
+  {text:'Deploy the service and then show me the logs.',provider:'vibetether-built-in-release',needsUserDecision:true},
+  {text:'Delete old accounts and explain what changed.',provider:'mattpocock-grilling',needsUserDecision:true},
+  {text:'Do not use deep mode; implement the new public API.',provider:'mattpocock-grilling',needsUserDecision:true,deep:false},
   ...[
     'Wire up SSO for enterprise users.','Add OAuth login to the customer portal.','Support OIDC for enterprise tenants.',
     'Implement passkey authentication with WebAuthn.','Integrate Stripe subscriptions.','Add soft delete for accounts.',
@@ -101,6 +104,6 @@ const negative=brokerSkills(negativeRegistry,{...base,phase:'EXECUTE_ONE',capabi
 const negativeTriggerAccuracy=negative.selected.id!=='synthetic-negative'?1:0;
 
 const adversarialObservationAccuracy=adversarialObservation.filter((text)=>classifyTaskText(text,{intentStatus:'confirmed'}).mode==='observation').length/adversarialObservation.length;
-const summary={schema_version:1,train:evaluate(train),held_out:evaluate(heldOut),adversarial:evaluate(adversarialControlled),observation_accuracy:observationAccuracy,adversarial_observation_accuracy:adversarialObservationAccuracy,negative_trigger_accuracy:negativeTriggerAccuracy,limitations:['Fixed deterministic regression corpora; results do not establish general natural-language routing accuracy.','The adversarial corpus was created from prior external findings and is a regression set, not an unrevealed independent forward test.','Windows host behavior is covered by CI configuration and fault injection, not by this local Linux run.']};
+const summary={schema_version:1,train:evaluate(train),held_out:evaluate(heldOut),adversarial:evaluate(adversarialControlled),observation_accuracy:observationAccuracy,adversarial_observation_accuracy:adversarialObservationAccuracy,negative_trigger_accuracy:negativeTriggerAccuracy,limitations:['Fixed deterministic regression corpora; results do not establish general natural-language routing accuracy.','The adversarial corpus was created from prior external findings and is a regression set, not an unrevealed independent forward test.',`This run covers only ${process.platform}; cross-platform host behavior still requires the configured CI matrix and platform-specific review.`]};
 console.log(JSON.stringify(summary,null,2));
 if(summary.train.top1_accuracy<0.9||summary.train.top3_recall<0.95||summary.held_out.top1_accuracy<0.85||summary.held_out.top3_recall<0.95||summary.adversarial.top1_accuracy<0.95||summary.adversarial.top3_recall<0.95||observationAccuracy<1||adversarialObservationAccuracy<1||negativeTriggerAccuracy<1) process.exit(1);

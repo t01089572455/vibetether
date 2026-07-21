@@ -5,14 +5,18 @@ description: Prepare and govern high-ambiguity or high-impact coding work before
 
 # VibeTether Deep
 
-Use this Skill only for work that needs an explicit user-confirmed start gate.
+Use this Skill for work that must not begin from guessed intent.
 
 1. Run `vibetether context --task "<request>" --boundary task-entry --json`.
-2. Investigate discoverable facts without writing product code.
-3. Prepare a Start Card with `vibetether deep prepare`, naming the bounded slice, success evidence, facts, assumptions, and decisions still owned by the user.
-4. Show the Start Card and recommended decisions to the user. Do not start implementation.
-5. After explicit user confirmation, run `vibetether deep permit --confirmed-by-user --reason "<what the user approved>"`.
-6. Start the controlled step with `vibetether step start --deep ...`. The step must match the permitted slice.
-7. The permit expires or is consumed when the step exits, and becomes stale when authority, control generation, or worktree identity changes.
+2. Read only applicable confirmed Truth and inspect discoverable repository facts. Do not ask the user for facts the repository or an authoritative source can answer. Do not write product code.
+3. Expand the request into the smallest complete Start Card: exact task, bounded slice, approved paths, permissions, success evidence, executable success checks, verified facts, explicit assumptions, and user-owned decisions.
+4. Run `vibetether deep prepare ...`. It returns exactly one `next_question`.
+5. Ask only that question. State a concrete recommended answer and its impact, then wait for the user's reply. Never answer it on the user's behalf and never batch later questions into the same turn.
+6. Record the normalized decision with `vibetether deep answer --question-id <ID> --selected-option "<decision the user made>" --user-message-locator "<durable user-message reference>"`. Ask the next returned question and repeat.
+7. When status becomes `awaiting-final-confirmation`, show the complete resolved Start Card, including evidence verifiers and the strongest counterexample considered. Ask whether this exact card may govern implementation.
+8. Only after that reply, create the machine-readable resolution and run `vibetether deep permit --confirmed-by-user --reason "<exact approval>" --resolution-json '<JSON>'`.
+9. Start the controlled step with `vibetether step start --deep ...`. Its task, slice, phase, capability, scope, permissions, and success checks must match the Permit.
 
-A Start Card is planning evidence, not permission. An Implementation Permit authorizes only its exact slice and does not authorize deployment, migration, credential access, destructive data changes, or release unless those permissions were separately approved.
+A Start Card is planning evidence, not permission. A decision receipt records the Agent's durable interpretation of a user message; without a mandatory host hook it is not cryptographic proof of authorship. The final confirmation is required to catch a wrong expansion before coding.
+
+The Permit expires or is consumed when the step exits. It becomes stale when its Start Card, answer receipts, authority, control generation, worktree, task, slice, approved scope, permissions, or success checks change. It does not authorize credentials, networking, external writes, destructive data changes, migration, deployment, publication, or release unless those exact permissions were included and separately approved.

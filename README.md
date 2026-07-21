@@ -152,27 +152,45 @@ Assertion text may be recorded as a note, but it cannot satisfy implementation, 
 
 ### Explicit deep mode
 
-When the user asks for deep mode or wants facts and assumptions checked before implementation, use the separate gate:
+When the user asks for deep mode—or the request leaves product behavior, UI, architecture, data, security, permissions, migration, deployment, publication, or release direction unresolved—use the separate gate. Deep first investigates discoverable facts, expands the request into a bounded Start Card, and asks one recommended decision question at a time:
 
 ```sh
 vibetether deep prepare --project . \
   --task "Review the migration facts before coding" \
   --slice "Implement only the user-approved migration slice" \
   --success-evidence "The focused migration checks pass" \
+  --success-check-json '{"id":"migration-check","claim":"The focused migration checks pass","kind":"command","command":["npm","test","--","migration.test.js"],"covers_paths":["src/migration.js"],"consumer_paths":["test/migration.test.js"]}' \
+  --path src/migration.js --path test/migration.test.js --code-write \
   --fact "The current format is version 0.6.3" \
   --decision "Confirm the exact compatibility boundary" --json
+```
 
+Show only the returned `next_question`, give a concrete recommendation, and wait. Record that reply before asking another:
+
+```sh
+vibetether deep answer --project . \
+  --question-id "question-1-..." \
+  --selected-option "Preserve v0.6.3 inputs and make rollback byte-safe" \
+  --user-message-locator "user-message:approved-compatibility" --json
+```
+
+When all questions are answered, show the complete expanded Start Card and ask the user to confirm that exact interpretation. Then pass the complete machine-readable resolution:
+
+```sh
 vibetether deep permit --project . --confirmed-by-user \
-  --reason "The user approved this Start Card and exact slice" --json
+  --reason "The user approved this exact resolved Start Card and slice" \
+  --resolution-json '<facts, assumptions, decisions, verifiers, counterexample, and confirmation source>' --json
 
 vibetether step start --project . --deep --code-write \
   --task "Use deep mode for the approved migration" \
   --phase EXECUTE_ONE --capability implementation \
   --slice "Implement only the user-approved migration slice" \
-  --success-evidence "The focused migration checks pass" --json
+  --success-evidence "The focused migration checks pass" \
+  --success-check-json '{"id":"migration-check","claim":"The focused migration checks pass","kind":"command","command":["npm","test","--","migration.test.js"],"covers_paths":["src/migration.js"],"consumer_paths":["test/migration.test.js"]}' \
+  --path src/migration.js --path test/migration.test.js --json
 ```
 
-The Start Card is not permission. The Implementation Permit is expiring, worktree-scoped, authority-scoped, and consumed when the step exits. It does not grant network, credential, migration, deployment, destructive-data, or release permission.
+The Start Card is not permission. A bare `--confirmed-by-user` flag cannot bypass unanswered questions or replace the resolution record. The Implementation Permit is expiring and bound to the task, slice, scope, permissions, checks, authority, worktree, and recorded decisions; it is consumed when the step exits. Without a mandatory host hook, the durable message locator still depends on Agent cooperation and is not cryptographic proof of user identity.
 
 ## Truth is authority; Experience is procedure
 

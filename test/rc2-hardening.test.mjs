@@ -13,7 +13,7 @@ import { attachWorktree } from '../src/worktree.mjs';
 import { grantDeepPermit, prepareDeep, validateDeepPermit } from '../src/deep.mjs';
 import { finishStep, startStep } from '../src/step.mjs';
 import { migrate, rollbackMigration } from '../src/migrate.mjs';
-import { contractFinishArgs, contractFinishOptions, deepResolution, fixture, git, initProject, mainJson, successCheckCliArgs, testSuccessCheck } from './helpers.mjs';
+import { answerDeepCard, contractFinishArgs, contractFinishOptions, deepResolution, fixture, git, initProject, mainJson, successCheckCliArgs, testSuccessCheck } from './helpers.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 function shellQuote(value) {
@@ -56,12 +56,14 @@ test('deep permits expire, become stale with authority, and are consumed when th
   const { root } = await initProject('deep-lifecycle');
   const task = 'Use deep mode and confirm facts before implementation.';
   const slice = 'Implement the reviewed deep slice.';
-  let card = await prepareDeep({ project: root, task, slice, success_evidence: ['Focused checks pass.'], facts: ['The current implementation lacks the behavior.'], decisions: ['Confirm the exact bounded behavior.'] });
+  let card = await prepareDeep({ project: root, task, slice, permissions: { code_write: true }, success_evidence: ['Focused checks pass.'], success_checks: [testSuccessCheck('Focused checks pass.')], facts: ['The current implementation lacks the behavior.'], decisions: ['Confirm the exact bounded behavior.'] });
+  await answerDeepCard(root, card, deepResolution(card.start_card));
   await grantDeepPermit({ project: root, confirmed_by_user: true, reason: 'The user approved the Start Card.', resolution: deepResolution(card.start_card), ttl_ms: -1 });
   let value = await runtimeContext(root);
   await assert.rejects(validateDeepPermit(value.context, value.runtime, value.authority, { required: true, slice }), /expired/i);
 
-  card = await prepareDeep({ project: root, task, slice, success_evidence: ['Focused checks pass.'] });
+  card = await prepareDeep({ project: root, task, slice, permissions: { code_write: true }, success_evidence: ['Focused checks pass.'], success_checks: [testSuccessCheck('Focused checks pass.')], facts: ['The current implementation lacks the behavior.'], decisions: ['Confirm the exact bounded behavior.'] });
+  await answerDeepCard(root, card, deepResolution(card.start_card));
   await grantDeepPermit({ project: root, confirmed_by_user: true, reason: 'The user approved a fresh Start Card.', resolution: deepResolution(card.start_card) });
   await writeFile(path.join(root, 'direction.md'), '# Direction\n\nUser-confirmed product direction.\n');
   await main(['truth', 'add', '--project', root, '--path', 'direction.md', '--role', 'product-direction', '--scope', '.', '--directionality', 'directional', '--yes']);
@@ -70,7 +72,8 @@ test('deep permits expire, become stale with authority, and are consumed when th
   await assert.rejects(validateDeepPermit(value.context, value.runtime, value.authority, { required: true, slice }), /stale/i);
 
   await main(['step', 'reanchor', '--project', root, '--reason', 'The user reviewed the changed direction.']);
-  card = await prepareDeep({ project: root, task, slice, success_evidence: ['Focused checks pass.'] });
+  card = await prepareDeep({ project: root, task, slice, permissions: { code_write: true }, success_evidence: ['Focused checks pass.'], success_checks: [testSuccessCheck('Focused checks pass.')], facts: ['The current implementation lacks the behavior.'], decisions: ['Confirm the exact bounded behavior.'] });
+  await answerDeepCard(root, card, deepResolution(card.start_card));
   await grantDeepPermit({ project: root, confirmed_by_user: true, reason: 'The user approved the re-anchored Start Card.', resolution: deepResolution(card.start_card) });
   await main(['step', 'start', '--project', root, '--task', task, '--phase', 'EXECUTE_ONE', '--capability', 'implementation', '--slice', slice, '--success-evidence', 'Focused checks pass.', ...successCheckCliArgs('Focused checks pass.'), '--code-write', '--deep']);
   await main(['step', 'abandon', '--project', root, '--reason', 'Deep lifecycle test cleanup.']);

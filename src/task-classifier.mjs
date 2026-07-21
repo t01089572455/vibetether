@@ -52,6 +52,7 @@ const RULES = [
 ];
 
 const DEEP = /\b(?:vibe[- ]?tether[- ]?deep|deep mode|use deep|deep analysis|fact[- ]check before (?:work|coding|implementation))\b|深度模式|深度核对|先核对事实|确认后再(?:开工|实现|编码)/u;
+const DEEP_NEGATED = /\b(?:do not|don't|never|without)\s+(?:use|using|invoke|invoking|enable|enabling)?\s*(?:vibe[- ]?tether[- ]?deep|deep mode|deep analysis)\b|不要(?:使用|调用|启用)?(?:\s*)(?:vibe[- ]?tether[- ]?deep|deep\s*模式|深度模式)|不使用(?:\s*)(?:deep\s*模式|深度模式)/u;
 const VAGUE = /\b(?:make it better|make .* better|modernize|improve(?: it| everything| checkout| login)?|build me|create an app|do this project|add (?:an? )?.* feature)\b|做得更好|现代一点|帮我做|做一个|优化一下|改善一下|做好一点|加一个.*功能|添加.*功能|新增.*功能/u;
 const DECISIONAL = /\b(?:architecture|architectural|public api|new api|database schema|security policy|authentication|authorization|permission|migration|visual direction|release policy)\b|架构|公共接口|新增接口|数据库结构|认证|鉴权|安全策略|权限|迁移|视觉方向|发布策略/u;
 const GENERIC_FEATURE = /\b(?:add|implement|build|create)\s+(?:an?\s+)?(?:new\s+)?(?:export|authentication|auth|login|checkout|api|feature)\b|(?:实现|新增|添加|加一个).*(?:导出|认证|登录|结账|接口|功能)/u;
@@ -59,6 +60,11 @@ const SPECIFIC = /\b(?:in\s+[^ ]+\.(?:js|ts|tsx|py|go|rs)|issue\s*#?\d+|acceptan
 const BOUNDED_LOCAL = /\b(?:known small|small typo|typo|local helper|bounded(?: implementation)? change|exact file|without changing (?:the )?public api|without changing public behavior|without changing behavior)\b|错别字|局部修改|明确文件|不改变(?:公开|公共)?\s*(?:api|接口|行为)/u;
 const READ_ONLY = /(?:\b(?:read|explain|summarize|inspect(?: only)?|review only|locate|show|list|where is|what is|what does|how does|which file|do not (?:change|modify|edit)(?: anything)?|don't (?:change|modify|edit)(?: anything)?|no changes|without changing anything)\b|读取|解释|总结|只读|定位|列出|在哪里|是什么|如何工作|哪个文件|不要修改|不做修改|不要改|无需修改)/u;
 const READ_ONLY_FIND = /(?:\bfind\s+(?:(?:the\s+)?(?:file|path|definition|reference|usage|location)|where\b)|查找(?:文件|路径|定义|引用|用法|位置))/u;
+const DEPLOY_ACTION = /\b(?:deploy|ship|roll\s*out)\b|\brelease\s+(?:the|this|that|an?\s+approved|approved|version|package|service|build)\b|部署|上线|投产/u;
+const PUBLICATION_ACTION = /\bpublish\b|发布(?:包|版本|制品|软件|应用)|公开发布/u;
+const MIGRATION_ACTION = /\b(?:run|apply|execute|perform|start)\s+(?:the\s+|an?\s+)?(?:database\s+|data\s+)?migration\b|执行(?:数据库|数据)?迁移|运行(?:数据库|数据)?迁移|应用迁移/u;
+const DESTRUCTIVE_ACTION = /\b(?:delete|drop|purge|destroy|truncate|wipe)\b|删除|清空|销毁|永久移除/u;
+const EXPLICIT_APPROVAL = /\b(?:approved|user[- ]approved|confirmed by the user|already confirmed)\b|已经批准|已批准|用户已确认|用户确认过/u;
 
 function directionalCandidate(source) {
   return source
@@ -69,13 +75,24 @@ function directionalCandidate(source) {
 export function classifyTaskText(text, { intentStatus = 'confirmed', currentPhase = 'DISCOVER' } = {}) {
   const source = String(text ?? '').trim();
   const lowered = source.toLowerCase();
-  const deepRequested = DEEP.test(lowered);
+  const deepRequested = DEEP.test(lowered) && !DEEP_NEGATED.test(lowered);
   const explicitObservation = READ_ONLY.test(lowered) || READ_ONLY_FIND.test(lowered);
   const writeCandidate = lowered
     .replace(/\b(?:do not|don't|without)\s+(?:change|modify|edit|write)(?:\s+anything)?\b/gu, '')
     .replace(/(?:不要修改|不做修改|不要改|无需修改)/gu, '');
   const directionCandidate = directionalCandidate(lowered);
-  const explicitWrite = /(?:\b(?:implement|build|add|change|modify|edit|refactor|fix|repair|write code)\b|实现|开发|新增|添加|加一个|修改|编辑|重构|修复|写代码)/u.test(writeCandidate);
+  const deployAction = DEPLOY_ACTION.test(lowered);
+  const publicationAction = PUBLICATION_ACTION.test(lowered);
+  const migrationAction = MIGRATION_ACTION.test(lowered);
+  const destructiveAction = DESTRUCTIVE_ACTION.test(lowered);
+  const impactSignals = [
+    ...(deployAction ? ['release'] : []),
+    ...(publicationAction ? ['publication'] : []),
+    ...(migrationAction ? ['migration'] : []),
+    ...(destructiveAction ? ['destructive-action'] : []),
+  ];
+  const explicitWrite = /(?:\b(?:implement|build|add|change|modify|edit|refactor|fix|repair|write code)\b|实现|开发|新增|添加|加一个|修改|编辑|重构|修复|写代码)/u.test(writeCandidate)
+    || impactSignals.length > 0;
 
   if (deepRequested) {
     return {
@@ -92,6 +109,14 @@ export function classifyTaskText(text, { intentStatus = 'confirmed', currentPhas
       phase: currentPhase, capability: null, signals: [], mode: 'observation', deep_requested: false,
       needs_user_decision: intentStatus !== 'confirmed',
       reason: 'No task text was supplied; preserve the current lifecycle state.',
+    };
+  }
+  if (destructiveAction || migrationAction) {
+    return {
+      phase: 'DISCOVER', capability: 'requirements-clarification',
+      signals: [...new Set([...impactSignals, 'directional-decision', 'vague-request', 'requirements-unclear'].map(normalizeSignal))],
+      mode: 'controlled', deep_requested: false, needs_user_decision: true,
+      reason: 'Destructive or migration work requires an exact target, recovery path, evidence, and explicit user decision before execution.',
     };
   }
   if (intentStatus !== 'confirmed' || VAGUE.test(lowered) || (GENERIC_FEATURE.test(lowered) && !SPECIFIC.test(lowered))) {
@@ -114,10 +139,10 @@ export function classifyTaskText(text, { intentStatus = 'confirmed', currentPhas
     return {
       phase: structural && rule.phase === 'EXECUTE_ONE' ? 'DISCOVER' : rule.phase,
       capability: structural && rule.phase === 'EXECUTE_ONE' ? 'requirements-clarification' : rule.capability,
-      signals: [...new Set([...rule.signals, ...clarificationSignals, ...(structural ? ['directional-decision'] : [])].map(normalizeSignal))],
+      signals: [...new Set([...rule.signals, ...impactSignals, ...clarificationSignals, ...(structural ? ['directional-decision'] : [])].map(normalizeSignal))],
       mode: structural || ['PLAN', 'EXECUTE_ONE', 'DIAGNOSE'].includes(rule.phase) ? 'controlled' : 'observation',
       deep_requested: false,
-      needs_user_decision: structural && rule.phase !== 'SHIP',
+      needs_user_decision: structural && !(rule.phase === 'SHIP' && EXPLICIT_APPROVAL.test(lowered)),
       reason: structural
         ? 'The request contains or may conceal a direction-sensitive product, architecture, data, security, permission, or public-contract decision.'
         : rule.reason,

@@ -9,7 +9,7 @@ import { parseTruthMap, authoritySnapshot } from '../src/truth.mjs';
 import { attachWorktree } from '../src/worktree.mjs';
 import { readRoute, breakLease, writeReceipt } from '../src/runtime.mjs';
 import { loadActivation } from '../src/skills.mjs';
-import { initProject, testSuccessCheck } from './helpers.mjs';
+import { answerDeepCard, initProject, testSuccessCheck } from './helpers.mjs';
 
 const consequentialUnseen = [
   'Wire up SSO for enterprise users.',
@@ -75,11 +75,14 @@ async function permittedDeepProject(name, { ttlMs = 60_000 } = {}) {
     project: root,
     task: 'Implement the approved authentication slice after resolving direction.',
     slice: 'Implement only the approved authentication slice.',
+    permissions: { code_write: true },
     success_evidence: ['A focused real-consumer authentication check passes.'],
+    success_checks: [testSuccessCheck('A focused real-consumer authentication check passes.')],
     facts: ['The existing application currently has no SSO provider.'],
     assumptions: ['OAuth is acceptable only if explicitly confirmed by the user.'],
     decisions: ['Choose OAuth versus password authentication.'],
   });
+  await answerDeepCard(root, cardReceipt, resolvedCard(cardReceipt.start_card));
   const permitReceipt = await grantDeepPermit({
     project: root,
     confirmed_by_user: true,
@@ -142,7 +145,9 @@ test('Deep Permit rejects confirmation theater until every Start Card blocker is
     project: root,
     task: 'Implement authentication.',
     slice: 'Implement the approved authentication method.',
+    permissions: { code_write: true },
     success_evidence: ['The approved end-to-end authentication flow passes.'],
+    success_checks: [testSuccessCheck('The approved end-to-end authentication flow passes.')],
     facts: ['The existing application has password login only.'],
     assumptions: ['Assume OAuth is desired without asking the user.'],
     decisions: ['User must choose OAuth versus password authentication.'],
@@ -157,6 +162,7 @@ test('Deep Permit rejects confirmation theater until every Start Card blocker is
     /Start Card|unresolved|decision|assumption|fact|challenge/i,
   );
 
+  await answerDeepCard(root, cardReceipt, resolvedCard(cardReceipt.start_card));
   const permit = await grantDeepPermit({
     project: root,
     confirmed_by_user: true,

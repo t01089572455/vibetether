@@ -4,7 +4,7 @@ import { prepareDeep, grantDeepPermit, validateDeepPermit } from '../src/deep.mj
 import { discoverContract } from '../src/contract.mjs';
 import { parseTruthMap, authoritySnapshot } from '../src/truth.mjs';
 import { attachWorktree } from '../src/worktree.mjs';
-import { initProject } from './helpers.mjs';
+import { answerDeepCard, initProject, testSuccessCheck } from './helpers.mjs';
 
 async function prepared(name) {
   const { root } = await initProject(name);
@@ -12,9 +12,14 @@ async function prepared(name) {
     project: root,
     task: 'Add enterprise authentication only after the user chooses the authentication model.',
     slice: 'Implement only the approved enterprise authentication model.',
+    permissions: { code_write: true },
     success_evidence: [
       'A real consumer completes the approved authentication flow.',
       'The focused regression command passes against final product bytes.',
+    ],
+    success_checks: [
+      testSuccessCheck('A real consumer completes the approved authentication flow.'),
+      {...testSuccessCheck('The focused regression command passes against final product bytes.'),id:'test-focused-regression'},
     ],
     facts: ['The current repository supports password login only.'],
     assumptions: ['Enterprise identity-provider metadata will be available.'],
@@ -86,6 +91,7 @@ function complete(card) {
 
 test('Deep Permit rejects ceremonial echo records even when confirmed_by_user is set', async () => {
   const { root, card } = await prepared('deep-semantic-echo');
+  await answerDeepCard(root, card, complete(card));
   await assert.rejects(
     grantDeepPermit({
       project: root,
@@ -99,6 +105,7 @@ test('Deep Permit rejects ceremonial echo records even when confirmed_by_user is
 
 test('Deep Permit records a complete, traceable resolution and validates it against current authority', async () => {
   const { root, card } = await prepared('deep-semantic-complete');
+  await answerDeepCard(root, card, complete(card));
   const permit = await grantDeepPermit({
     project: root,
     confirmed_by_user: true,

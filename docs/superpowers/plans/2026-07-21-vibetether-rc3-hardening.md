@@ -139,7 +139,7 @@ git commit -m "fix: make Windows baseline and test counts reliable"
 - Modify: `README.md`
 - Test: `test/rc4-entry-readiness.test.mjs`
 
-- [ ] **Step 1: Add mixed-intent, negation, filename-bypass, and question-order regressions**
+- [x] **Step 1: Add mixed-intent, negation, filename-bypass, and question-order regressions**
 
 ```js
 const blocked = [
@@ -158,13 +158,13 @@ for (const text of blocked) {
 
 Add a Deep journey that proves only one unresolved decision is returned at a time and code-write stays blocked until the exact final Start Card is confirmed.
 
-- [ ] **Step 2: Run the new test and verify the current bypasses fail**
+- [x] **Step 2: Run the new test and verify the current bypasses fail**
 
 Run: `node --test test/rc4-entry-readiness.test.mjs`
 
 Expected: FAIL because read-only words currently outrank write impact, deep negation matches, and a specific file can suppress clarification.
 
-- [ ] **Step 3: Replace rule-order shortcuts with an explicit impact signature**
+- [x] **Step 3: Replace rule-order shortcuts with an explicit impact signature**
 
 ```js
 const impact = {
@@ -186,7 +186,7 @@ const observationOnly = impact.read && !Object.values({
 
 Detect explicit deep requests only in non-negated clauses. A filename, issue number, or test name may bound location but cannot authorize product, architecture, data, permission, UI, external, destructive, or release decisions.
 
-- [ ] **Step 4: Add a decision receipt and one-next-question state**
+- [x] **Step 4: Add a decision receipt and one-next-question state**
 
 ```js
 const decisionReceipt = {
@@ -203,7 +203,7 @@ const decisionReceipt = {
 
 `deep prepare` returns `next_question` with a recommendation and impact. `deep answer` accepts one answer, records one receipt, recomputes the Start Card, and returns the next unresolved question. A bare `--confirmed-by-user` flag cannot create a Permit.
 
-- [ ] **Step 5: Bind the Permit to the full consequential envelope**
+- [x] **Step 5: Bind the Permit to the full consequential envelope**
 
 ```js
 const binding = {
@@ -225,11 +225,13 @@ const binding = {
 
 Validation compares every field and rejects missing facts, unresolved assumptions, unresolved directional decisions, unverifiable success evidence, or an undispositioned counterexample.
 
-- [ ] **Step 6: Update both Skill entry documents and README commands**
+`provider_id` is exact only when the user or project pins a Provider. Otherwise the Permit records an agent-selected policy and binds the capability plus permissions, preserving the user's rule that technical implementation choices remain autonomous unless they change direction or authority.
+
+- [x] **Step 6: Update both Skill entry documents and README commands**
 
 Document the exact adaptive and deep paths, including the one-question loop and the machine-readable resolution/decision receipt. State that host cooperation is required when no hook is available.
 
-- [ ] **Step 7: Run readiness, routing, and existing compatibility tests**
+- [x] **Step 7: Run readiness, routing, and existing compatibility tests**
 
 Run: `node --test test/rc4-entry-readiness.test.mjs test/rc3-router-generalization.test.mjs test/rc3-deep-semantic.test.mjs test/rc2-sol-blockers.test.mjs`
 

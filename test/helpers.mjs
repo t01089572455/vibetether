@@ -146,3 +146,21 @@ export function deepResolution(card) {
     },
   };
 }
+
+export async function answerDeepCard(root, prepared, resolution = deepResolution(prepared.start_card)) {
+  let state = prepared;
+  while (state.next_question) {
+    const question = state.next_question;
+    const selectedOption = question.kind === 'assumption'
+      ? resolution.assumptions_resolved.find((item) => item.assumption === question.subject)?.rationale
+      : resolution.decisions_resolved.find((item) => item.decision === question.subject)?.resolution;
+    if (!selectedOption) throw new Error(`Missing test answer for Deep question ${question.id}.`);
+    state = await mainJson([
+      'deep', 'answer', '--project', root,
+      '--question-id', question.id,
+      '--selected-option', selectedOption,
+      '--user-message-locator', `user-message:test-answer-${question.order}`,
+    ]);
+  }
+  return { state, resolution };
+}

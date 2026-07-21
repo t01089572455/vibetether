@@ -25,7 +25,7 @@ import { brokerSkills } from './skill-broker.mjs';
 import { uninstallProject } from './uninstall.mjs';
 import { parseIntent } from './intent.mjs';
 import { classifyTaskText } from './task-classifier.mjs';
-import { grantDeepPermit, prepareDeep, readDeepState, revokeDeepPermit } from './deep.mjs';
+import { answerDeepQuestion, grantDeepPermit, prepareDeep, readDeepState, revokeDeepPermit } from './deep.mjs';
 
 const HELP=`VibeTether 1.0.0-rc.3 — long-task control kernel and cold Skill broker
 
@@ -34,7 +34,7 @@ Usage:
   vibetether bootstrap --goal TEXT --success-evidence TEXT [--confirmed] --yes
   vibetether context [--task TEXT] [--boundary NAME] [--json]
   vibetether context read HANDLE [--offset N] [--limit N]
-  vibetether deep prepare|permit|revoke|status
+  vibetether deep prepare|answer|permit|revoke|status
   vibetether step start [--task TEXT | --phase PHASE --capability ID] --slice TEXT --success-evidence TEXT --success-check-json JSON [--signal ID] [--confirmed-by-user --decision-reason TEXT]
   vibetether step finish [--evidence-command-json JSON] --output-proof-json JSON --exit-proof-json JSON
   vibetether step abandon --reason TEXT
@@ -122,7 +122,8 @@ export async function main(args=[],runtime={}) {
     return response(await buildContext({project:options.project,boundary:options.boundary,phase:options.phase?.[0],capability:options.capability?.[0],signals:options.signal,agent:options.agent,provider:options.provider,permissions:{network:options.network===true,external_write:options.external_write===true,code_write:options.code_write===true},task_text:options.task,paths:options.path??[]}),options.json);
   }
   if (command==='deep') {
-    if (action==='prepare') return response(await prepareDeep({project:options.project,task:options.task,slice:options.slice,success_evidence:options.success_evidence,facts:options.fact,assumptions:options.assumption,decisions:options.decision}),options.json);
+    if (action==='prepare') return response(await prepareDeep({project:options.project,task:options.task,slice:options.slice,phase:options.phase?.[0],capability:options.capability?.[0],provider:options.provider,scope_paths:options.path??[],permissions:{network:options.network===true,external_write:options.external_write===true,code_write:options.code_write===true},success_evidence:options.success_evidence,success_checks:(options.success_check_json??[]).map((item)=>json(item,'success-check-json')),facts:options.fact,assumptions:options.assumption,decisions:options.decision}),options.json);
+    if (action==='answer') return response(await answerDeepQuestion({project:options.project,question_id:options.question_id,selected_option:options.selected_option,user_message_locator:options.user_message_locator}),options.json);
     if (action==='permit') return response(await grantDeepPermit({project:options.project,confirmed_by_user:options.confirmed_by_user===true,reason:options.reason,resolution:options.resolution_json?json(options.resolution_json,'resolution-json'):null}),options.json);
     if (action==='revoke') return response(await revokeDeepPermit({project:options.project,reason:options.reason}),options.json);
     if (action==='status') { const {runtime:rt}=await contextRuntime(options.project); return response(await readDeepState(rt.paths,{allowMissing:true})??{status:'not-prepared'},options.json); }

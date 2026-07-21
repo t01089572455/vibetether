@@ -8,7 +8,7 @@ import { inspectProject } from '../src/doctor.mjs';
 import { migrate } from '../src/migrate.mjs';
 import { discoverContract } from '../src/contract.mjs';
 import { authoritySnapshot, parseTruthMap } from '../src/truth.mjs';
-import { contractFinishArgs, deepResolution, fixture, git, initProject, mainJson, successCheckCliArgs } from './helpers.mjs';
+import { answerDeepCard, contractFinishArgs, deepResolution, fixture, git, initProject, mainJson, successCheckCliArgs } from './helpers.mjs';
 
 async function addConfirmed(root, entry) {
   await mkdir(path.dirname(path.join(root, ...entry.path.split('/'))), { recursive: true });
@@ -35,11 +35,12 @@ test('deep mode requires a Start Card and user-confirmed Implementation Permit b
     /Implementation Permit|user decision/i,
   );
 
-  const prepared = await mainJson(['deep', 'prepare', '--project', root, '--task', task, '--slice', slice, '--success-evidence', 'Focused checks pass.', ...successCheckCliArgs('Focused checks pass.'), '--fact', 'The requested behavior is not yet implemented.', '--decision', 'Confirm the bounded implementation slice.']);
-  assert.equal(prepared.status, 'awaiting-user-confirmation');
+  const prepared = await mainJson(['deep', 'prepare', '--project', root, '--task', task, '--slice', slice, '--success-evidence', 'Focused checks pass.', ...successCheckCliArgs('Focused checks pass.'), '--fact', 'The requested behavior is not yet implemented.', '--decision', 'Confirm the bounded implementation slice.', '--code-write']);
+  assert.equal(prepared.status, 'awaiting-user-answer');
   assert.equal(prepared.start_card.slice, slice);
 
   await assert.rejects(main(['deep', 'permit', '--project', root, '--reason', 'Not actually confirmed.']), /confirmed-by-user/i);
+  await answerDeepCard(root, prepared, deepResolution(prepared.start_card));
   const permitted = await mainJson(['deep', 'permit', '--project', root, '--confirmed-by-user', '--reason', 'The user approved this exact Start Card.', '--resolution-json', JSON.stringify(deepResolution(prepared.start_card))]);
   assert.equal(permitted.status, 'permitted');
   assert.equal(permitted.permit.status, 'active');

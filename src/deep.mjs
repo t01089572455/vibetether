@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { conflictError } from './errors.mjs';
-import { boundedText, canonicalJson, sha256Text } from './files.mjs';
+import { boundedText, canonicalJson, safeRelative, sha256Text } from './files.mjs';
 import { discoverContract } from './contract.mjs';
 import { parseTruthMap, authoritySnapshot } from './truth.mjs';
 import { attachWorktree } from './worktree.mjs';
@@ -65,6 +65,135 @@ function indexedResolution(values, key, label) {
     result.set(id, value);
   }
   return result;
+}
+
+function deepQuestions(card) {
+  const entries = [
+    ...card.assumptions.map((subject) => ({
+      kind: 'assumption',
+      subject,
+      prompt: `Confirm, reject, or replace this assumption before implementation: ${subject}`,
+      recommendation: 'Verify the assumption from project evidence or obtain an explicit user decision; do not silently infer it.',
+      impact: 'An incorrect assumption can invalidate the approved implementation direction or its success evidence.',
+    })),
+    ...card.decisions_needed.map((subject) => ({
+      kind: 'decision',
+      subject,
+      prompt: subject,
+      recommendation: 'Choose the smallest reversible option consistent with confirmed Truth and the requested outcome.',
+      impact: 'This choice changes the consequential scope or direction that the Implementation Permit will authorize.',
+    })),
+  ];
+  return entries.map((entry, index) => ({
+    id: `question-${index + 1}-${sha256Text(`${card.id}:${entry.kind}:${entry.subject}`).slice(0, 12)}`,
+    order: index + 1,
+    ...entry,
+  }));
+}
+
+function normalizedPermissions(value = {}) {
+  return {
+    network: value.network === true,
+    external_write: value.external_write === true,
+    code_write: value.code_write === true,
+  };
+}
+
+function normalizedScopePaths(values, successChecks = []) {
+  const inferred = successChecks.flatMap((check) => Array.isArray(check?.covers_paths) ? check.covers_paths : []);
+  const selected = values?.length ? values : inferred;
+  return [...new Set(selected.map((item) => safeRelative(item, 'Deep approved scope path', { allowDirectory: String(item).endsWith('/') })))]
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function normalizedSuccessChecks(values) {
+  if (!Array.isArray(values) || values.length === 0) {
+    throw conflictError('Deep Start Card requires at least one predeclared success check.', 'INVALID_DEEP_CARD');
+  }
+  return JSON.parse(canonicalJson(values));
+}
+
+function prepareExecutionEnvelope(options, successEvidence) {
+  const successChecks = normalizedSuccessChecks(options.success_checks);
+  return {
+    phase: boundedText(options.phase ?? 'EXECUTE_ONE', 64, 'Deep phase').toUpperCase(),
+    capability: boundedText(options.capability ?? 'implementation', 128, 'Deep capability'),
+    provider_id: options.provider ? boundedText(options.provider, 256, 'Deep provider') : null,
+    scope_paths: normalizedScopePaths(options.scope_paths, successChecks),
+    permissions: normalizedPermissions(options.permissions),
+    success_evidence_digest: sha256Text(canonicalJson(successEvidence)),
+    success_checks: successChecks,
+    success_checks_digest: sha256Text(canonicalJson(successChecks)),
+  };
+}
+
+function validateExecutionEnvelope(card, options = null) {
+  const expected = card.execution_envelope;
+  if (!record(expected)) throw conflictError('Deep Start Card lacks its consequential execution envelope.', 'IMPLEMENTATION_PERMIT_STALE');
+  if (expected.success_evidence_digest !== sha256Text(canonicalJson(card.success_evidence))
+      || expected.success_checks_digest !== sha256Text(canonicalJson(expected.success_checks))) {
+    throw conflictError('Deep Start Card execution envelope was modified after preparation.', 'IMPLEMENTATION_PERMIT_STALE');
+  }
+  if (!options) return expected;
+  const actualChecks = JSON.parse(canonicalJson(options.success_checks ?? []));
+  const actual = {
+    task_digest: sha256Text(boundedText(options.task_text, 2000, 'Deep route task')),
+    phase: boundedText(options.phase, 64, 'Deep route phase').toUpperCase(),
+    capability: boundedText(options.capability, 128, 'Deep route capability'),
+    provider_id: options.provider_id ? boundedText(options.provider_id, 256, 'Deep route provider') : null,
+    scope_paths: normalizedScopePaths(options.scope_paths, actualChecks),
+    permissions: normalizedPermissions(options.permissions),
+    success_evidence_digest: sha256Text(canonicalJson(options.success_evidence ?? [])),
+    success_checks_digest: sha256Text(canonicalJson(actualChecks)),
+  };
+  const expectedComparable = {
+    task_digest: sha256Text(card.task),
+    phase: expected.phase,
+    capability: expected.capability,
+    scope_paths: expected.scope_paths,
+    permissions: expected.permissions,
+    success_evidence_digest: expected.success_evidence_digest,
+    success_checks_digest: expected.success_checks_digest,
+  };
+  const actualComparable = {
+    task_digest: actual.task_digest,
+    phase: actual.phase,
+    capability: actual.capability,
+    scope_paths: actual.scope_paths,
+    permissions: actual.permissions,
+    success_evidence_digest: actual.success_evidence_digest,
+    success_checks_digest: actual.success_checks_digest,
+  };
+  if (canonicalJson(expectedComparable) !== canonicalJson(actualComparable)
+      || (expected.provider_id && expected.provider_id !== actual.provider_id)) {
+    throw conflictError('Requested step does not match the user-approved Deep execution envelope.', 'IMPLEMENTATION_PERMIT_SCOPE');
+  }
+  return expected;
+}
+
+function validateDecisionReceipts(state, { complete = false } = {}) {
+  const questions = Array.isArray(state.questions) ? state.questions : [];
+  const receipts = Array.isArray(state.decision_receipts) ? state.decision_receipts : [];
+  if (receipts.length > questions.length || (complete && receipts.length !== questions.length)) {
+    throw conflictError('Every Deep question must have exactly one durable user-answer receipt before final confirmation.', 'DEEP_QUESTIONS_UNRESOLVED');
+  }
+  const cardDigest = startCardDigest(state.start_card);
+  const taskDigest = sha256Text(state.start_card.task);
+  const ids = new Set();
+  for (const [index, receipt] of receipts.entries()) {
+    const question = questions[index];
+    if (!record(receipt) || !question || receipt.question_id !== question.id || receipt.question_kind !== question.kind || receipt.subject !== question.subject) {
+      throw conflictError('Deep decision receipts must answer the current questions in order.', 'DEEP_DECISION_RECEIPT_INVALID');
+    }
+    if (ids.has(receipt.id)) throw conflictError('Deep decision receipt IDs must be unique.', 'DEEP_DECISION_RECEIPT_INVALID');
+    ids.add(receipt.id);
+    if (receipt.start_card_digest !== cardDigest || receipt.task_digest !== taskDigest) {
+      throw conflictError('A Deep decision receipt is stale for the current Start Card.', 'DEEP_DECISION_RECEIPT_STALE');
+    }
+    boundedText(receipt.selected_option, 2000, 'Deep selected option');
+    confirmationSource(receipt.user_message_locator, 'Deep user-message locator');
+  }
+  return receipts;
 }
 
 export function validateStartCardResolution(card, resolution) {
@@ -258,24 +387,33 @@ export async function prepareDeep(options = {}) {
   const slice = boundedText(options.slice ?? task, 1000, 'Deep slice');
   const successEvidence = strings(options.success_evidence, 'Deep success evidence');
   if (!successEvidence.length) throw conflictError('Deep Start Card requires success evidence.', 'INVALID_DEEP_CARD');
+  const facts = strings(options.facts, 'Deep fact');
+  if (!facts.length) throw conflictError('Deep Start Card requires at least one discoverable fact to verify before implementation.', 'INVALID_DEEP_CARD');
+  const decisionsNeeded = strings(options.decisions, 'Deep decision');
+  if (!decisionsNeeded.length) throw conflictError('Deep Start Card requires at least one explicit user-owned decision before implementation.', 'INVALID_DEEP_CARD');
   const card = {
     id: `start-card-${randomUUID()}`,
     task,
     slice,
     success_evidence: successEvidence,
-    facts: strings(options.facts, 'Deep fact'),
+    facts,
     assumptions: strings(options.assumptions, 'Deep assumption'),
-    decisions_needed: strings(options.decisions, 'Deep decision'),
+    decisions_needed: decisionsNeeded,
+    execution_envelope: prepareExecutionEnvelope(options, successEvidence),
     authority_digest: value.authority.authority_digest,
     control_generation: value.context.manifest.control_generation,
     worktree_id: value.runtime.paths.worktree_id,
     created_at: new Date().toISOString(),
   };
+  const questions = deepQuestions(card);
   const state = {
-    schema_version: 1,
+    schema_version: 2,
     mode: 'deep',
-    status: 'awaiting-user-confirmation',
+    status: 'awaiting-user-answer',
     start_card: card,
+    questions,
+    decision_receipts: [],
+    next_question: questions[0],
     permit: null,
     updated_at: new Date().toISOString(),
   };
@@ -286,10 +424,69 @@ export async function prepareDeep(options = {}) {
   current.implementation_permit_id = null;
   current.status = 'blocked';
   current.open_risks = ['Deep mode requires explicit user confirmation before consequential implementation.'];
-  current.next_action = 'Show the Start Card to the user, resolve its decisions, then run `vibetether deep permit --confirmed-by-user --reason <reason>`. ';
+  current.next_action = 'Ask only the returned next_question, record the user answer, and repeat until the final Start Card is explicitly confirmed.';
   current.updated_at = new Date().toISOString();
   await writeCurrentProjection(value.runtime.paths, current);
   await appendRuntimeEvent(value.runtime.paths, { type: 'deep-start-card-prepared', start_card_id: card.id });
+  return receipt;
+}
+
+export async function answerDeepQuestion(options = {}) {
+  const value = await loaded(options.project);
+  const state = await readDeepState(value.runtime.paths, { allowMissing: false });
+  if (state.status !== 'awaiting-user-answer') {
+    throw conflictError('Deep mode is not awaiting another user answer.', 'INVALID_DEEP_STATE');
+  }
+  if (state.start_card.authority_digest !== value.authority.authority_digest
+      || state.start_card.control_generation !== value.context.manifest.control_generation
+      || state.start_card.worktree_id !== value.runtime.paths.worktree_id) {
+    throw conflictError('Deep Start Card is stale because project authority, control generation, or worktree changed.', 'DEEP_CARD_STALE');
+  }
+  const prior = validateDecisionReceipts(state);
+  const question = state.questions[prior.length];
+  const questionId = boundedText(options.question_id, 256, 'Deep question id');
+  if (!question || question.id !== questionId) {
+    throw conflictError(`Answer only the current Deep question${question ? `: ${question.id}` : ''}.`, 'DEEP_QUESTION_ORDER');
+  }
+  const selectedOption = boundedText(options.selected_option, 2000, 'Deep selected option');
+  const userMessageLocator = confirmationSource(options.user_message_locator, 'Deep user-message locator');
+  const decisionReceipt = {
+    schema_version: 1,
+    id: `decision-${randomUUID()}`,
+    start_card_digest: startCardDigest(state.start_card),
+    task_digest: sha256Text(state.start_card.task),
+    question_id: question.id,
+    question_kind: question.kind,
+    subject: question.subject,
+    selected_option: selectedOption,
+    user_message_locator: userMessageLocator,
+    recorded_at: new Date().toISOString(),
+  };
+  const decisionReceipts = [...prior, decisionReceipt];
+  const nextQuestion = state.questions[decisionReceipts.length] ?? null;
+  const next = {
+    ...state,
+    status: nextQuestion ? 'awaiting-user-answer' : 'awaiting-final-confirmation',
+    decision_receipts: decisionReceipts,
+    next_question: nextQuestion,
+    permit: null,
+    updated_at: new Date().toISOString(),
+  };
+  const receipt = await writeReceipt(value.runtime.paths.deep, next);
+  const current = await readCurrent(value.runtime.paths);
+  current.status = 'blocked';
+  current.next_action = nextQuestion
+    ? `Ask only Deep question ${nextQuestion.id}, then record that answer.`
+    : 'Show the fully resolved Start Card to the user and request one explicit final confirmation before granting the Permit.';
+  current.updated_at = new Date().toISOString();
+  await writeCurrentProjection(value.runtime.paths, current);
+  await appendRuntimeEvent(value.runtime.paths, {
+    type: 'deep-question-answered',
+    start_card_id: state.start_card.id,
+    question_id: question.id,
+    decision_receipt_id: decisionReceipt.id,
+    remaining_questions: state.questions.length - decisionReceipts.length,
+  });
   return receipt;
 }
 
@@ -297,18 +494,35 @@ export async function grantDeepPermit(options = {}) {
   if (options.confirmed_by_user !== true) throw conflictError('Implementation Permit requires explicit --confirmed-by-user.', 'USER_DECISION_REQUIRED');
   const value = await loaded(options.project);
   const state = await readDeepState(value.runtime.paths, { allowMissing: false });
-  if (state.status !== 'awaiting-user-confirmation' && state.status !== 'permit-revoked') throw conflictError('Deep Start Card is not awaiting confirmation.', 'INVALID_DEEP_STATE');
-  if (state.start_card.authority_digest !== value.authority.authority_digest || state.start_card.control_generation !== value.context.manifest.control_generation) {
-    throw conflictError('Deep Start Card is stale because project authority or control generation changed.', 'DEEP_CARD_STALE');
+  if (state.status !== 'awaiting-final-confirmation' && state.status !== 'permit-revoked') throw conflictError('Deep questions must be answered one at a time before final Start Card confirmation.', 'DEEP_QUESTIONS_UNRESOLVED');
+  if (state.start_card.authority_digest !== value.authority.authority_digest
+      || state.start_card.control_generation !== value.context.manifest.control_generation
+      || state.start_card.worktree_id !== value.runtime.paths.worktree_id) {
+    throw conflictError('Deep Start Card is stale because project authority, control generation, or worktree changed.', 'DEEP_CARD_STALE');
   }
   const reason = boundedText(options.reason, 1000, 'Permit reason');
+  const decisionReceipts = validateDecisionReceipts(state, { complete: true });
   const resolution = validateStartCardResolution(state.start_card, options.resolution);
+  const executionEnvelope = validateExecutionEnvelope(state.start_card);
+  for (const question of state.questions) {
+    const receipt = decisionReceipts.find((item) => item.question_id === question.id);
+    const resolved = question.kind === 'assumption'
+      ? resolution.assumptions_resolved.find((item) => item.assumption === question.subject)?.rationale
+      : resolution.decisions_resolved.find((item) => item.decision === question.subject)?.resolution;
+    if (!receipt || resolved !== receipt.selected_option) {
+      throw conflictError('The final Start Card resolution must exactly preserve every recorded user answer.', 'DEEP_DECISION_MISMATCH');
+    }
+  }
   const permit = {
     id: `permit-${randomUUID()}`,
     start_card_id: state.start_card.id,
     start_card_digest: startCardDigest(state.start_card),
     resolution,
     resolution_digest: sha256Text(canonicalJson(resolution)),
+    task_digest: sha256Text(state.start_card.task),
+    slice_digest: sha256Text(state.start_card.slice),
+    decision_receipt_ids: decisionReceipts.map((item) => item.id),
+    execution_envelope_digest: sha256Text(canonicalJson(executionEnvelope)),
     confirmed_by_user: true,
     reason,
     authority_digest: value.authority.authority_digest,
@@ -333,7 +547,7 @@ export async function grantDeepPermit(options = {}) {
   return receipt;
 }
 
-export async function validateDeepPermit(context, runtime, authority, { required = false, slice = null } = {}) {
+export async function validateDeepPermit(context, runtime, authority, { required = false, slice = null, envelope = null } = {}) {
   const state = await readDeepState(runtime.paths, { allowMissing: true });
   if (!state || state.status !== 'permitted' || state.permit?.status !== 'active') {
     if (required) throw conflictError('Deep mode requires an active user-confirmed Implementation Permit.', 'IMPLEMENTATION_PERMIT_REQUIRED');
@@ -346,6 +560,16 @@ export async function validateDeepPermit(context, runtime, authority, { required
   const resolution = validateStartCardResolution(state.start_card, permit.resolution);
   if (permit.resolution_digest !== sha256Text(canonicalJson(resolution))) {
     throw conflictError('Implementation Permit resolution was modified after confirmation.', 'IMPLEMENTATION_PERMIT_STALE');
+  }
+  const decisionReceipts = validateDecisionReceipts(state, { complete: true });
+  if (permit.task_digest !== sha256Text(state.start_card.task)
+      || permit.slice_digest !== sha256Text(state.start_card.slice)
+      || canonicalJson(permit.decision_receipt_ids) !== canonicalJson(decisionReceipts.map((item) => item.id))) {
+    throw conflictError('Implementation Permit no longer matches the reviewed task, slice, or decision receipts.', 'IMPLEMENTATION_PERMIT_STALE');
+  }
+  const executionEnvelope = validateExecutionEnvelope(state.start_card, envelope);
+  if (permit.execution_envelope_digest !== sha256Text(canonicalJson(executionEnvelope))) {
+    throw conflictError('Implementation Permit no longer matches the reviewed execution envelope.', 'IMPLEMENTATION_PERMIT_STALE');
   }
   if (permit.authority_digest !== authority.authority_digest || permit.control_generation !== context.manifest.control_generation || permit.worktree_id !== runtime.paths.worktree_id) {
     throw conflictError('Implementation Permit is stale for the current authority, control generation, or worktree.', 'IMPLEMENTATION_PERMIT_STALE');

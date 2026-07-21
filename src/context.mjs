@@ -62,6 +62,14 @@ function compactDeepCard(state) {
     fact_count: (card.facts ?? []).length,
     assumption_count: (card.assumptions ?? []).length,
     decision_count: (card.decisions_needed ?? []).length,
+    answered_question_count: (state.decision_receipts ?? []).length,
+    remaining_question_count: Math.max(0, (state.questions ?? []).length - (state.decision_receipts ?? []).length),
+    next_question: state.next_question ? {
+      id: state.next_question.id,
+      prompt: state.next_question.prompt,
+      recommendation: state.next_question.recommendation,
+      impact: state.next_question.impact,
+    } : null,
     created_at: card.created_at,
   };
 }
@@ -123,7 +131,7 @@ export async function buildContext(options={}) {
   const experience=await recallExperience(context,runtime.paths,context.experience,{authorityDigest:authority.authority_digest,skillsDigest,signals});
   const applicable=authority.confirmed_sources.filter((entry)=>scopeApplies(entry,options.paths??[])&&roleApplies(entry,{phase,capability,signals}));
   const truthHandles=applicable.slice(0,TRUTH_PAGE_SIZE).map((entry)=>({handle:`truth:${entry.id}`,id:entry.id,path:entry.path,role:entry.role,scope:entry.scope,sha256:entry.sha256,kind:entry.kind}));
-  const deepNeedsPermit=classification.deep_requested===true&&!deepPermit;
+  const deepNeedsPermit=(classification.deep_requested===true||current.task_mode==='deep'||Boolean(deepState))&&!deepPermit;
   const verdict=blockers.length?'BLOCKED_BY_CONFLICT_OR_AUTHORIZATION':(intent.status!=='confirmed'||classification.needs_user_decision===true||deepNeedsPermit)?'ASK_USER_DECISION':'READY_FOR_IMPLEMENT_ONE';
   return compactCapsule({
     schema_version:1,
