@@ -86,6 +86,7 @@ The canonical shape is:
       "authority_sources": ["truth:truth_product_export_contract"],
       "parent_id": null,
       "dependencies": [],
+      "superseded_by": [],
       "disposition": "required",
       "required_at": ["goal", "release"],
       "acceptance": [
@@ -158,6 +159,8 @@ A directional outcome mutation stores a bounded receipt inside the registry:
 ```
 
 The receipt records the observable authorization basis without storing the full conversation. It is not a cryptographic proof that a host message came from a human. On hosts without a mandatory hook, the cooperation limitation remains explicit. A bare `--yes`, Agent-authored summary, or boolean such as `confirmed_by_user` cannot create a directional receipt by itself.
+
+To avoid a self-referential digest, `result_registry_digest` is computed from canonical registry bytes with every receipt's own `result_registry_digest` replaced by the fixed all-zero SHA-256 sentinel. Validators perform the same normalization before comparison; all other receipt and registry fields remain covered.
 
 Coverage confirmation also records the designated integration worktree ID. Rebinding goal-level closure to another worktree is a directional mutation with its own receipt. A non-Git project uses its stable attached execution-root identity.
 

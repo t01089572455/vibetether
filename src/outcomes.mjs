@@ -1,4 +1,8 @@
-import { readProjectJson, canonicalJson, safeRelative, sha256Text, boundedText, containsSecret } from './files.mjs';
+import { randomUUID } from 'node:crypto';
+import {
+  readProjectJson, canonicalJson, safeRelative, sha256Text, boundedText, containsSecret,
+  resolveInside, transactionalWrites,
+} from './files.mjs';
 import { conflictError } from './errors.mjs';
 import {
   OUTCOME_ACCEPTANCE_MAX, OUTCOME_COUNT_MAX, OUTCOME_DEPENDENCY_MAX,
@@ -15,7 +19,7 @@ const SOURCE_KEYS = new Set([
 ]);
 const OUTCOME_KEYS = new Set([
   'id', 'title', 'authority_sources', 'parent_id', 'dependencies', 'disposition',
-  'required_at', 'acceptance', 'decision_receipt', 'revision_digest',
+  'superseded_by', 'required_at', 'acceptance', 'decision_receipt', 'revision_digest',
 ]);
 const ACCEPTANCE_KEYS = new Set(['id', 'claim', 'evidence_kind', 'required_maturity', 'validator']);
 const VALIDATOR_KEYS = new Set([
@@ -122,7 +126,10 @@ function validateOutcome(value, label) {
   stringArray(value.authority_sources, `${label} authority_sources`, { max: 32, allowEmpty: false });
   if (value.parent_id !== null) logicalId(value.parent_id, `${label} parent_id`);
   stringArray(value.dependencies, `${label} dependencies`, { max: OUTCOME_DEPENDENCY_MAX, ids: true });
+  stringArray(value.superseded_by, `${label} superseded_by`, { max: OUTCOME_DEPENDENCY_MAX, ids: true });
   if (!OUTCOME_DISPOSITIONS.has(value.disposition)) throw conflictError(`${label} disposition is unsupported.`, 'INVALID_OUTCOMES');
+  if (value.disposition === 'superseded' && value.superseded_by.length === 0) throw conflictError(`${label} superseded Outcome requires replacements.`, 'INVALID_OUTCOMES');
+  if (value.disposition !== 'superseded' && value.superseded_by.length !== 0) throw conflictError(`${label} has replacements but is not superseded.`, 'INVALID_OUTCOMES');
   stringArray(value.required_at, `${label} required_at`, { max: 2 });
   if (value.required_at.some((item) => !REQUIRED_BOUNDARIES.has(item))) throw conflictError(`${label} required_at is unsupported.`, 'INVALID_OUTCOMES');
   if (!Array.isArray(value.acceptance) || value.acceptance.length > OUTCOME_ACCEPTANCE_MAX) throw conflictError(`${label} acceptance is invalid.`, 'INVALID_OUTCOMES');
@@ -157,8 +164,16 @@ export function emptyOutcomeRegistry(goalId = 'goal_project_delivery', goalRevis
   };
 }
 
+function registryDigestMaterial(value) {
+  const copy = structuredClone(value);
+  if (copy.coverage_decision) copy.coverage_decision.result_registry_digest = `sha256:${'0'.repeat(64)}`;
+  for (const outcome of copy.outcomes ?? []) if (outcome.decision_receipt) outcome.decision_receipt.result_registry_digest = `sha256:${'0'.repeat(64)}`;
+  return copy;
+}
+
 export function outcomeRegistryDigest(value) {
-  return `sha256:${sha256Text(canonicalJson(validateOutcomeRegistry(structuredClone(value))))}`;
+  const validated = validateOutcomeRegistry(structuredClone(value));
+  return `sha256:${sha256Text(canonicalJson(registryDigestMaterial(validated)))}`;
 }
 
 export function validateOutcomeRegistry(value) {
@@ -191,6 +206,7 @@ export function validateOutcomeRegistry(value) {
   for (const item of value.outcomes) {
     if (item.parent_id !== null && !outcomeIds.has(item.parent_id)) throw conflictError(`Outcome ${item.id} has an unknown parent.`, 'INVALID_OUTCOMES');
     for (const dependency of item.dependencies) if (!outcomeIds.has(dependency)) throw conflictError(`Outcome ${item.id} has an unknown dependency: ${dependency}`, 'INVALID_OUTCOMES');
+    for (const replacement of item.superseded_by) if (!outcomeIds.has(replacement)) throw conflictError(`Outcome ${item.id} has an unknown replacement: ${replacement}`, 'INVALID_OUTCOMES');
   }
   const bytes = Buffer.byteLength(canonicalJson(value), 'utf8');
   if (bytes > OUTCOME_REGISTRY_BUDGET_BYTES) throw conflictError(`Outcome registry exceeds ${OUTCOME_REGISTRY_BUDGET_BYTES} bytes.`, 'OUTCOMES_TOO_LARGE');
@@ -293,9 +309,131 @@ export async function auditCoverageSources(context, registryValue) {
   return { ok: issues.length === 0, sources, issues };
 }
 
+function decisionReceipt({ action, targetIds, priorDigest, userMessageLocator, reason }) {
+  return {
+    id: `decision-${randomUUID()}`,
+    action: boundedText(action, 96, 'Outcome decision action'),
+    target_ids: [...targetIds],
+    prior_registry_digest: priorDigest,
+    result_registry_digest: `sha256:${'0'.repeat(64)}`,
+    user_message_locator: boundedText(userMessageLocator, 500, 'User message locator'),
+    reason: boundedText(reason, 1000, 'Outcome decision reason'),
+    recorded_at: new Date().toISOString(),
+  };
+}
+
+function requireUserDecision(options = {}) {
+  if (typeof options.user_message_locator !== 'string' || !options.user_message_locator.trim()
+      || typeof options.reason !== 'string' || !options.reason.trim()) {
+    throw conflictError('Directional Outcome changes require a user message locator and reason; --yes alone is not authorization.', 'USER_DECISION_REQUIRED');
+  }
+}
+
+function finalizeReceiptDigest(registry, receipt) {
+  const resultDigest = outcomeRegistryDigest(registry);
+  receipt.result_registry_digest = resultDigest;
+  for (const item of registry.outcomes) if (item.decision_receipt?.id === receipt.id) item.decision_receipt.result_registry_digest = resultDigest;
+  if (registry.coverage_decision?.id === receipt.id) registry.coverage_decision.result_registry_digest = resultDigest;
+  validateOutcomeRegistry(registry);
+  return registry;
+}
+
+export function proposeOutcome(registryValue, outcomeValue) {
+  const registry = validateOutcomeRegistry(structuredClone(registryValue));
+  const outcome = structuredClone(outcomeValue);
+  if (outcome?.disposition !== 'candidate' || outcome?.decision_receipt !== null) throw conflictError('A proposed Outcome must be a non-authoritative candidate.', 'INVALID_OUTCOME_PROPOSAL');
+  if (registry.outcomes.some((item) => item.id === outcome.id)) throw conflictError(`Outcome already exists: ${outcome.id}`, 'OUTCOME_EXISTS');
+  registry.outcomes.push(outcome);
+  validateOutcomeRegistry(registry);
+  return registry;
+}
+
+export function decideOutcome(registryValue, { action, id, replacements = [], user_message_locator, reason } = {}) {
+  requireUserDecision({ user_message_locator, reason });
+  const registry = validateOutcomeRegistry(structuredClone(registryValue));
+  const item = registry.outcomes.find((candidate) => candidate.id === id);
+  if (!item) throw conflictError(`Outcome is not found: ${id}`, 'OUTCOME_NOT_FOUND');
+  const disposition = ({ confirm: 'required', defer: 'deferred', reject: 'rejected', supersede: 'superseded' })[action];
+  if (!disposition) throw conflictError(`Outcome decision is unsupported: ${action}`, 'INVALID_OUTCOME_DECISION');
+  if (item.disposition === 'superseded') throw conflictError(`Outcome is already superseded: ${id}`, 'OUTCOME_ALREADY_DISPOSITIONED');
+  if (action === 'supersede') {
+    stringArray(replacements, 'Outcome replacements', { max: OUTCOME_DEPENDENCY_MAX, ids: true, allowEmpty: false });
+    if (replacements.includes(id)) throw conflictError('An Outcome cannot supersede itself.', 'INVALID_OUTCOME_DECISION');
+    for (const replacement of replacements) if (!registry.outcomes.some((candidate) => candidate.id === replacement && !['candidate', 'rejected', 'superseded'].includes(candidate.disposition))) {
+      throw conflictError(`Replacement Outcome is not active: ${replacement}`, 'INVALID_OUTCOME_DECISION');
+    }
+  } else if (replacements.length) throw conflictError('Only supersede accepts replacement Outcomes.', 'INVALID_OUTCOME_DECISION');
+  const receipt = decisionReceipt({
+    action: action === 'confirm' ? 'confirm-required' : action,
+    targetIds: [id, ...replacements],
+    priorDigest: outcomeRegistryDigest(registry),
+    userMessageLocator: user_message_locator,
+    reason,
+  });
+  item.disposition = disposition;
+  item.superseded_by = action === 'supersede' ? [...replacements] : [];
+  item.decision_receipt = receipt;
+  return finalizeReceiptDigest(registry, receipt);
+}
+
+export async function confirmOutcomeCoverage(context, registryValue, worktreeId, options = {}) {
+  requireUserDecision(options);
+  const registry = validateOutcomeRegistry(structuredClone(registryValue));
+  const candidates = registry.outcomes.filter((item) => item.disposition === 'candidate').map((item) => item.id);
+  if (candidates.length) throw conflictError(`Coverage contains unresolved candidate Outcomes: ${candidates.join(', ')}`, 'OUTCOME_CANDIDATES_UNRESOLVED');
+  const audit = await auditCoverageSources(context, registry);
+  if (!audit.ok) {
+    const summary = audit.issues.map((item) => `${item.code}:${item.source_id}`).join(', ');
+    throw conflictError(`Exact source-ID coverage audit failed: ${summary}`, 'COVERAGE_AUDIT_FAILED');
+  }
+  if (typeof worktreeId !== 'string' || !worktreeId) throw conflictError('Coverage confirmation requires the integration worktree identity.', 'WORKTREE_ID_REQUIRED');
+  const receipt = decisionReceipt({
+    action: 'confirm-coverage',
+    targetIds: [registry.goal_id],
+    priorDigest: outcomeRegistryDigest(registry),
+    userMessageLocator: options.user_message_locator,
+    reason: options.reason,
+  });
+  registry.coverage_status = 'confirmed';
+  registry.integration_worktree_id = worktreeId;
+  registry.coverage_decision = receipt;
+  return { registry: finalizeReceiptDigest(registry, receipt), audit };
+}
+
+export function outcomeStatus(registryValue) {
+  const registry = validateOutcomeRegistry(structuredClone(registryValue));
+  const counts = Object.fromEntries([...OUTCOME_DISPOSITIONS].map((state) => [state, 0]));
+  for (const item of registry.outcomes) counts[item.disposition] += 1;
+  const observedDigest = outcomeRegistryDigest(registry);
+  const decisionDigest = registry.coverage_decision?.result_registry_digest ?? null;
+  const effectiveCoverageStatus = registry.coverage_status === 'confirmed' && decisionDigest !== observedDigest ? 'changed' : registry.coverage_status;
+  return {
+    goal_id: registry.goal_id,
+    goal_revision_digest: registry.goal_revision_digest,
+    coverage_status: effectiveCoverageStatus,
+    declared_coverage_status: registry.coverage_status,
+    integration_worktree_id: registry.integration_worktree_id,
+    registry_digest: observedDigest,
+    counts,
+    outcomes: registry.outcomes.map((item) => ({ id: item.id, title: item.title, disposition: item.disposition, required_at: item.required_at, acceptance_ids: item.acceptance.map((entry) => entry.id), superseded_by: item.superseded_by })),
+  };
+}
+
+export async function writeOutcomeRegistry(context, registryValue) {
+  const registry = validateOutcomeRegistry(structuredClone(registryValue));
+  const projection = renderInitialProgress(registry);
+  await transactionalWrites([
+    { target: resolveInside(context.root, context.manifest.outcome_index, 'Outcome registry path'), content: canonicalJson(registry), mode: 0o644 },
+    { target: resolveInside(context.root, context.manifest.progress_projection, 'Progress projection path'), content: projection, mode: 0o644 },
+  ]);
+  return registry;
+}
+
 export function renderInitialProgress(registryValue) {
   const registry = validateOutcomeRegistry(structuredClone(registryValue));
   const registryDigest = outcomeRegistryDigest(registry);
+  const required = registry.outcomes.filter((item) => item.disposition === 'required');
+  const remaining = required.map((item) => item.id).sort();
   return [
     '# VibeTether Progress',
     '',
@@ -304,10 +442,10 @@ export function renderInitialProgress(registryValue) {
     `Goal: ${registry.goal_id}`,
     `Goal revision: ${registry.goal_revision_digest}`,
     `Coverage status: ${registry.coverage_status}`,
-    'Integration worktree: not-designated',
-    'Required: 0 | Open: 0 | In progress: 0 | Satisfied: 0 | Stale: 0 | Blocked: 0',
-    'Current Outcome: none',
-    'Remaining Outcome IDs: none',
+    `Integration worktree: ${registry.integration_worktree_id ?? 'not-designated'}`,
+    `Required: ${required.length} | Open: ${required.length} | In progress: 0 | Satisfied: 0 | Stale: 0 | Blocked: 0`,
+    `Current Outcome: ${remaining[0] ?? 'none'}`,
+    `Remaining Outcome IDs: ${remaining.length ? remaining.join(', ') : 'none'}`,
     'Precise completion label: NOT_STARTED',
     `Generation digest: ${registryDigest}`,
     'Regenerate: vibetether outcomes status --write-progress --project .',

@@ -34,6 +34,7 @@ function outcome(id = 'outcome_export_contract') {
     authority_sources: ['truth:truth_product_export_contract'],
     parent_id: null,
     dependencies: [],
+    superseded_by: [],
     disposition: 'required',
     required_at: ['goal', 'release'],
     acceptance: [acceptance()],

@@ -26,6 +26,10 @@ import { uninstallProject } from './uninstall.mjs';
 import { parseIntent } from './intent.mjs';
 import { classifyTaskText } from './task-classifier.mjs';
 import { answerDeepQuestion, grantDeepPermit, prepareDeep, readDeepState, revokeDeepPermit } from './deep.mjs';
+import {
+  confirmOutcomeCoverage, decideOutcome, loadOutcomeRegistry, outcomeStatus,
+  proposeOutcome, writeOutcomeRegistry,
+} from './outcomes.mjs';
 
 const HELP=`VibeTether ${VERSION} — long-task control kernel and cold Skill broker
 
@@ -40,6 +44,7 @@ Usage:
   vibetether step abandon --reason TEXT
   vibetether step heartbeat | reanchor | break-lease | break-state-lock --reason TEXT --yes
   vibetether truth add|confirm|decline|list
+  vibetether outcomes status|list|propose|confirm|defer|reject|supersede|coverage confirm
   vibetether experience add|confirm|status|audit
   vibetether worktree attach|list|create|remove|prune
   vibetether worktree handoff create|accept|finish
@@ -56,7 +61,7 @@ Usage:
 Exit codes: 2 invalid input, 3 conflict or safety refusal, 4 health check failed.
 `;
 
-const MULTI=new Set(['bundle','signal','success_evidence','success_check_json','evidence_command_json','evidence_artifact','output_proof_json','exit_proof_json','scope_boundary','constraint','trigger','negative_trigger','capability','phase','host','os','protected_capability','evidence_id','experience_id','artifact','arg','output','exit_evidence','fact','assumption','decision','operation','path']);
+const MULTI=new Set(['bundle','signal','success_evidence','success_check_json','evidence_command_json','evidence_artifact','output_proof_json','exit_proof_json','scope_boundary','constraint','trigger','negative_trigger','capability','phase','host','os','protected_capability','evidence_id','experience_id','artifact','arg','output','exit_evidence','fact','assumption','decision','operation','path','replacement']);
 const BOOLEAN=new Set(['json','yes','dry_run','confirmed','network','external_write','code_write','force','remove_contract','deep','confirmed_by_user','interactive']);
 
 function key(flag) { return flag.replace(/^--/,'').replaceAll('-','_'); }
@@ -156,6 +161,34 @@ export async function main(args=[],runtime={}) {
     else throw usageError('Unknown truth action.');
     if (!options.yes) throw conflictError('Truth changes require --yes.','CONFIRMATION_REQUIRED');
     await writeProjectText(context.root,context.manifest.truth_index,renderTruthMap(next)); return response({status:action,path:options.path?.[0]??options.path},options.json);
+  }
+  if (command==='outcomes') {
+    const {context,runtime:rt}=await contextRuntime(options.project);
+    const registry=await loadOutcomeRegistry(context);
+    if (!action||action==='status') return response(outcomeStatus(registry),options.json);
+    if (action==='list') return response({coverage_status:outcomeStatus(registry).coverage_status,outcomes:outcomeStatus(registry).outcomes},options.json);
+    if (action==='propose') {
+      const candidate=json(options.outcome_json,'outcome-json');
+      const next=proposeOutcome(registry,candidate);
+      if (!options.yes) return response({applied:false,action:'propose',outcome:candidate,registry_digest:outcomeStatus(next).registry_digest},options.json);
+      await writeOutcomeRegistry(context,next);
+      return response({applied:true,action:'propose',outcome:candidate,registry_digest:outcomeStatus(next).registry_digest},options.json);
+    }
+    if (['confirm','defer','reject','supersede'].includes(action)) {
+      if (!options.id) throw usageError(`outcomes ${action} requires --id.`);
+      if (!options.yes) return response({applied:false,action,id:options.id,replacements:options.replacement??[]},options.json);
+      const next=decideOutcome(registry,{action,id:options.id,replacements:options.replacement??[],user_message_locator:options.user_message_locator,reason:options.reason});
+      await writeOutcomeRegistry(context,next);
+      const item=next.outcomes.find((candidate)=>candidate.id===options.id);
+      return response({applied:true,action,id:item.id,disposition:item.disposition,superseded_by:item.superseded_by,decision_receipt:item.decision_receipt},options.json);
+    }
+    if (action==='coverage'&&options._[1]==='confirm') {
+      if (!options.yes) return response({applied:false,action:'confirm-coverage',coverage_status:registry.coverage_status,integration_worktree_id:rt.paths.worktree_id},options.json);
+      const result=await confirmOutcomeCoverage(context,registry,rt.paths.worktree_id,{user_message_locator:options.user_message_locator,reason:options.reason});
+      await writeOutcomeRegistry(context,result.registry);
+      return response({applied:true,coverage_status:result.registry.coverage_status,integration_worktree_id:result.registry.integration_worktree_id,registry_digest:outcomeStatus(result.registry).registry_digest,audit:result.audit},options.json);
+    }
+    throw usageError('Unknown outcomes action.');
   }
   if (command==='experience') {
     const {context,authority,runtime}=await contextRuntime(options.project); validateExperienceIndex(context.experience); const skillsDigest=skillsLockDigest(context.skills);
