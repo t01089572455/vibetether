@@ -74,7 +74,9 @@ The canonical shape is:
       "truth_id": "truth_product_requirements",
       "source_revision_digest": "sha256:...",
       "expected_id_count": 42,
-      "expected_id_set_digest": "sha256:..."
+      "expected_id_set_digest": "sha256:...",
+      "mapping_path": ".vibetether/coverage/product-requirements.json",
+      "mapping_revision_digest": "sha256:..."
     }
   ],
   "outcomes": [
@@ -172,6 +174,35 @@ historical
 rejected
 superseded by named source IDs
 ```
+
+The registry does not store only a count and digest while leaving the individual dispositions implicit. Each `coverage_sources[]` entry points to a project-owned mapping sidecar through `mapping_path` and binds its reviewed bytes through `mapping_revision_digest`. The sidecar has this canonical shape:
+
+```json
+{
+  "schema_version": 1,
+  "source_id": "source_product_requirements",
+  "source_revision_digest": "sha256:...",
+  "entries": [
+    {
+      "source_item_id": "REQ-001",
+      "disposition": "mapped",
+      "outcome_ids": ["outcome_export_contract"],
+      "equivalence_group": "export-user-result",
+      "reason": "REQ-001 describes the same observable export result governed by this Outcome."
+    },
+    {
+      "source_item_id": "REQ-002",
+      "disposition": "duplicate_of",
+      "target_source_item_ids": ["REQ-001"],
+      "reason": "The later requirement repeats REQ-001 without adding a distinct user result."
+    }
+  ]
+}
+```
+
+`disposition` is exactly one of `mapped`, `duplicate_of`, `historical`, `rejected`, or `superseded_by`. A `mapped` entry names one or more existing Outcome IDs and may name one equivalence group. `duplicate_of` and `superseded_by` name existing source item IDs in `target_source_item_ids`; `historical` and `rejected` name neither outcomes nor target IDs. Every entry includes a bounded reason. Unknown fields, duplicated `source_item_id` values, cyclic duplicate/supersession references, dangling Outcome or source-item references, and incompatible fields fail closed.
+
+The mapping sidecar is `user-authority`: discovery may propose candidate entries, but changing a disposition, target, equivalence group, or reason requires the same user-grounded decision rules as Outcome mutations. System-generated source extraction may refresh a separate candidate file; it cannot overwrite the confirmed mapping sidecar.
 
 The coverage audit fails on missing IDs, unknown IDs, duplicate active ownership, unresolved dispositions, count mismatch, source revision drift, or ID-set digest mismatch. Multiple raw IDs may map to one real Outcome equivalence group, but template evidence copied across IDs is not accepted as per-ID proof.
 

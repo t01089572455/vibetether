@@ -68,7 +68,7 @@ Harden the exact RC.3 artifact on an isolated integration branch until its adapt
 
 ## Change Budget and Slices
 
-- Budget: up to nine independently reviewable commits before the first remote review branch; each commit must keep unrelated v0.6.3 and workspace changes untouched. The expansion from six is explicitly authorized by the user to include the newly reviewed Goal/Outcome Coverage failure mode.
+- Budget: up to eighteen independently reviewable commits before the first remote review branch; each commit must keep unrelated v0.6.3 and workspace changes untouched. The expansion from nine is limited to the approved RC4 Goal/Outcome slices, exact-package proof, and their review fixes; it does not authorize new product scope.
 - Slice 1: Windows path canonicalization, global-test isolation, and accurate test aggregation.
 - Slice 2: task classification, one-question deep readiness, decision receipts, and permit scope binding.
 - Slice 3: evidence/permit/lease compare-and-set completion, final-byte seal, and non-bypassable success capture.
@@ -76,6 +76,7 @@ Harden the exact RC.3 artifact on an isolated integration branch until its adapt
 - Slice 5: Provider immutable verification, complete resource activation, permission environment, archive limits, and cache recovery.
 - Slice 6: exact-package install journeys, live v0.6.3 migration/rollback, route held-out evaluation, fault injection, Windows/Ubuntu Node matrices, documentation, and review.
 - Slice 7: Goal/Outcome Coverage Contract, exact source-ID audit, deterministic tracked progress projection, runtime progress, route-to-outcome binding, layered Doctor boundaries, migration/rollback coverage, longitudinal false-completion evaluation, and exact-package proof.
+- Recovery regression: a legacy checkpoint whose satisfied route and pending Truth reconciliation refer to different route instances must enter a recoverable blocked state with an exact repair action; it must not permanently prevent a new plan or require silent manual state edits.
 - Checkpoint: after every slice, run its focused tests, `npm run check`, inspect the diff against this packet, and commit only the bounded slice.
 
 ## Acceptance Criteria
@@ -95,7 +96,7 @@ Harden the exact RC.3 artifact on an isolated integration branch until its adapt
 
 - Verification commands: `npm.cmd run check`, focused `node --test` commands per slice, `npm.cmd run test:coverage`, `npm.cmd run test:compat:v063-live`, package install smoke tests, archive manifest comparison, and GitHub Actions matrix jobs.
 - Raw result summary: exact RC.3 Git tree matches `d70304a3cb5e2c8ee663c12a64d55dc2af4cbb46`; Windows `npm run check` currently fails in `init-context.test.mjs`, `safety-cli.test.mjs`, and `worktree.test.mjs`; the runner also reports zero passes because it parses only one TAP summary spelling.
-- Scope review: compare every changed path with the six slices, inspect for writes outside isolated fixtures, verify remote `main` is unchanged, and reject unrelated refactors.
+- Scope review: compare every changed path with the seven slices, inspect for writes outside isolated fixtures, verify remote `main` is unchanged, and reject unrelated refactors.
 - Artifact evidence: record final Git commit/tree, ZIP/TGZ SHA-256 values, file manifests, package contents, matrix URLs, and exact exit codes in this packet before marking it complete.
 
 ## Independent Review
