@@ -1,7 +1,5 @@
-.worktrees/
 node_modules/
-*.tgz
 coverage/
-.vibetether/state/
-*.bak
-
+*.tgz
+*.zip
+.DS_Store

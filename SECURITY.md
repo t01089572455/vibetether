@@ -1,29 +1,19 @@
 # Security Policy
 
-## Supported versions
+## Supported version
 
-The `0.2.x` preview line receives security fixes. Preview interfaces may still change, but managed-file safety, path containment, provider supply-chain behavior, dependency behavior, and sensitive-data handling are treated as security-relevant contracts.
+This repository contains a 1.0.0 release candidate. Security support and final-release policy will be established only after RC cross-platform validation.
 
-## Reporting a vulnerability
+## Reporting
 
-Please use [GitHub private vulnerability reporting](https://github.com/t01089572455/vibetether/security/advisories/new). Do not open a public issue for a vulnerability that could expose user files, credentials, repository data, or an installation path.
-
-Include the affected version, operating system, Node.js version, reproduction steps, impact, and any suggested mitigation. Remove secrets and private repository content from the report.
+Report suspected vulnerabilities privately to the repository owner rather than opening a public issue containing exploit details or credentials. Include the affected command, platform, minimal reproduction, and expected safety boundary. Never attach real tokens, private keys, or user data.
 
 ## Security model
 
-VibeTether:
+VibeTether rejects project path traversal, protected Git metadata, known credential paths, obvious secret values, and symlinked authority, runtime, Provider, and evidence paths. Project and global writes use recoverable replacement and multi-file rollback paths; fault-injection tests cover partial writes, replacement failure, and rollback conflicts. Provider objects are content-addressed and rehashed before activation. Receipts are digest-protected. External Provider permissions are hard filters.
 
-- writes only inside the selected project after path and symlink checks;
-- uses bounded managed blocks and preserves user-authored instruction content;
-- creates a first-change backup before modifying existing managed surfaces;
-- refuses malformed markers and modified installed Skill copies;
-- fetches curated providers only during explicit initialization, with interactive Git credentials disabled;
-- pins provider sources to exact commits and verifies complete Skill fingerprints and license hashes;
-- installs upstream license copies and records source, integrity, path, and ownership in a project lock;
-- excludes local runtime checkpoints from version control by default;
-- does not install remote providers during an active task or from runtime routing;
-- does not add telemetry, privileged hooks, MCP servers, deployment access, or external writes by default;
-- does not store private chain-of-thought in manifests or checkpoints.
+Deep mode, Provider receipts, and permission filters are policy gates, not an operating-system sandbox. Activated Provider scripts still run with the operating-system permissions of the invoking user, but VibeTether supplies a minimal environment allowlist and invalidates the activation when its route exits. Review Provider content, provenance, license evidence, and permissions before pinning it. Sources supported only by a README license declaration remain marked for legal review before public redistribution. Network, external writes, code writes, release, migration, and destructive operations remain explicit authorization boundaries.
 
-Project instruction files are behavioral guidance, not a permission boundary. Continue to use operating-system permissions, repository protections, secret scanning, code review, and host-native approval controls.
+## Out of scope
+
+Model prompt injection, a malicious user who controls the entire project and operating-system account, weaknesses in Git/Node/npm, and semantic errors in approved project Truth are outside the deterministic security guarantee, although VibeTether may surface conflicts and stale state.

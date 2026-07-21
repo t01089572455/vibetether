@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "source_repository": "https://github.com/t01089572455/vibetether",
+  "source_release": "v0.6.3",
+  "resolved_commit": "9097a0d7014740f592132f50bc41d203b0b80ee5",
+  "fixture_kind": "sanitized-installed-project",
+  "provenance": "Sanitized from an installed VibeTether 0.6.3 project shape supplied for compatibility review, with the canonical v0.6.3 Truth Map sections and control pointers retained.",
+  "privacy": "Project names, goals, evidence, paths, and user prose were replaced while preserving the v0.6.3 schema and lifecycle structure.",
+  "limitations": "This fixture is not a byte-identical clone of a private user project and contains no credentials or private data. Live release compatibility is separately exercised by scripts/test-live-v063-migration.mjs when network acquisition is authorized."
+}

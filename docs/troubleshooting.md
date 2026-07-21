@@ -1,148 +1,42 @@
 # Troubleshooting
 
-Start with:
+## No Contract found
 
-```sh
-node .vibetether/bin/vibetether.mjs doctor --project . --boundary ordinary --json
-```
+Run `vibetether init`, or use `vibetether worktree attach --contract-root <tracked-worktree>` for a linked worktree of the same Git repository.
 
-If the project-local launcher is missing or cannot start, use the documented
-Codeload acquisition command to rerun `init`; do not create an unrelated
-launcher by hand.
+## Contract missing on this branch
 
-## Doctor reports a changed launcher or CLI version mismatch
+The Context Capsule found a valid tracked Contract in another worktree. Merge or deliberately copy the Contract into this branch before consequential writes. VibeTether does not silently treat another branch as current authority.
 
-The manifest records the managed launcher fingerprint, versioned package tag,
-and expected release. A byte mismatch is a project conflict. Back up intentional
-customization under another filename, then rerun the canonical `init` command.
+## Active writer lease
 
-A version mismatch means the CLI currently inspecting the project differs from
-the project's recorded baseline. It is attention during ordinary work and a
-blocking issue at completion-like boundaries. Prefer:
+Another route owns this worktree. Use another worktree, finish or abandon the existing route, or inspect it before an explicit `step break-lease`. Never break a live lease merely to bypass coordination.
 
-```sh
-node .vibetether/bin/vibetether.mjs doctor --project . --boundary completion
-```
+## Stale execution snapshot
 
-If that launcher itself is stale, rerun the canonical update command from the
-installation guide. The launcher still needs Node.js, npm, and network access to
-the pinned Codeload release unless npm already has the package cached.
-If `VIBETETHER_CLI_PACKAGE` is set, it deliberately overrides the recorded
-acquisition source for that process; clear untrusted or accidental values before
-diagnosing ordinary project behavior.
+Files, branch, HEAD, or dirty bytes changed after evidence. Run fresh verification and finish a new bounded step.
 
-## npm exits 128 before VibeTether starts
+## Stale Experience
 
-Use the documented Codeload tarball form:
+Inspect the audit reasons. Re-run the workflow under current authority and environment, then confirm it again with fresh evidence. Do not manually edit hashes to restore proven status.
 
-```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.3 vibetether init --project .
-```
+## Provider unavailable
 
-The shorter `github:t01089572455/vibetether` shorthand can make npm invoke Git
-or SSH and exit 128 before VibeTether is running. VibeTether cannot recover an
-acquisition failure that happens before its executable starts.
+Check channel, pin, host, OS, permission grants, positive and negative triggers, cache fingerprint, and project failure history. Optional work uses the built-in fallback; a permission-sensitive capability may stop instead of bypassing the missing authorization.
 
-`curl -I https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.3`
-tests package acquisition separately from later provider Git access.
+## Invalid runtime
 
-If `vibetether --version` unexpectedly reports an older release, check whether
-the command omitted the current README's cache key
-(`refs/heads/main?v=0.6.3`). npm can reuse a cached package or `npx` execution
-environment for the bare moving URL even with `--prefer-online` or `--force`.
-Copy the current README command or switch to the fixed release tag above, then
-verify the version before `init`.
+The corrupt current projection is moved to quarantine and replaced with a small blocked state. Re-anchor from the validated Contract; do not copy prose from the invalid file back into runtime.
 
-## A provider fetch reports TLS or an unexpected EOF
 
-Recognized transient TLS failures receive at most three attempts with bounded
-backoff. On Windows, a Schannel-specific failure switches later provider attempts
-to OpenSSL. Authentication, missing repository, commit, fingerprint, and license
-errors are not retried as transient.
+## User decision or Deep Permit required
 
-For a pinned public GitHub provider, an exhausted transient Git fetch then uses
-an exact-commit Codeload archive fallback. VibeTether still validates the full
-catalog inventory, required license evidence, and every declared Skill
-fingerprint before the provider can be installed. The fallback is deliberately
-not used for authentication failures, non-GitHub sources, changed commits, or
-integrity failures. If extraction itself reports that `tar` is unavailable,
-enable a standard `tar` command or resolve the normal Git transport and rerun
-the same command.
+A vague or direction-sensitive request cannot start code-write. Clarify the requested behavior and acceptance evidence, then retry with a durable `--confirmed-by-user --decision-reason` record. For explicit deep mode, prepare and show the Start Card, obtain user confirmation, and issue a fresh `deep permit`.
 
-After a successful fetch, the lock, commit, catalog path, fingerprints, and
-license evidence form a verified cached catalog. Repeating an unchanged
-initialization reuses it without provider network access.
+## Route contract unsatisfied
 
-If Schannel keeps failing, use Git's command-session configuration in Command
-Prompt, then rerun the same install:
+Provide every non-path required output with `--output`, create every path-like output, and acknowledge each declared exit-evidence statement with `--exit-evidence`. A successful empty command cannot replace missing outputs.
 
-```bat
-set "GIT_CONFIG_COUNT=1"
-set "GIT_CONFIG_KEY_0=http.sslBackend"
-set "GIT_CONFIG_VALUE_0=openssl"
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v0.6.3 vibetether init --project . --agent both --profile extended --bundle web --bundle production --yes
-```
+## Rollback conflict
 
-`GIT_SSL_BACKEND=openssl` alone does not configure Git's HTTP backend.
-
-## Windows reports EPERM or EACCES
-
-On a first install, the current release copies complete resources into the final
-directory and writes `SKILL.md` last. This activation-last path avoids renaming a
-temporary discoverable Skill after Codex or Claude has already opened it. An
-error that names `.vibe-tether.<id>.tmp` inside an agent directory indicates an
-older installer path; rerun with the current Codeload release.
-
-Codex, Claude Code, an editor, antivirus, or another process may hold the active
-Skill without delete sharing. A host cannot replace the Skill it has locked.
-VibeTether records a pending verified replacement instead of deleting blindly.
-Close the owning host and rerun the same command. See the
-[Windows lifecycle runbook](operations/windows-skill-lifecycle.md).
-
-## Doctor reports a changed managed Skill
-
-VibeTether will not overwrite or remove an unknown or customized copy. Back it
-up, compare it with the current release, and move intentional customization to a
-project-owned Skill name before retrying. Registered canonical older releases
-and portable LF/CRLF differences are handled separately from custom content.
-
-## A provider is unavailable during a task
-
-Run the portable `capabilities` command to refresh live availability. Optional
-providers use their declared fallback. Do not download a provider in the middle
-of active work; change the profile or bundle through a reviewed portable `init`
-command.
-
-## The expected Web or production Skill is absent
-
-Inspect `bundle_signals` in `.vibetether/project.yaml`. Select `--bundle web` or
-`--bundle production` explicitly, or use `--no-auto-bundles` when repository
-evidence should not select bundles.
-
-## Initialization stops on license evidence
-
-This is intentional. Changed declarations, unexpected Skill directories, wrong
-commits, fingerprint mismatch, or missing required evidence stop before project
-writes. Update the audited registry in a release; do not bypass the check.
-
-## Project instruction markers conflict
-
-VibeTether edits only its exact marked block. Preserve user text, repair duplicate
-or reversed markers, and rerun `init --dry-run`.
-
-## Upgrade reports a missing canonical Truth Map section
-
-Release 0.6.2 treated every pre-existing `.vibetether/TRUTH.md` as the canonical
-machine index. Some older projects used that path for a user-authored prose truth
-register instead. Upgrade with the current release: it preserves a legacy
-manifest-declared prose file byte-for-byte and routes the canonical index to
-`.vibetether/TRUTH-MAP.md`.
-
-If the error names `.vibetether/TRUTH-MAP.md`, that alternate path is already
-occupied by non-canonical content. VibeTether stops before writing. Back up and
-rename the unrelated sidecar, then rerun the same update command.
-
-## PowerShell blocks npm.ps1
-
-Use `npm.cmd` or run the Codeload command from Command Prompt. Do not weaken the
-machine execution policy merely for installation.
+Rollback stopped because managed assets changed after migration. VibeTether preserves the current bytes in the reported conflict directory rather than overwriting them. Merge the original, migration output, and current versions deliberately.

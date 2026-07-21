@@ -1,6 +1,0 @@
-interface:
-  display_name: "VibeTether"
-  short_description: "Automatic readiness checks and advisory Skill routing"
-  default_prompt: "Use $vibe-tether to assess whether this task is ready to start, investigate discoverable facts, re-anchor project truth, and recommend the best next Skill or fallback before implementation."
-policy:
-  allow_implicit_invocation: true

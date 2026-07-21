@@ -1,149 +1,93 @@
-import { createHash } from 'node:crypto';
-import { lstat, readFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { rejectSymlinkPath, resolveInside } from './files.mjs';
-import { validateProviderLock } from './managed-project-state.mjs';
-import { skillFingerprint } from './skill-install.mjs';
+import { conflictError } from './errors.mjs';
+import {
+  assertSafeId, atomicJson, boundedText, copyVerifiedDirectory, hashTree, readJsonFile,
+  rejectAbsoluteSymlinkChain, safeRelative, withFileLock,
+} from './files.mjs';
+import { cacheHome } from './paths.mjs';
+import { validateProviderCard } from './provider-registry.mjs';
 
-function portablePath(value) {
-  return String(value ?? '').replaceAll('\\', '/');
-}
+export function providerObjectPath(objectHash) { return path.join(cacheHome(),'providers','objects',objectHash); }
+export function providerCardPath(id) { return path.join(cacheHome(),'providers','cards',`${id}.json`); }
+function providerLockPath(id) { return path.join(cacheHome(),'providers','locks',`${id}.lock`); }
 
-function evidenceFor(source) {
-  return source.license_evidence ?? {
-    mode: 'full-text',
-    path: source.license_path,
-  };
-}
-
-function sourceMetadataMatches(source, lockedSource) {
-  if (!lockedSource
-      || lockedSource.id !== source.id
-      || lockedSource.repository !== source.repository
-      || lockedSource.ref !== source.ref
-      || String(lockedSource.commit).toLowerCase() !== String(source.commit).toLowerCase()
-      || lockedSource.license !== source.license
-      || lockedSource.license_path !== source.license_path) return false;
-
-  const desiredEvidence = evidenceFor(source);
-  const lockedEvidence = evidenceFor(lockedSource);
-  if (lockedEvidence.mode !== desiredEvidence.mode || lockedEvidence.path !== desiredEvidence.path) return false;
-  if (desiredEvidence.mode === 'readme-declaration') {
-    return lockedEvidence.declaration === desiredEvidence.declaration
-      && lockedEvidence.sha256 === desiredEvidence.sha256;
+function frontmatter(source) {
+  const match=String(source).match(/^---\n([\s\S]*?)\n---\n/);
+  if (!match) throw conflictError('Provider SKILL.md requires YAML frontmatter.','INVALID_PROVIDER');
+  const fields={};
+  for (const line of match[1].split('\n')) {
+    const item=line.match(/^([a-z_]+):\s*(.+)$/);
+    if (item) fields[item[1]]=item[2].trim().replace(/^['"]|['"]$/g,'');
   }
-  return true;
+  if (!fields.name||!fields.description) throw conflictError('Provider frontmatter requires name and description.','INVALID_PROVIDER');
+  return fields;
 }
 
-async function verifiedLicense(root, source, lockedSource) {
-  const desiredEvidence = evidenceFor(source);
-  if (desiredEvidence.mode === 'readme-declaration') {
-    return {
-      license_evidence: { ...lockedSource.license_evidence },
-    };
-  }
-
-  const relativePath = `.vibetether/licenses/${source.id}.LICENSE.txt`;
-  if (portablePath(lockedSource.license_installation?.path) !== relativePath
-      || !/^[a-f0-9]{64}$/.test(lockedSource.license_sha256 ?? '')) return null;
-  try {
-    await rejectSymlinkPath(root, relativePath);
-    const target = resolveInside(root, relativePath);
-    const entry = await lstat(target);
-    if (!entry.isFile() || entry.isSymbolicLink()) return null;
-    const bytes = await readFile(target);
-    const actual = createHash('sha256').update(bytes).digest('hex');
-    if (actual !== lockedSource.license_sha256) return null;
-    return {
-      license_evidence: {
-        ...desiredEvidence,
-        sha256: actual,
-      },
-      license_content: bytes.toString('utf8'),
-      license_sha256: actual,
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function verifiedSource(root, source, lock) {
-  const lockedSource = lock.sources.find((entry) => entry.id === source.id);
-  if (!sourceMetadataMatches(source, lockedSource)) return null;
-  const license = await verifiedLicense(root, source, lockedSource);
-  if (!license) return null;
-
-  const skills = [];
-  for (const skill of source.skills) {
-    const catalog = lock.catalog.find((entry) => entry.id === skill.id);
-    const relativePath = `.vibetether/providers/catalog/${source.id}/${skill.install_name}`;
-    if (!catalog
-        || catalog.source_id !== source.id
-        || catalog.install_name !== skill.install_name
-        || catalog.fingerprint !== skill.fingerprint
-        || portablePath(catalog.installation?.path) !== relativePath) return null;
-    try {
-      await rejectSymlinkPath(root, relativePath);
-      const sourcePath = resolveInside(root, relativePath);
-      if (await skillFingerprint(sourcePath) !== skill.fingerprint) return null;
-      skills.push({
-        ...skill,
-        source_id: source.id,
-        repository: source.repository,
-        ref: source.ref,
-        commit: source.commit,
-        license: source.license,
-        source_path: sourcePath,
-      });
-    } catch {
-      return null;
+async function discoverFiles(root) {
+  const resources=[]; const scripts=[];
+  async function walk(directory,prefix='') {
+    const entries=await readdir(directory,{withFileTypes:true});
+    for (const entry of entries.sort((a,b)=>a.name.localeCompare(b.name))) {
+      const relative=prefix?`${prefix}/${entry.name}`:entry.name;
+      const target=path.join(directory,entry.name);
+      if (entry.isSymbolicLink()) throw conflictError(`Provider contains symbolic link: ${relative}`,'SYMLINK_PATH');
+      if (entry.isDirectory()) await walk(target,relative);
+      else if (entry.isFile()&&relative!=='SKILL.md') {
+        if (relative.startsWith('scripts/')) scripts.push(relative); else resources.push(relative);
+      } else if (!entry.isFile()) throw conflictError(`Provider contains unsupported file type: ${relative}`,'UNSAFE_PROVIDER');
     }
   }
-
-  return {
-    repository: {
-      source_id: source.id,
-      repository: source.repository,
-      ref: source.ref,
-      commit: source.commit,
-      license: source.license,
-      ...license,
-    },
-    skills,
-    warnings: evidenceFor(source).mode === 'readme-declaration'
-      ? [`${source.id} declares ${source.license} in ${evidenceFor(source).path}; complete license text is not present upstream.`]
-      : [],
-  };
+  await walk(root); return {resources,scripts};
 }
 
-export async function resolveLocalProviderStage(root, sources, existingLock) {
-  const lock = validateProviderLock(existingLock);
-  if (!lock || existingLock.schema_version !== 2) {
-    return { repositories: [], skills: [], warnings: [], unresolved: [...sources] };
-  }
-
-  const repositories = [];
-  const skills = [];
-  const warnings = [];
-  const unresolved = [];
-  for (const source of sources) {
-    const resolved = await verifiedSource(root, source, lock);
-    if (!resolved) {
-      unresolved.push(source);
-      continue;
-    }
-    repositories.push(resolved.repository);
-    skills.push(...resolved.skills);
-    warnings.push(...resolved.warnings);
-  }
-  return { repositories, skills, warnings, unresolved };
+export async function importProvider(options) {
+  const id=assertSafeId(options.id,'Provider id');
+  const source=await rejectAbsoluteSymlinkChain(path.resolve(options.source),{allowMissing:false});
+  const skillSource=await readFile(path.join(source,'SKILL.md'),'utf8').catch(()=>null);
+  if (!skillSource) throw conflictError('Provider source is missing SKILL.md.','INVALID_PROVIDER');
+  const meta=frontmatter(skillSource);
+  if (meta.name!==id) throw conflictError(`Provider id ${id} does not match SKILL.md name ${meta.name}.`,'INVALID_PROVIDER');
+  const fingerprint=await hashTree(source);
+  const objectPath=providerObjectPath(fingerprint);
+  await copyVerifiedDirectory(source,objectPath,fingerprint);
+  const {resources,scripts}=await discoverFiles(objectPath);
+  const capabilities=(options.capabilities??[]).map((item)=>assertSafeId(item,'Provider capability'));
+  const phases=(options.phases??[]).map((item)=>String(item).toUpperCase());
+  if (!capabilities.length||!phases.length) throw conflictError('Provider import requires at least one capability and phase.','INVALID_PROVIDER');
+  const card=validateProviderCard({
+    id,channel:'experimental',builtin:false,version:boundedText(options.version??'unversioned',100,'Provider version'),
+    source:boundedText(options.source_label??source,500,'Provider source'),license:boundedText(options.license,100,'Provider license'),
+    object_hash:fingerprint,fingerprint,capabilities,phases,
+    positive_triggers:(options.positive_triggers??[]).map((item)=>String(item)),
+    negative_triggers:(options.negative_triggers??[]).map((item)=>String(item)),
+    hosts:options.hosts??['codex','claude'],operating_systems:options.operating_systems??['linux','darwin','win32'],
+    permissions:{network:options.network===true,external_write:options.external_write===true,code_write:options.code_write===true},
+    context_bytes:Buffer.byteLength(skillSource,'utf8'),
+    quality:{trigger_precision:0,trigger_recall:0,output_gain:0,evaluated_at:new Date(0).toISOString()},
+    description:meta.description,path:objectPath,resources,scripts,
+    worker_recommended:Buffer.byteLength(skillSource,'utf8')>12*1024,
+    created_at:new Date().toISOString(),updated_at:new Date().toISOString(),
+  });
+  await mkdir(path.dirname(providerCardPath(id)),{recursive:true});
+  return withFileLock(providerLockPath(id),async()=>{
+    const prior=await readJsonFile(providerCardPath(id),'Provider card',{allowMissing:true});
+    if (prior&&prior.object_hash!==fingerprint) throw conflictError(`Provider id already exists with different bytes: ${id}`,'FILE_COLLISION');
+    await atomicJson(providerCardPath(id),card); return card;
+  });
 }
 
-export function mergeProviderStages(local, remote) {
-  return {
-    repositories: [...local.repositories, ...(remote?.repositories ?? [])],
-    skills: [...local.skills, ...(remote?.skills ?? [])],
-    warnings: [...local.warnings, ...(remote?.warnings ?? [])],
-    cleanup: remote?.cleanup ? () => remote.cleanup() : async () => {},
-  };
+export async function readProviderCard(id) {
+  assertSafeId(id,'Provider id');
+  return validateProviderCard(await readJsonFile(providerCardPath(id),'Provider card'));
+}
+
+export async function updateProviderCard(id,mutator) {
+  assertSafeId(id,'Provider id');
+  return withFileLock(providerLockPath(id),async()=>{
+    const prior=await readProviderCard(id);
+    const next=validateProviderCard({...await mutator(structuredClone(prior)),updated_at:new Date().toISOString()});
+    if (next.id!==prior.id||next.object_hash!==prior.object_hash||next.fingerprint!==prior.fingerprint) throw conflictError('Provider identity and content hashes are immutable.','INVALID_PROVIDER');
+    await atomicJson(providerCardPath(id),next); return next;
+  });
 }

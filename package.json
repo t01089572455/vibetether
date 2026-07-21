@@ -1,15 +1,7 @@
 {
   "name": "vibetether",
-  "version": "0.6.3",
-  "description": "Direction control, guided readiness, Skill routing, and Proven Path recall for long-running coding agents.",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/t01089572455/vibetether.git"
-  },
-  "homepage": "https://github.com/t01089572455/vibetether#readme",
-  "bugs": {
-    "url": "https://github.com/t01089572455/vibetether/issues"
-  },
+  "version": "1.0.0-rc.3",
+  "description": "Release candidate for a beginner-friendly long-task control kernel and cold Skill broker.",
   "type": "module",
   "bin": {
     "vibetether": "./bin/vibetether.mjs"
@@ -17,41 +9,45 @@
   "files": [
     "bin",
     "src",
-    "skills",
     "registry",
-    "adapters",
-    "docs/operations",
-    "docs/installation.md",
-    "docs/project-truth.md",
-    "docs/assets",
-    "docs/routing.md",
-    "docs/proven-paths.md",
-    "docs/providers.md",
-    "docs/troubleshooting.md",
-    "evals",
-    "THIRD_PARTY_NOTICES.md"
+    "skills",
+    "docs",
+    "README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSE"
   ],
   "scripts": {
-    "test": "node --test",
-    "eval": "node evals/run-static-evals.mjs",
-    "audit:provider": "node scripts/audit-provider-source.mjs",
-    "audit:release": "node scripts/verify-release-history.mjs",
-    "acceptance:tour": "node scripts/manual-acceptance-tour.mjs",
-    "check": "npm test && npm run eval && npm run audit:release && node skills/vibe-tether/scripts/validate-project.mjs --self"
+    "test": "node scripts/run-tests.mjs",
+    "test:coverage": "node --test --test-concurrency=1 --experimental-test-coverage test/all.test.mjs",
+    "eval": "node evals/run-routing-evals.mjs",
+    "audit:budgets": "node scripts/audit-budgets.mjs",
+    "audit:release": "node scripts/audit-release.mjs",
+    "check:syntax": "node scripts/check-syntax.mjs",
+    "check": "npm run check:syntax && npm test && npm run eval && npm run audit:budgets && npm run audit:release",
+    "test:compat:v063-live": "node scripts/test-live-v063-migration.mjs"
   },
   "engines": {
     "node": ">=20"
   },
-  "dependencies": {
-    "yaml": "^2.8.1"
-  },
-  "license": "MIT",
   "keywords": [
     "agent-skills",
     "codex",
     "claude-code",
-    "vibe-coding",
-    "drift-control",
+    "worktree",
+    "context-engineering",
+    "long-running-agents",
     "skill-router"
-  ]
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/t01089572455/vibetether.git"
+  },
+  "bugs": {
+    "url": "https://github.com/t01089572455/vibetether/issues"
+  },
+  "homepage": "https://github.com/t01089572455/vibetether#readme"
 }

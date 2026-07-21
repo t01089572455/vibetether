@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "generated_from": "user-supplied-v0.6.3-catalog",
+  "sources": [
+    {
+      "id": "mattpocock-skills-v1.1.0",
+      "pack": "standard",
+      "repository": "https://github.com/mattpocock/skills.git",
+      "requested_ref": "v1.1.0",
+      "resolved_commit": "d574778f94cf620fcc8ce741584093bc650a61d3",
+      "license": "MIT",
+      "license_evidence": {
+        "mode": "full-text",
+        "path": "LICENSE",
+        "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+      },
+      "redistribution_status": "license-text-retained"
+    },
+    {
+      "id": "obra-superpowers-v5.1.0",
+      "pack": "standard",
+      "repository": "https://github.com/obra/superpowers.git",
+      "requested_ref": "v5.1.0",
+      "resolved_commit": "f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "license": "MIT",
+      "license_evidence": {
+        "mode": "full-text",
+        "path": "LICENSE",
+        "sha256": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400"
+      },
+      "redistribution_status": "license-text-retained"
+    },
+    {
+      "id": "multica-karpathy-2c60614",
+      "pack": "standard",
+      "repository": "https://github.com/multica-ai/andrej-karpathy-skills.git",
+      "requested_ref": "commit:2c60614",
+      "resolved_commit": "2c606141936f1eeef17fa3043a72095b4765b9c2",
+      "license": "MIT",
+      "license_evidence": {
+        "mode": "readme-declaration",
+        "path": "README.md",
+        "sha256": "daf314efb31894b86d68b67786c820bd8470bb2126e578ba9cd0e3e2667883f8",
+        "declaration": "## License\n\nMIT",
+        "evidence_file": "registry/licenses/multica-karpathy-2c60614.LICENSE-DECLARATION.txt",
+        "evidence_file_sha256": "c762544a7e2113786c52363307fcc246ff497b48bdf8bd1a80d1c8026b091275"
+      },
+      "redistribution_status": "metadata-only-not-redistributed",
+      "packaged_content": false
+    },
+    {
+      "id": "anthropic-skills-9d2f1ae",
+      "pack": "extended",
+      "repository": "https://github.com/anthropics/skills.git",
+      "requested_ref": "commit:9d2f1ae",
+      "resolved_commit": "9d2f1ae187231d8199c64b5b762e1bdf2244733d",
+      "license": "Apache-2.0",
+      "license_evidence": {
+        "mode": "full-text",
+        "path": "skills/frontend-design/LICENSE.txt",
+        "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+      },
+      "redistribution_status": "license-text-retained"
+    },
+    {
+      "id": "vercel-agent-skills-f8a72b9",
+      "pack": "web",
+      "repository": "https://github.com/vercel-labs/agent-skills.git",
+      "requested_ref": "commit:f8a72b9",
+      "resolved_commit": "f8a72b9603728bb92a217a879b7e62e43ad76c81",
+      "license": "MIT",
+      "license_evidence": {
+        "mode": "readme-declaration",
+        "path": "README.md",
+        "sha256": "c0a05286fc2a9d52ec2480bf070867665b9357beef37c9c2812e5b2ece571b6a",
+        "declaration": "## License\n\nMIT",
+        "evidence_file": "registry/licenses/vercel-agent-skills-f8a72b9.LICENSE-DECLARATION.txt",
+        "evidence_file_sha256": "036d78a4792c7e47024e11cb300606d0cdcf64b04e8ff45b9f81772285f6e404"
+      },
+      "redistribution_status": "metadata-only-not-redistributed",
+      "packaged_content": false
+    },
+    {
+      "id": "addy-agent-skills-98967c4",
+      "pack": "production",
+      "repository": "https://github.com/addyosmani/agent-skills.git",
+      "requested_ref": "commit:98967c4",
+      "resolved_commit": "98967c45a42b88d6b8fb3a88b7ff6273920763d6",
+      "license": "MIT",
+      "license_evidence": {
+        "mode": "full-text",
+        "path": "LICENSE",
+        "sha256": "6f202f8bd568cd730dbb2b0d1f8e243bc74c2fa1f64dbce9b2c7ea08bd5c9fd7"
+      },
+      "redistribution_status": "license-text-retained"
+    }
+  ]
+}

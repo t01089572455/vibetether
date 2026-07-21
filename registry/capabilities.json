@@ -1,447 +1,678 @@
 {
   "schema_version": 1,
-  "runtime_auto_install": false,
-  "selection_policy": {
-    "one_primary_workflow_provider_per_phase": true,
-    "project_truth_overrides_provider_advice": true,
-    "remote_candidates_require_install_time_review": true,
-    "record_provider_version_and_exit_evidence": true
-  },
-  "readiness_gate": {
-    "mode": "automatic",
-    "run_before": [
-      "task-entry",
-      "phase-transition",
-      "consequential-action",
-      "resume-or-compaction-recovery"
-    ],
-    "dimensions": [
-      "user-and-outcome",
-      "scope-and-non-goals",
-      "success-evidence",
-      "applicable-project-truth",
-      "unresolved-conflicts",
-      "directional-decisions",
-      "current-slice",
-      "verification-path",
-      "authorization-and-risk"
-    ],
-    "fact_gap": "investigate-autonomously-before-asking",
-    "direction_gap": "route-to-clarification-and-ask-one-recommended-question",
-    "structural_gap": "investigate-recommend-and-confirm",
-    "local_technical_gap": "decide-autonomously-after-bounded-investigation",
-    "implementation_requires": "READY_FOR_IMPLEMENT_ONE",
-    "verdicts": [
-      "READY_FOR_IMPLEMENT_ONE",
-      "INVESTIGATE_FACTS",
-      "ASK_USER_DECISION",
-      "BLOCKED_BY_CONFLICT_OR_AUTHORIZATION"
-    ],
-    "allowed_before_ready": [
-      "read-only-discovery",
-      "reversible-direction-neutral-preparation"
-    ]
-  },
   "capabilities": [
     {
       "id": "requirements-clarification",
-      "phases": ["DISCOVER", "ALIGN"],
-      "purpose": "Turn an ambiguous request into an approved Intent Contract without guessing direction.",
-      "invoke_when": ["goal-unclear", "scope-unclear", "success-evidence-unclear", "direction-conflict"],
-      "required_inputs": ["user_request", "applicable_truth_sources"],
-      "required_outputs": ["goal", "success_evidence", "scope_boundaries", "open_direction_decisions"],
-      "exit_evidence": ["The user-owned direction is explicit enough for design or planning."],
-      "fallback": "Use the built-in directional interview and stop on unresolved direction."
+      "phases": [
+        "DISCOVER",
+        "ALIGN"
+      ],
+      "fallback": "vibetether-built-in-alignment",
+      "required_outputs": [
+        "approved_goal",
+        "success_evidence",
+        "goal",
+        "scope_boundaries",
+        "open_direction_decisions"
+      ],
+      "exit_evidence": [
+        "Intent is confirmed or the unresolved user decision is explicit.",
+        "The user-owned direction is explicit enough for design or planning."
+      ]
     },
     {
       "id": "document-alignment",
-      "phases": ["ALIGN"],
-      "purpose": "Resolve conflicts and missing decisions against project truth before implementation.",
-      "invoke_when": ["truth-sources-exist", "documents-conflict", "decision-owner-needed"],
-      "required_inputs": ["applicable_truth_sources", "current_request"],
-      "required_outputs": ["authority_order", "resolved_decisions", "open_conflicts"],
-      "exit_evidence": ["Applicable sources have been read and material conflicts are resolved or escalated."],
-      "fallback": "Use the built-in authority and conflict loop."
-    },
-    {
-      "id": "explicit-requirements-interview",
-      "phases": ["DISCOVER"],
-      "purpose": "Expose the user-invoked grill-me alias for an explicit relentless interview.",
-      "invoke_when": ["user-explicitly-invokes-grill-me"],
-      "required_inputs": ["user_request"],
-      "required_outputs": ["clarified_decisions", "remaining_ambiguities"],
-      "exit_evidence": ["The explicit grilling session has produced user-owned decisions."],
-      "fallback": "Use the built-in directional interview."
-    },
-    {
-      "id": "explicit-document-alignment",
-      "phases": ["ALIGN"],
-      "purpose": "Expose the user-invoked grill-with-docs alias for clarification with durable domain documents.",
-      "invoke_when": ["user-explicitly-invokes-grill-with-docs"],
-      "required_inputs": ["user_request", "domain_documents"],
-      "required_outputs": ["clarified_decisions", "adr_updates", "glossary_updates"],
-      "exit_evidence": ["The user-owned decisions and requested durable documents agree."],
-      "fallback": "Use the built-in alignment interview and update approved truth directly."
-    },
-    {
-      "id": "domain-modeling",
-      "phases": ["ALIGN", "DESIGN"],
-      "purpose": "Create durable shared language and record consequential domain decisions.",
-      "invoke_when": ["terminology-unstable", "domain-boundaries-unclear", "durable-decision-needed"],
-      "required_inputs": ["project_truth", "domain_examples"],
-      "required_outputs": ["ubiquitous_language", "domain_boundaries", "decision_record"],
-      "exit_evidence": ["Terms and boundaries are usable by implementation and review."],
-      "fallback": "Use the built-in glossary and decision-record path."
+      "phases": [
+        "ALIGN"
+      ],
+      "fallback": "vibetether-built-in-document-alignment",
+      "required_outputs": [
+        "source_conflicts",
+        "recommended_resolution",
+        "authority_order",
+        "resolved_decisions",
+        "open_conflicts"
+      ],
+      "exit_evidence": [
+        "Applicable authority is unambiguous.",
+        "Applicable sources have been read and material conflicts are resolved or escalated."
+      ]
     },
     {
       "id": "product-design",
-      "phases": ["DESIGN"],
-      "purpose": "Map behavior and user experience choices to approved product outcomes.",
-      "invoke_when": ["behavior-choice-needed", "workflow-choice-needed", "multiple-valid-directions"],
-      "required_inputs": ["intent_contract", "product_truth"],
-      "required_outputs": ["approved_design", "acceptance_evidence"],
-      "exit_evidence": ["The user has approved a design direction and its acceptance evidence."],
-      "fallback": "Use the built-in design brief and request approval before implementation."
+      "phases": [
+        "DESIGN"
+      ],
+      "fallback": "vibetether-built-in-design",
+      "required_outputs": [
+        "alternatives",
+        "tradeoffs",
+        "approved_direction",
+        "approved_design",
+        "acceptance_evidence"
+      ],
+      "exit_evidence": [
+        "The user approved one direction and non-goals.",
+        "The user has approved a design direction and its acceptance evidence."
+      ]
     },
     {
       "id": "planning",
-      "phases": ["PLAN"],
-      "purpose": "Convert approved direction into small, verifiable execution slices.",
-      "invoke_when": ["direction-approved", "multi-step-change", "multiple-files-or-phases"],
-      "required_inputs": ["approved_design", "repository_state"],
-      "required_outputs": ["ordered_slices", "verification_commands", "risk_gates"],
-      "exit_evidence": ["Every slice has scope, verification, dependencies, and applicable user gates."],
-      "fallback": "Use the built-in slice plan with one in-progress slice at a time."
+      "phases": [
+        "PLAN"
+      ],
+      "fallback": "vibetether-built-in-planning",
+      "required_outputs": [
+        "bounded_slices",
+        "verification_paths",
+        "ordered_slices",
+        "verification_commands",
+        "risk_gates"
+      ],
+      "exit_evidence": [
+        "Each slice has files, checks, and stop conditions.",
+        "Every slice has scope, verification, dependencies, and applicable user gates."
+      ]
+    },
+    {
+      "id": "worktree-isolation",
+      "phases": [
+        "PLAN"
+      ],
+      "fallback": "vibetether-built-in-planning",
+      "required_outputs": [
+        "isolated_workspace"
+      ],
+      "exit_evidence": [
+        "The worktree is attached and baseline state is known."
+      ]
     },
     {
       "id": "implementation",
-      "phases": ["EXECUTE_ONE"],
-      "purpose": "Implement one approved slice while preserving project constraints.",
-      "invoke_when": ["slice-approved", "low-risk-reversible-action", "constraints-known"],
-      "required_inputs": ["current_slice", "applicable_constraints"],
-      "required_outputs": ["bounded_change", "change_summary"],
-      "exit_evidence": ["The current slice is implemented without expanding direction or scope."],
-      "fallback": "Use the built-in minimal-change execution loop."
-    },
-    {
-      "id": "git-isolation",
-      "phases": ["PLAN", "EXECUTE_ONE"],
-      "purpose": "Choose a host-native or Git worktree boundary before isolated feature execution.",
-      "invoke_when": ["isolation-needed", "feature-work-starting", "plan-execution-starting"],
-      "required_inputs": ["repository_state", "host_isolation_state"],
-      "required_outputs": ["isolation_choice", "verified_workspace"],
-      "exit_evidence": ["The execution workspace is isolated or a safe in-place choice is explicit."],
-      "fallback": "Use the built-in isolation check and stop if safe isolation is mandatory but unavailable."
-    },
-    {
-      "id": "plan-execution",
-      "phases": ["EXECUTE_ONE"],
-      "purpose": "Execute an approved plan one bounded and reviewed slice at a time.",
-      "invoke_when": ["written-plan-exists", "slice-ready", "verification-defined"],
-      "required_inputs": ["approved_plan", "current_slice", "repository_state"],
-      "required_outputs": ["implemented_slice", "fresh_verification", "checkpoint_update"],
-      "exit_evidence": ["The slice passes its declared checks and the next action is explicit."],
-      "fallback": "Use the built-in one-slice execution loop."
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "fallback": "vibetether-built-in-implementation",
+      "required_outputs": [
+        "bounded_change",
+        "change_summary"
+      ],
+      "exit_evidence": [
+        "The current slice has fresh functional evidence.",
+        "The current slice is implemented without expanding direction or scope."
+      ]
     },
     {
       "id": "tdd",
-      "phases": ["EXECUTE_ONE"],
-      "purpose": "Prove behavior through an observed red-green-refactor cycle.",
-      "invoke_when": ["new-behavior", "bug-fix", "testable-contract"],
-      "required_inputs": ["behavior_contract"],
-      "required_outputs": ["red_evidence", "green_evidence", "refactor_evidence"],
-      "exit_evidence": ["The failure was observed before implementation and the focused test is now green."],
-      "fallback": "Use the built-in red-green-refactor discipline."
-    },
-    {
-      "id": "parallel-execution",
-      "phases": ["EXECUTE_ONE"],
-      "purpose": "Delegate independent tasks without leaking shared state or bypassing review between results.",
-      "invoke_when": ["multiple-independent-tasks", "subagents-available", "delegation-authorized"],
-      "required_inputs": ["independent_task_set", "delegation_boundary"],
-      "required_outputs": ["isolated_results", "integration_review"],
-      "exit_evidence": ["Each delegated result is reviewed and integrated against the approved slice."],
-      "fallback": "Use the built-in sequential execution path."
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "fallback": "vibetether-built-in-tdd",
+      "required_outputs": [
+        "red_green_refactor",
+        "red_evidence",
+        "green_evidence",
+        "refactor_evidence"
+      ],
+      "exit_evidence": [
+        "A failing check was observed and the focused check now passes.",
+        "The failure was observed before implementation and the focused test is now green."
+      ]
     },
     {
       "id": "debugging",
-      "phases": ["DIAGNOSE"],
-      "purpose": "Diagnose unexpected behavior before proposing a correction.",
-      "invoke_when": ["unexpected-behavior", "test-failure", "performance-regression", "root-cause-unknown"],
-      "required_inputs": ["reproduction", "observed_evidence"],
-      "required_outputs": ["root_cause", "minimal_fix", "regression_evidence"],
-      "exit_evidence": ["The root cause is supported by reproduction and discriminating evidence."],
-      "fallback": "Use the built-in reproduce-isolate-hypothesize-verify loop."
+      "phases": [
+        "DIAGNOSE"
+      ],
+      "fallback": "vibetether-built-in-debugging",
+      "required_outputs": [
+        "reproduction",
+        "root_cause",
+        "regression_proof",
+        "minimal_fix",
+        "regression_evidence"
+      ],
+      "exit_evidence": [
+        "Root cause is supported by a controlled reproduction.",
+        "The root cause is supported by reproduction and discriminating evidence."
+      ]
     },
     {
-      "id": "frontend-product-design",
-      "phases": ["DESIGN"],
-      "purpose": "Lock visual intent, information hierarchy, interaction states, and a golden reference.",
-      "invoke_when": ["user-visible-ui", "visual-direction-unapproved", "reference-ui-provided"],
-      "required_inputs": ["product_goal", "page_type", "brand_or_reference_assets"],
-      "required_outputs": ["visual_direction", "golden_screen", "state_matrix"],
-      "exit_evidence": ["One representative visual direction or golden screen is approved."],
-      "fallback": "Use the built-in UI Intent Contract and require visual approval."
+      "id": "verification",
+      "phases": [
+        "VERIFY"
+      ],
+      "fallback": "vibetether-built-in-verification",
+      "required_outputs": [
+        "fresh_evidence",
+        "scope_result"
+      ],
+      "exit_evidence": [
+        "Evidence proves the requested outcome, not only a proxy."
+      ]
     },
     {
-      "id": "frontend-engineering",
-      "phases": ["EXECUTE_ONE"],
-      "purpose": "Implement approved UI intent with responsive and accessible behavior.",
-      "invoke_when": ["approved-ui-contract", "responsive-states-needed", "accessibility-states-needed"],
-      "required_inputs": ["approved_ui_contract", "existing_design_system"],
-      "required_outputs": ["implemented_states", "accessibility_evidence", "responsive_evidence"],
-      "exit_evidence": ["Required states work at declared viewports and accessibility checks pass."],
-      "fallback": "Use the built-in UI implementation checklist."
+      "id": "review",
+      "phases": [
+        "REVIEW"
+      ],
+      "fallback": "vibetether-built-in-review",
+      "required_outputs": [
+        "findings",
+        "disposition"
+      ],
+      "exit_evidence": [
+        "Request, authority, diff, and raw evidence were reviewed."
+      ]
     },
     {
-      "id": "browser-verification",
-      "phases": ["VERIFY"],
-      "purpose": "Verify real rendered behavior and compare it with the golden reference.",
-      "invoke_when": ["user-visible-change", "browser-flow-changed", "visual-claim"],
-      "required_inputs": ["running_product", "golden_screen", "critical_flows"],
-      "required_outputs": ["functional_verdict", "visual_verdict", "captured_evidence"],
-      "exit_evidence": ["Functional and visual verdicts are recorded separately with current captures."],
-      "fallback": "Use the built-in render-capture-compare loop."
-    },
-    {
-      "id": "security-review",
-      "phases": ["REVIEW"],
-      "purpose": "Inspect trust boundaries, permissions, secrets, and destructive operations.",
-      "invoke_when": ["permission-change", "security-boundary", "secret-handling", "destructive-operation"],
-      "required_inputs": ["change_set", "threat_context"],
-      "required_outputs": ["findings", "risk_verdict"],
-      "exit_evidence": ["Critical trust-boundary risks are resolved or explicitly accepted by the user."],
-      "fallback": "Use the built-in high-risk checklist and stop on unreviewed critical risk."
-    },
-    {
-      "id": "code-review",
-      "phases": ["REVIEW"],
-      "purpose": "Review correctness, regressions, contracts, and maintainability against project truth.",
-      "invoke_when": ["implementation-complete", "before-merge", "consequential-diff"],
-      "required_inputs": ["diff", "acceptance_contract"],
-      "required_outputs": ["prioritized_findings", "review_verdict"],
-      "exit_evidence": ["Findings are prioritized and blocking issues are resolved or declared."],
-      "fallback": "Use the built-in evidence-first review checklist."
-    },
-    {
-      "id": "review-feedback",
-      "phases": ["REVIEW", "EXECUTE_ONE"],
-      "purpose": "Evaluate review feedback technically before accepting or implementing it.",
-      "invoke_when": ["review-feedback-received", "feedback-unclear", "feedback-technically-questionable"],
-      "required_inputs": ["review_feedback", "code_and_contract_evidence"],
-      "required_outputs": ["verified_feedback", "accepted_or_rejected_items", "implementation_evidence"],
-      "exit_evidence": ["Every accepted suggestion is technically verified and every rejection is evidence-based."],
-      "fallback": "Use the built-in verify-before-accepting review loop."
-    },
-    {
-      "id": "skill-authoring",
-      "phases": ["DESIGN", "PLAN", "EXECUTE_ONE", "VERIFY"],
-      "purpose": "Create or revise an Agent Skill with trigger, resource, and forward-verification discipline.",
-      "invoke_when": ["skill-creation-or-update", "skill-trigger-change", "skill-release-verification"],
-      "required_inputs": ["skill_goal", "concrete_usage_examples"],
-      "required_outputs": ["skill_contract", "reusable_resources", "validation_evidence"],
-      "exit_evidence": ["The Skill validates and its target behaviors have been exercised without hidden context."],
-      "fallback": "Use the built-in Skill authoring and validation checklist."
-    },
-    {
-      "id": "codebase-orientation",
-      "phases": ["ALIGN"],
-      "purpose": "Map an unfamiliar repository before choosing an implementation path.",
-      "invoke_when": ["codebase-unfamiliar", "entry-points-unclear"],
-      "required_inputs": ["repository", "current_request"],
-      "required_outputs": ["codebase_map", "relevant_entry_points"],
-      "exit_evidence": ["Relevant entry points, boundaries, and constraints are identified."],
-      "fallback": "Use the built-in read-only repository orientation loop."
-    },
-    {
-      "id": "research",
-      "phases": ["DISCOVER"],
-      "purpose": "Collect current primary-source evidence before a decision depends on external facts.",
-      "invoke_when": ["primary-source-research-needed", "external-facts-uncertain"],
-      "required_inputs": ["research_question", "source_constraints"],
-      "required_outputs": ["primary_sources", "evidence_synthesis"],
-      "exit_evidence": ["Material claims are traceable and inferences are labeled."],
-      "fallback": "Use the built-in primary-source research checklist."
-    },
-    {
-      "id": "prototype",
-      "phases": ["DESIGN"],
-      "purpose": "Use a bounded throwaway experiment to answer a costly design uncertainty.",
-      "invoke_when": ["runnable-experiment-needed", "design-uncertainty"],
-      "required_inputs": ["uncertainty", "discard_boundary"],
-      "required_outputs": ["bounded_prototype", "learning_verdict"],
-      "exit_evidence": ["The experiment answers the declared question without silently becoming production scope."],
-      "fallback": "Use the built-in bounded prototype contract."
-    },
-    {
-      "id": "triage-qa",
-      "phases": ["DIAGNOSE"],
-      "purpose": "Turn loosely reported issues into reproducible, prioritized work without losing user context.",
-      "invoke_when": ["multiple-issues", "qa-session", "priority-unclear"],
-      "required_inputs": ["reported_issues", "product_context"],
-      "required_outputs": ["reproductions", "prioritized_issue_set"],
-      "exit_evidence": ["Each retained issue has evidence, scope, and a disposition."],
-      "fallback": "Use the built-in evidence-first triage loop."
-    },
-    {
-      "id": "huge-effort-wayfinding",
-      "phases": ["PLAN"],
-      "purpose": "Keep a very large effort navigable through milestones, dependency boundaries, and resumable checkpoints.",
-      "invoke_when": ["huge-effort", "many-workstreams", "long-horizon"],
-      "required_inputs": ["approved_direction", "known_dependencies"],
-      "required_outputs": ["milestone_map", "current_frontier", "recovery_points"],
-      "exit_evidence": ["The current frontier and next bounded slice remain unambiguous after interruption."],
-      "fallback": "Use the built-in milestone and checkpoint map."
-    },
-    {
-      "id": "handoff-recovery",
-      "phases": ["ALIGN"],
-      "purpose": "Restore intent, truth, decisions, and the next verified action after handoff or context loss.",
-      "invoke_when": ["handoff", "context-compacted", "session-resumed"],
-      "required_inputs": ["project_truth", "latest_checkpoint", "repository_state"],
-      "required_outputs": ["reanchored_state", "next_verified_action"],
-      "exit_evidence": ["The resumed agent can state goal, constraints, current slice, and next evidence without guessing."],
-      "fallback": "Use the built-in full re-anchor protocol."
-    },
-    {
-      "id": "architecture-improvement",
-      "phases": ["DESIGN"],
-      "purpose": "Improve structure only where domain evidence and delivery pressure justify the change.",
-      "invoke_when": ["architecture-friction", "domain-boundary-eroding"],
-      "required_inputs": ["codebase_map", "domain_language", "change_pressure"],
-      "required_outputs": ["architecture_option", "migration_boundary"],
-      "exit_evidence": ["The structural change has a concrete consumer, boundary, and migration path."],
-      "fallback": "Use the built-in evidence-led architecture review."
-    },
-    {
-      "id": "performance",
-      "phases": ["VERIFY"],
-      "purpose": "Measure and improve performance against an explicit budget and representative workload.",
-      "invoke_when": ["performance-regression", "performance-budget", "vercel"],
-      "required_inputs": ["baseline", "representative_workload", "budget"],
-      "required_outputs": ["measurements", "bottleneck_evidence", "post_change_comparison"],
-      "exit_evidence": ["Fresh measurements support the performance verdict."],
-      "fallback": "Use the built-in measure-before-optimizing loop."
-    },
-    {
-      "id": "ci-cd",
-      "phases": ["EXECUTE_ONE"],
-      "purpose": "Change automation pipelines with reversible steps, secret safety, and reproducible evidence.",
-      "invoke_when": ["ci", "pipeline-change"],
-      "required_inputs": ["pipeline_contract", "secret_boundaries"],
-      "required_outputs": ["pipeline_change", "validation_evidence"],
-      "exit_evidence": ["The pipeline change is reproducible and does not expose credentials."],
-      "fallback": "Use the built-in CI/CD safety checklist."
-    },
-    {
-      "id": "migration",
-      "phases": ["PLAN"],
-      "purpose": "Design data or API migrations with compatibility, rollback, and explicit destructive gates.",
-      "invoke_when": ["migration", "schema-change", "deprecation"],
-      "required_inputs": ["current_contract", "target_contract", "data_risk"],
-      "required_outputs": ["migration_plan", "rollback_plan", "compatibility_window"],
-      "exit_evidence": ["Migration and rollback paths are tested or explicitly gated before destructive work."],
-      "fallback": "Use the built-in migration and rollback gate."
-    },
-    {
-      "id": "observability",
-      "phases": ["EXECUTE_ONE"],
-      "purpose": "Add signals that make product behavior and failures diagnosable without leaking sensitive data.",
-      "invoke_when": ["observability", "production-diagnosis"],
-      "required_inputs": ["failure_modes", "privacy_constraints"],
-      "required_outputs": ["instrumentation", "diagnostic_query"],
-      "exit_evidence": ["A representative failure can be detected and diagnosed from the new signals."],
-      "fallback": "Use the built-in observable-outcomes checklist."
-    },
-    {
-      "id": "production-engineering",
-      "phases": ["EXECUTE_ONE"],
-      "purpose": "Apply focused production engineering guidance without replacing the primary delivery workflow.",
-      "invoke_when": ["production-hardening"],
-      "required_inputs": ["current_slice", "production_constraints"],
-      "required_outputs": ["bounded_hardening_change"],
-      "exit_evidence": ["The hardening change has current verification and remains within scope."],
-      "fallback": "Use the built-in production hardening checklist."
-    },
-    {
-      "id": "plan-execution-with-subagents",
-      "phases": ["EXECUTE_ONE"],
-      "purpose": "Execute independent plan slices through authorized subagents with review between integrations.",
-      "invoke_when": ["subagents-available", "delegation-authorized"],
-      "required_inputs": ["approved_plan", "independent_slice_boundaries"],
-      "required_outputs": ["reviewed_subagent_results"],
-      "exit_evidence": ["Each delegated result is reviewed against the approved plan before integration."],
-      "fallback": "Use the built-in sequential execution loop."
-    },
-    {
-      "id": "catalog-reference",
-      "phases": ["DISCOVER"],
-      "purpose": "Expose a searchable inventory of audited upstream Skills without making them automatic workflow owners.",
-      "invoke_when": ["specialist-not-covered", "user-requests-catalog-skill"],
-      "required_inputs": ["scenario", "catalog_inventory"],
-      "required_outputs": ["candidate_comparison", "explicit_selection"],
-      "exit_evidence": ["A catalog candidate is selected explicitly or the built-in fallback is retained."],
-      "fallback": "Use the built-in catalog search and keep VibeTether as the workflow owner."
-    },
-    {
-      "id": "success-capture",
-      "phases": ["VERIFY", "REVIEW", "SHIP"],
-      "purpose": "Preserve a first, recovered, or changed reusable workflow without duplicating routine success records.",
-      "invoke_when": ["first-proven-path", "recovered-path", "changed-proven-path", "about-to-claim-complete"],
-      "required_inputs": ["verified_success_evidence", "applicable_project_artifacts"],
-      "required_outputs": ["trigger_class", "experience_disposition", "durable_artifacts", "redaction_check"],
-      "exit_evidence": ["The experience disposition is non-pending, internally consistent, sanitized, and points to existing durable artifacts when required."],
-      "fallback": "Use the built-in Success Capture Gate and validate the checkpoint with doctor."
-    },
-    {
-      "id": "completion-verification",
-      "phases": ["VERIFY"],
-      "purpose": "Require fresh evidence before any completion or correctness claim.",
-      "invoke_when": ["about-to-claim-complete", "fix-claimed", "tests-claimed-passing"],
-      "required_inputs": ["acceptance_contract", "changed_scope"],
-      "required_outputs": ["fresh_command_output", "scope_verdict", "known_limitations"],
-      "exit_evidence": ["Fresh verification output supports every material completion claim."],
-      "fallback": "Use the built-in evidence-before-claims gate."
-    },
-    {
-      "id": "release-verification",
-      "phases": ["SHIP"],
-      "purpose": "Prove release readiness and obtain confirmation before external publication.",
-      "invoke_when": ["release-candidate", "publish-requested", "deployment-requested"],
-      "required_inputs": ["release_candidate", "release_contract"],
-      "required_outputs": ["fresh_verification", "known_limitations", "release_decision"],
-      "exit_evidence": ["The release candidate is verified and the user has confirmed external publication."],
-      "fallback": "Use the built-in release gate and require explicit confirmation."
-    },
-    {
-      "id": "branch-finish",
-      "phases": ["SHIP"],
-      "purpose": "Present explicit integration, publication, and cleanup choices for completed work.",
-      "invoke_when": ["branch-complete", "integration-choice-needed", "cleanup-choice-needed"],
-      "required_inputs": ["verified_branch", "base_branch", "release_constraints"],
-      "required_outputs": ["integration_options", "user_decision", "cleanup_result"],
-      "exit_evidence": ["The chosen integration path is complete and publication gates were respected."],
-      "fallback": "Use the built-in branch finish and publication gate."
-    },
-    {
-      "id": "project-bootstrap",
-      "phases": ["DISCOVER", "ALIGN"],
-      "purpose": "Establish confirmed user-owned direction and route real project truth before implementation.",
-      "invoke_when": ["greenfield-directory", "truth-sources-missing", "intent-unresolved"],
-      "required_inputs": ["project_discovery", "known_direction", "unresolved_user_decisions"],
-      "required_outputs": ["intent_contract", "routed_project_truth", "readiness_verdict"],
-      "exit_evidence": ["Goal and success evidence are confirmed, or the checkpoint remains at DISCOVER without guessed direction."],
-      "fallback": "Use the built-in bootstrap readiness model and ask one recommended directional question at a time."
+      "id": "release",
+      "phases": [
+        "SHIP"
+      ],
+      "fallback": "vibetether-built-in-release",
+      "required_outputs": [
+        "authorization",
+        "release_evidence",
+        "rollback"
+      ],
+      "exit_evidence": [
+        "Release is authorized and reproducible with rollback."
+      ]
     },
     {
       "id": "proven-path-recall",
-      "phases": ["ALIGN", "PLAN", "EXECUTE_ONE", "VERIFY", "SHIP"],
-      "purpose": "Recall applicable verified operational paths before rediscovering repeatable work.",
-      "invoke_when": ["build", "local-environment", "ci", "deployment", "publish", "migration", "authentication", "external-service", "recovery", "release"],
-      "required_inputs": ["task_signals", "experience_index", "environment_change_signals"],
-      "required_outputs": ["applicable_experience", "artifacts_read", "revalidation_needs", "selection_reason"],
-      "exit_evidence": ["A matching path was read, or a material no-match or stale reason was recorded before consequential action."],
-      "fallback": "Use the built-in metadata resolver; no community provider is required."
+      "phases": [
+        "DISCOVER",
+        "ALIGN",
+        "PLAN",
+        "EXECUTE_ONE",
+        "VERIFY",
+        "SHIP"
+      ],
+      "fallback": "vibetether-built-in-recall",
+      "required_outputs": [
+        "applicable_experience",
+        "artifacts_read",
+        "revalidation_needs",
+        "selection_reason"
+      ],
+      "exit_evidence": [
+        "Only fresh, matching proven paths were considered.",
+        "A matching path was read, or a material no-match or stale reason was recorded before consequential action."
+      ]
+    },
+    {
+      "id": "explicit-requirements-interview",
+      "phases": [
+        "DISCOVER"
+      ],
+      "fallback": "vibetether-built-in-alignment",
+      "required_outputs": [
+        "clarified_decisions",
+        "remaining_ambiguities"
+      ],
+      "exit_evidence": [
+        "The explicit grilling session has produced user-owned decisions."
+      ]
+    },
+    {
+      "id": "explicit-document-alignment",
+      "phases": [
+        "ALIGN"
+      ],
+      "fallback": "vibetether-built-in-document-alignment",
+      "required_outputs": [
+        "clarified_decisions",
+        "adr_updates",
+        "glossary_updates"
+      ],
+      "exit_evidence": [
+        "The user-owned decisions and requested durable documents agree."
+      ]
+    },
+    {
+      "id": "domain-modeling",
+      "phases": [
+        "ALIGN",
+        "DESIGN"
+      ],
+      "fallback": "vibetether-built-in-document-alignment",
+      "required_outputs": [
+        "ubiquitous_language",
+        "domain_boundaries",
+        "decision_record"
+      ],
+      "exit_evidence": [
+        "Terms and boundaries are usable by implementation and review."
+      ]
+    },
+    {
+      "id": "git-isolation",
+      "phases": [
+        "PLAN",
+        "EXECUTE_ONE"
+      ],
+      "fallback": "vibetether-built-in-planning",
+      "required_outputs": [
+        "isolation_choice",
+        "verified_workspace"
+      ],
+      "exit_evidence": [
+        "The execution workspace is isolated or a safe in-place choice is explicit."
+      ]
+    },
+    {
+      "id": "plan-execution",
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "fallback": "vibetether-built-in-implementation",
+      "required_outputs": [
+        "implemented_slice",
+        "fresh_verification",
+        "checkpoint_update"
+      ],
+      "exit_evidence": [
+        "The slice passes its declared checks and the next action is explicit."
+      ]
+    },
+    {
+      "id": "parallel-execution",
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "fallback": "vibetether-built-in-implementation",
+      "required_outputs": [
+        "isolated_results",
+        "integration_review"
+      ],
+      "exit_evidence": [
+        "Each delegated result is reviewed and integrated against the approved slice."
+      ]
+    },
+    {
+      "id": "frontend-product-design",
+      "phases": [
+        "DESIGN"
+      ],
+      "fallback": "vibetether-built-in-design",
+      "required_outputs": [
+        "visual_direction",
+        "golden_screen",
+        "state_matrix"
+      ],
+      "exit_evidence": [
+        "One representative visual direction or golden screen is approved."
+      ]
+    },
+    {
+      "id": "frontend-engineering",
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "fallback": "vibetether-built-in-implementation",
+      "required_outputs": [
+        "implemented_states",
+        "accessibility_evidence",
+        "responsive_evidence"
+      ],
+      "exit_evidence": [
+        "Required states work at declared viewports and accessibility checks pass."
+      ]
+    },
+    {
+      "id": "browser-verification",
+      "phases": [
+        "VERIFY"
+      ],
+      "fallback": "vibetether-built-in-verification",
+      "required_outputs": [
+        "functional_verdict",
+        "visual_verdict",
+        "captured_evidence"
+      ],
+      "exit_evidence": [
+        "Functional and visual verdicts are recorded separately with current captures."
+      ]
+    },
+    {
+      "id": "security-review",
+      "phases": [
+        "REVIEW"
+      ],
+      "fallback": "vibetether-built-in-review",
+      "required_outputs": [
+        "findings",
+        "risk_verdict"
+      ],
+      "exit_evidence": [
+        "Critical trust-boundary risks are resolved or explicitly accepted by the user."
+      ]
+    },
+    {
+      "id": "code-review",
+      "phases": [
+        "REVIEW"
+      ],
+      "fallback": "vibetether-built-in-review",
+      "required_outputs": [
+        "prioritized_findings",
+        "review_verdict"
+      ],
+      "exit_evidence": [
+        "Findings are prioritized and blocking issues are resolved or declared."
+      ]
+    },
+    {
+      "id": "review-feedback",
+      "phases": [
+        "REVIEW",
+        "EXECUTE_ONE"
+      ],
+      "fallback": "vibetether-built-in-review",
+      "required_outputs": [
+        "verified_feedback",
+        "accepted_or_rejected_items",
+        "implementation_evidence"
+      ],
+      "exit_evidence": [
+        "Every accepted suggestion is technically verified and every rejection is evidence-based."
+      ]
+    },
+    {
+      "id": "skill-authoring",
+      "phases": [
+        "DESIGN",
+        "PLAN",
+        "EXECUTE_ONE",
+        "VERIFY"
+      ],
+      "fallback": "vibetether-built-in-design",
+      "required_outputs": [
+        "skill_contract",
+        "reusable_resources",
+        "validation_evidence"
+      ],
+      "exit_evidence": [
+        "The Skill validates and its target behaviors have been exercised without hidden context."
+      ]
+    },
+    {
+      "id": "codebase-orientation",
+      "phases": [
+        "ALIGN"
+      ],
+      "fallback": "vibetether-built-in-document-alignment",
+      "required_outputs": [
+        "codebase_map",
+        "relevant_entry_points"
+      ],
+      "exit_evidence": [
+        "Relevant entry points, boundaries, and constraints are identified."
+      ]
+    },
+    {
+      "id": "research",
+      "phases": [
+        "DISCOVER"
+      ],
+      "fallback": "vibetether-built-in-alignment",
+      "required_outputs": [
+        "primary_sources",
+        "evidence_synthesis"
+      ],
+      "exit_evidence": [
+        "Material claims are traceable and inferences are labeled."
+      ]
+    },
+    {
+      "id": "prototype",
+      "phases": [
+        "DESIGN"
+      ],
+      "fallback": "vibetether-built-in-design",
+      "required_outputs": [
+        "bounded_prototype",
+        "learning_verdict"
+      ],
+      "exit_evidence": [
+        "The experiment answers the declared question without silently becoming production scope."
+      ]
+    },
+    {
+      "id": "triage-qa",
+      "phases": [
+        "DIAGNOSE"
+      ],
+      "fallback": "vibetether-built-in-debugging",
+      "required_outputs": [
+        "reproductions",
+        "prioritized_issue_set"
+      ],
+      "exit_evidence": [
+        "Each retained issue has evidence, scope, and a disposition."
+      ]
+    },
+    {
+      "id": "huge-effort-wayfinding",
+      "phases": [
+        "PLAN"
+      ],
+      "fallback": "vibetether-built-in-planning",
+      "required_outputs": [
+        "milestone_map",
+        "current_frontier",
+        "recovery_points"
+      ],
+      "exit_evidence": [
+        "The current frontier and next bounded slice remain unambiguous after interruption."
+      ]
+    },
+    {
+      "id": "handoff-recovery",
+      "phases": [
+        "ALIGN"
+      ],
+      "fallback": "vibetether-built-in-document-alignment",
+      "required_outputs": [
+        "reanchored_state",
+        "next_verified_action"
+      ],
+      "exit_evidence": [
+        "The resumed agent can state goal, constraints, current slice, and next evidence without guessing."
+      ]
+    },
+    {
+      "id": "architecture-improvement",
+      "phases": [
+        "DESIGN"
+      ],
+      "fallback": "vibetether-built-in-design",
+      "required_outputs": [
+        "architecture_option",
+        "migration_boundary"
+      ],
+      "exit_evidence": [
+        "The structural change has a concrete consumer, boundary, and migration path."
+      ]
+    },
+    {
+      "id": "performance",
+      "phases": [
+        "VERIFY"
+      ],
+      "fallback": "vibetether-built-in-verification",
+      "required_outputs": [
+        "measurements",
+        "bottleneck_evidence",
+        "post_change_comparison"
+      ],
+      "exit_evidence": [
+        "Fresh measurements support the performance verdict."
+      ]
+    },
+    {
+      "id": "ci-cd",
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "fallback": "vibetether-built-in-implementation",
+      "required_outputs": [
+        "pipeline_change",
+        "validation_evidence"
+      ],
+      "exit_evidence": [
+        "The pipeline change is reproducible and does not expose credentials."
+      ]
+    },
+    {
+      "id": "migration",
+      "phases": [
+        "PLAN"
+      ],
+      "fallback": "vibetether-built-in-planning",
+      "required_outputs": [
+        "migration_plan",
+        "rollback_plan",
+        "compatibility_window"
+      ],
+      "exit_evidence": [
+        "Migration and rollback paths are tested or explicitly gated before destructive work."
+      ]
+    },
+    {
+      "id": "observability",
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "fallback": "vibetether-built-in-implementation",
+      "required_outputs": [
+        "instrumentation",
+        "diagnostic_query"
+      ],
+      "exit_evidence": [
+        "A representative failure can be detected and diagnosed from the new signals."
+      ]
+    },
+    {
+      "id": "production-engineering",
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "fallback": "vibetether-built-in-implementation",
+      "required_outputs": [
+        "bounded_hardening_change"
+      ],
+      "exit_evidence": [
+        "The hardening change has current verification and remains within scope."
+      ]
+    },
+    {
+      "id": "plan-execution-with-subagents",
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "fallback": "vibetether-built-in-implementation",
+      "required_outputs": [
+        "reviewed_subagent_results"
+      ],
+      "exit_evidence": [
+        "Each delegated result is reviewed against the approved plan before integration."
+      ]
+    },
+    {
+      "id": "catalog-reference",
+      "phases": [
+        "DISCOVER"
+      ],
+      "fallback": "vibetether-built-in-alignment",
+      "required_outputs": [
+        "candidate_comparison",
+        "explicit_selection"
+      ],
+      "exit_evidence": [
+        "A catalog candidate is selected explicitly or the built-in fallback is retained."
+      ]
+    },
+    {
+      "id": "success-capture",
+      "phases": [
+        "VERIFY",
+        "REVIEW",
+        "SHIP"
+      ],
+      "fallback": "vibetether-built-in-verification",
+      "required_outputs": [
+        "trigger_class",
+        "experience_disposition",
+        "durable_artifacts",
+        "redaction_check"
+      ],
+      "exit_evidence": [
+        "The experience disposition is non-pending, internally consistent, sanitized, and points to existing durable artifacts when required."
+      ]
+    },
+    {
+      "id": "completion-verification",
+      "phases": [
+        "VERIFY"
+      ],
+      "fallback": "vibetether-built-in-verification",
+      "required_outputs": [
+        "fresh_command_output",
+        "scope_verdict",
+        "known_limitations"
+      ],
+      "exit_evidence": [
+        "Fresh verification output supports every material completion claim."
+      ]
+    },
+    {
+      "id": "release-verification",
+      "phases": [
+        "SHIP"
+      ],
+      "fallback": "vibetether-built-in-release",
+      "required_outputs": [
+        "fresh_verification",
+        "known_limitations",
+        "release_decision"
+      ],
+      "exit_evidence": [
+        "The release candidate is verified and the user has confirmed external publication."
+      ]
+    },
+    {
+      "id": "branch-finish",
+      "phases": [
+        "SHIP"
+      ],
+      "fallback": "vibetether-built-in-release",
+      "required_outputs": [
+        "integration_options",
+        "user_decision",
+        "cleanup_result"
+      ],
+      "exit_evidence": [
+        "The chosen integration path is complete and publication gates were respected."
+      ]
+    },
+    {
+      "id": "project-bootstrap",
+      "phases": [
+        "DISCOVER",
+        "ALIGN"
+      ],
+      "fallback": "vibetether-built-in-alignment",
+      "required_outputs": [
+        "intent_contract",
+        "routed_project_truth",
+        "readiness_verdict"
+      ],
+      "exit_evidence": [
+        "Goal and success evidence are confirmed, or the checkpoint remains at DISCOVER without guessed direction."
+      ]
     }
   ]
 }

@@ -1,0 +1,63 @@
+schema_version: 1
+project_id: sanitized_real_v063_fixture
+project_state: existing
+profile: extended
+bundle_signals: []
+goal_source: .vibetether/intent.md
+intent_contract: .vibetether/intent.md
+sources:
+  always:
+    - AGENTS.md
+    - CLAUDE.md
+    - .vibetether/intent.md
+  conditional:
+    requirements:
+      - docs/requirements.md
+    architecture: []
+    ui: []
+    testing: []
+    release: []
+    operations:
+      - docs/operations/runbook.md
+      - docs/operations/
+discovery:
+  AGENTS.md:
+    role: agent instructions
+    confidence: high
+    kind: file
+  CLAUDE.md:
+    role: agent instructions
+    confidence: high
+    kind: file
+  .vibetether/intent.md:
+    role: intent contract
+    confidence: high
+    kind: file
+  docs/operations/:
+    role: operational proven paths
+    confidence: high
+    kind: directory
+harnesses:
+  codex:
+    enabled: true
+    instruction_file: AGENTS.md
+  claude:
+    enabled: true
+    instruction_file: CLAUDE.md
+control:
+  direction_uncertainty: ask
+  local_reversible_technical_choices: autonomous
+  structural_technical_choices: recommend_then_confirm
+  destructive_actions: confirm
+  release_actions: confirm
+checkpoint:
+  mode: local
+  path: .vibetether/state/current.yaml
+  max_age_hours: 168
+bundles:
+  - production
+  - web
+capability_board: .vibetether/capabilities.yaml
+provider_lock: .vibetether/providers.lock.yaml
+truth_index: .vibetether/TRUTH.md
+experience_index: .vibetether/experience-index.yaml

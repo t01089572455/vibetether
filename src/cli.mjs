@@ -1,380 +1,228 @@
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { readFile } from 'node:fs/promises';
-import { runBootstrap, runInit } from './bootstrap.mjs';
-import { CliError } from './errors.mjs';
-import { inspectProject } from './doctor.mjs';
-import { uninstall } from './uninstall.mjs';
+import { createInterface } from 'node:readline/promises';
+import { stdin as input, stdout as output } from 'node:process';
+import { VERSION } from './constants.mjs';
+import { usageError, conflictError } from './errors.mjs';
+import { initialize } from './init.mjs';
+import { buildContext, readContextHandle } from './context.mjs';
+import { startStep, finishStep, abandonStep, heartbeatStep, reanchorStep } from './step.mjs';
+import { discoverContract, skillsLockDigest } from './contract.mjs';
+import { parseTruthMap, renderTruthMap, addTruthCandidate, confirmTruthCandidate, declineTruthCandidate, authoritySnapshot } from './truth.mjs';
+import { writeProjectJson, writeProjectText, normalizeSignal, readJsonFile } from './files.mjs';
+import { breakLease, loadProviderStats, readRoute } from './runtime.mjs';
+import { validateExperienceIndex, createExperienceCandidate, confirmExperience, updateExperienceStatus, auditExperience } from './experience.mjs';
+import { attachFromDirectory, attachWorktree, listAttachedWorktrees, createWorktree, removeWorktree, pruneWorktrees, createHandoff, acceptHandoff, finishHandoff } from './worktree.mjs';
+import { loadProviderRegistry } from './provider-registry.mjs';
+import { importProvider } from './provider-cache.mjs';
+import { activateSkill, approveProvider, evaluateProvider, execSkillScript, exposeProvider, inspectSkill, optimizeSkills, promoteProvider, providerHotset, readSkillResource, searchSkills } from './skills.mjs';
 import { showCapabilities } from './capabilities.mjs';
-import { runCustomize } from './customize.mjs';
-import { runRoute, runTruthReconciliation } from './route-handshake.mjs';
+import { inspectProject } from './doctor.mjs';
+import { installGlobalEntry, uninstallGlobalEntry } from './global-entry.mjs';
+import { migrate, planMigration, rollbackMigration } from './migrate.mjs';
+import { planUpgrade, rollbackUpgrade, upgradeProject } from './upgrade.mjs';
+import { bootstrap } from './bootstrap.mjs';
+import { validateRoutes } from './routes.mjs';
+import { brokerSkills } from './skill-broker.mjs';
+import { uninstallProject } from './uninstall.mjs';
+import { parseIntent } from './intent.mjs';
+import { classifyTaskText } from './task-classifier.mjs';
+import { grantDeepPermit, prepareDeep, readDeepState, revokeDeepPermit } from './deep.mjs';
 
-const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-
-const HELP = `VibeTether — keep coding agents tethered to project truth
+const HELP=`VibeTether 1.0.0-rc.3 — long-task control kernel and cold Skill broker
 
 Usage:
-  vibetether init [options]
-  vibetether bootstrap [options]
-  vibetether doctor [options]
-  vibetether capabilities [options]
-  vibetether customize [options]
-  vibetether route [options]
-  vibetether route complete [options]
-  vibetether route abandon [options]
-  vibetether truth reconcile [options]
-  vibetether uninstall [options]
-  vibetether --help
-  vibetether --version
+  vibetether init [--interactive] [--project PATH] [--agent codex|claude|both] [--profile core|standard|extended] [--bundle web|production] [--control-mode team|hybrid|local]
+  vibetether bootstrap --goal TEXT --success-evidence TEXT [--confirmed] --yes
+  vibetether context [--task TEXT] [--boundary NAME] [--json]
+  vibetether context read HANDLE [--offset N] [--limit N]
+  vibetether deep prepare|permit|revoke|status
+  vibetether step start [--task TEXT | --phase PHASE --capability ID] --slice TEXT --success-evidence TEXT --success-check-json JSON [--signal ID] [--confirmed-by-user --decision-reason TEXT]
+  vibetether step finish [--evidence-command-json JSON] --output-proof-json JSON --exit-proof-json JSON
+  vibetether step abandon --reason TEXT
+  vibetether step heartbeat | reanchor | break-lease
+  vibetether truth add|confirm|decline|list
+  vibetether experience add|confirm|status|audit
+  vibetether worktree attach|list|create|remove|prune
+  vibetether worktree handoff create|accept|finish
+  vibetether skills search|inspect|import|evaluate|approve|promote|activate|read|exec|expose|disable|prefer|optimize|hotset
+  vibetether capabilities [--phase PHASE --capability ID]
+  vibetether doctor [--boundary NAME] [--json]
+  vibetether global install|uninstall
+  vibetether migrate [--dry-run|--yes]
+  vibetether migrate rollback --id ID --yes
+  vibetether upgrade [--dry-run|--yes]
+  vibetether upgrade rollback --id ID --yes
+  vibetether uninstall [--remove-contract] --yes
 
-Init and bootstrap options:
-  --project PATH                    Project directory (default: current directory)
-  --agent codex|claude|both         Agent harnesses to install (default: both)
-  --profile core|standard|extended  Control profile (default: standard)
-  --bundle web|production           Add a specialist bundle (repeatable)
-  --no-auto-bundles                 Disable repository-evidence bundle selection
-  --dry-run                         Show the plan without changing files
-  --yes                             Apply changes without an interactive prompt
-  --goal TEXT                       Record the project goal
-  --success-evidence TEXT           Record required success evidence
-  --scope-boundary TEXT             Add a scope boundary (repeatable)
-  --constraint TEXT                 Add a non-negotiable constraint (repeatable)
-  --visual-direction TEXT           Record the governing visual direction
-
-Doctor options:
-  --project PATH                    Project directory (default: current directory)
-  --boundary ordinary|completion|handoff|merge|deployment|release|publication
-                                    Set the current lifecycle boundary
-  --json                            Print a machine-readable report
-
-Capabilities options:
-  --project PATH                    Project directory (default: current directory)
-  --phase PHASE                     Resolve one lifecycle phase (use with --capability)
-  --capability ID                   Resolve one capability (use with --phase)
-  --signal SIGNAL                   Add a routing signal (repeatable)
-  --agent codex|claude              Check availability for one harness
-  --json                            Print the dashboard or resolution as JSON
-
-Customize options:
-  --project PATH                    Project directory (default: current directory)
-  --dry-run                         Preview the project route without writing
-
-Route start options:
-  --project PATH                    Project directory (default: current directory)
-  --execution-root PATH             Actual project-contained execution directory
-  --phase PHASE                     Resolve one lifecycle phase
-  --capability ID                   Resolve one capability
-  --signal SIGNAL                   Add an observable routing signal (repeatable)
-  --agent codex|claude              Check one enabled harness
-  --select SKILL                    Select an available alternative
-  --reason TEXT                     Required material reason with --select
-  --json                            Print machine-readable route state
-
-Route complete options:
-  --project PATH                    Project directory (default: current directory)
-  --evidence TEXT                   Add bounded completion evidence (repeatable)
-  --artifact PATH                   Add a safe project-relative artifact (repeatable)
-  --truth-decision no-material-change
-                                    Inline the common unchanged-authority disposition
-  --truth-reason TEXT               Required with --truth-decision
-  --json                            Print machine-readable route state
-
-Route abandon options:
-  --project PATH                    Project directory (default: current directory)
-  --reason TEXT                     Record the material abandonment reason
-  --truth-decision no-material-change
-                                    Inline the common unchanged-authority disposition
-  --truth-reason TEXT               Required with --truth-decision
-  --json                            Print machine-readable route state
-
-Truth reconcile options:
-  --project PATH                    Project directory (default: current directory)
-  --decision DECISION               no-material-change|candidate-pending|applied|declined
-  --reason TEXT                     Record the material reconciliation reason
-  --candidate PATH                  Required for candidate-pending, applied, and declined
-  --json                            Print machine-readable reconciliation state
-
-Uninstall options:
-  --project PATH                    Project directory (default: current directory)
-  --dry-run                         Show the plan without changing files
-  --yes                             Apply changes without an interactive prompt
+Exit codes: 2 invalid input, 3 conflict or safety refusal, 4 health check failed.
 `;
 
-function valueAfter(args, index, flag) {
-  if (index + 1 >= args.length || args[index + 1].startsWith('--')) {
-    throw new CliError(`Missing value for ${flag}.`);
-  }
-  return args[index + 1];
-}
+const MULTI=new Set(['bundle','signal','success_evidence','success_check_json','evidence_command_json','evidence_artifact','output_proof_json','exit_proof_json','scope_boundary','constraint','trigger','negative_trigger','capability','phase','host','os','protected_capability','evidence_id','experience_id','artifact','arg','output','exit_evidence','fact','assumption','decision','operation','path']);
+const BOOLEAN=new Set(['json','yes','dry_run','confirmed','network','external_write','code_write','force','remove_contract','deep','confirmed_by_user','interactive']);
 
-function parseInit(args, command = 'init') {
-  const options = {
-    project: process.cwd(),
-    agent: 'both',
-    profile: 'standard',
-    bundles: [],
-    autoBundles: true,
-    dryRun: false,
-    yes: false,
-    goal: null,
-    successEvidence: null,
-    scopeBoundaries: [],
-    constraints: [],
-    visualDirection: null,
-    explicit: {
-      agent: false,
-      profile: false,
-      bundles: false,
-      goal: false,
-      successEvidence: false,
-      scopeBoundaries: false,
-      constraints: false,
-      visualDirection: false,
-    },
-  };
-  for (let index = 0; index < args.length; index += 1) {
-    const flag = args[index];
-    if (flag === '--project') options.project = valueAfter(args, index++, flag);
-    else if (flag === '--agent') {
-      options.agent = valueAfter(args, index++, flag);
-      options.explicit.agent = true;
-    } else if (flag === '--profile') {
-      options.profile = valueAfter(args, index++, flag);
-      options.explicit.profile = true;
-    } else if (flag === '--bundle') {
-      options.bundles.push(valueAfter(args, index++, flag));
-      options.explicit.bundles = true;
-    }
-    else if (flag === '--no-auto-bundles') options.autoBundles = false;
-    else if (flag === '--dry-run') options.dryRun = true;
-    else if (flag === '--yes') options.yes = true;
-    else if (flag === '--goal') {
-      options.goal = valueAfter(args, index++, flag);
-      options.explicit.goal = true;
-    } else if (flag === '--success-evidence') {
-      options.successEvidence = valueAfter(args, index++, flag);
-      options.explicit.successEvidence = true;
-    } else if (flag === '--scope-boundary') {
-      options.scopeBoundaries.push(valueAfter(args, index++, flag));
-      options.explicit.scopeBoundaries = true;
-    } else if (flag === '--constraint') {
-      options.constraints.push(valueAfter(args, index++, flag));
-      options.explicit.constraints = true;
-    } else if (flag === '--visual-direction') {
-      options.visualDirection = valueAfter(args, index++, flag);
-      options.explicit.visualDirection = true;
-    }
-    else if (flag === '--help' || flag === '-h') return { help: true };
-    else throw new CliError(`Unknown option for ${command}: ${flag}`);
-  }
-  if (!['codex', 'claude', 'both'].includes(options.agent)) {
-    throw new CliError(`Invalid --agent value: ${options.agent}`);
-  }
-  if (!['core', 'standard', 'extended'].includes(options.profile)) {
-    throw new CliError(`Invalid --profile value: ${options.profile}`);
-  }
-  const invalidBundle = options.bundles.find((bundle) => !['web', 'production'].includes(bundle));
-  if (invalidBundle) throw new CliError(`Invalid --bundle value: ${invalidBundle}`);
-  options.bundles = [...new Set(options.bundles)];
-  if (options.profile === 'core' && options.bundles.length > 0) {
-    throw new CliError('The core profile cannot be combined with --bundle because core is provider-free.');
+function key(flag) { return flag.replace(/^--/,'').replaceAll('-','_'); }
+function parse(tokens) {
+  const options={_:[]};
+  for (let index=0;index<tokens.length;index+=1) {
+    const token=tokens[index];
+    if (!token.startsWith('--')) { options._.push(token); continue; }
+    const name=key(token);
+    if (BOOLEAN.has(name)) { options[name]=true; continue; }
+    if (index+1>=tokens.length||tokens[index+1].startsWith('--')) throw usageError(`Missing value for ${token}.`);
+    const value=tokens[++index];
+    if (MULTI.has(name)) { (options[name]??=[]).push(value); } else options[name]=value;
   }
   return options;
 }
-
-function parseSimple(args, command) {
-  const options = {
-    project: process.cwd(),
-    json: false,
-    dryRun: false,
-    yes: false,
-    boundary: 'ordinary',
-  };
-  for (let index = 0; index < args.length; index += 1) {
-    const flag = args[index];
-    if (flag === '--project') options.project = valueAfter(args, index++, flag);
-    else if (flag === '--json' && command === 'doctor') options.json = true;
-    else if (flag === '--boundary' && command === 'doctor') options.boundary = valueAfter(args, index++, flag);
-    else if (flag === '--dry-run' && command === 'uninstall') options.dryRun = true;
-    else if (flag === '--yes' && command === 'uninstall') options.yes = true;
-    else if (flag === '--help' || flag === '-h') return { help: true };
-    else throw new CliError(`Unknown option for ${command}: ${flag}`);
+function number(value,label,defaultValue=null) { if (value===undefined||value===null) return defaultValue; const parsed=Number(value); if (!Number.isInteger(parsed)) throw usageError(`${label} must be an integer.`); return parsed; }
+function json(value,label) { try { return JSON.parse(value); } catch { throw usageError(`${label} must be valid JSON.`); } }
+function response(value,asJson=false) { return `${asJson?JSON.stringify(value,null,2):typeof value==='string'?value:JSON.stringify(value,null,2)}\n`; }
+async function interactiveInit(options,runtime={}) {
+  if (options.yes||options.dry_run) return options;
+  let prompt=null;
+  let close=false;
+  if (runtime.promptAdapter?.question) prompt=runtime.promptAdapter;
+  else if (input.isTTY&&output.isTTY) { prompt=createInterface({input,output}); close=true; }
+  else if (options.interactive===true) {
+    let supplied=''; for await (const chunk of input) supplied+=chunk;
+    const answers=supplied.split(/\r?\n/);
+    prompt={async question(text){ output.write(text); return answers.shift()??''; }};
   }
-  if (command === 'doctor'
-      && !['ordinary', 'completion', 'handoff', 'merge', 'deployment', 'release', 'publication'].includes(options.boundary)) {
-    throw new CliError(`Invalid --boundary value: ${options.boundary}`);
-  }
-  return options;
+  if (!prompt) return options;
+  try {
+    if (!options.goal) options.goal=(await prompt.question('Project goal: ')).trim();
+    if (!options.success_evidence?.length) options.success_evidence=[(await prompt.question('Required success evidence: ')).trim()];
+    const answer=(await prompt.question('Create the reviewed VibeTether Contract? [Y/n] ')).trim().toLowerCase();
+    if (answer&&answer!=='y'&&answer!=='yes') throw conflictError('Initialization cancelled.','CANCELLED');
+    options.confirmed=Boolean(options.goal&&options.success_evidence?.[0]); options.yes=true; return options;
+  } finally { if (close) prompt.close(); }
 }
 
-function parseCapabilities(args) {
-  const options = {
-    project: process.cwd(),
-    phase: null,
-    capability: null,
-    signals: [],
-    agent: null,
-    json: false,
-  };
-  for (let index = 0; index < args.length; index += 1) {
-    const flag = args[index];
-    if (flag === '--project') options.project = valueAfter(args, index++, flag);
-    else if (flag === '--phase') options.phase = valueAfter(args, index++, flag);
-    else if (flag === '--capability') options.capability = valueAfter(args, index++, flag);
-    else if (flag === '--signal') options.signals.push(valueAfter(args, index++, flag));
-    else if (flag === '--agent') options.agent = valueAfter(args, index++, flag);
-    else if (flag === '--json') options.json = true;
-    else if (flag === '--help' || flag === '-h') return { help: true };
-    else throw new CliError(`Unknown option for capabilities: ${flag}`);
-  }
-  if (options.agent && !['codex', 'claude'].includes(options.agent)) {
-    throw new CliError(`Invalid --agent value: ${options.agent}`);
-  }
-  return options;
+async function contextRuntime(project) {
+  const context=await discoverContract(project??process.cwd());
+  const authority=await authoritySnapshot(context.executionRoot,parseTruthMap(context.truthSource),context.intentSource);
+  const runtime=await attachWorktree(context,authority.authority_digest);
+  return {context,authority,runtime};
+}
+async function writeSkills(context,mutator) {
+  const next=await mutator(structuredClone(context.skills));
+  await writeProjectJson(context.root,context.manifest.skills_lock,next); return next;
 }
 
-function parseCustomize(args) {
-  const options = { project: process.cwd(), dryRun: false };
-  for (let index = 0; index < args.length; index += 1) {
-    const flag = args[index];
-    if (flag === '--project') options.project = valueAfter(args, index++, flag);
-    else if (flag === '--dry-run') options.dryRun = true;
-    else if (flag === '--help' || flag === '-h') return { help: true };
-    else throw new CliError(`Unknown option for customize: ${flag}`);
+export async function main(args=[],runtime={}) {
+  if (!args.length||args[0]==='--help'||args[0]==='-h') return HELP;
+  if (args[0]==='--version'||args[0]==='-v') return `${VERSION}\n`;
+  const [command,...rest]=args; const options=parse(rest); const action=options._[0];
+  if (command==='init') {
+    const prepared=await interactiveInit(options,runtime);
+    return response(await initialize({project:prepared.project,agent:prepared.agent??'both',profile:prepared.profile??'standard',bundles:prepared.bundle??[],control_mode:prepared.control_mode??'team',goal:prepared.goal,success_evidence:prepared.success_evidence?.[0]??prepared.success_evidence,scope_boundaries:prepared.scope_boundary??[],constraints:prepared.constraint??[],confirmed:prepared.confirmed,dry_run:prepared.dry_run,yes:prepared.yes}),prepared.json);
   }
-  return options;
-}
-
-function parseRoute(args) {
-  const action = ['complete', 'abandon'].includes(args[0]) ? args.shift() : 'start';
-  const options = {
-    action,
-    project: process.cwd(),
-    executionRoot: null,
-    phase: null,
-    capability: null,
-    signals: [],
-    agent: null,
-    select: null,
-    reason: null,
-    truthDecision: null,
-    truthReason: null,
-    evidence: [],
-    artifacts: [],
-    json: false,
-  };
-  for (let index = 0; index < args.length; index += 1) {
-    const flag = args[index];
-    if (flag === '--project') options.project = valueAfter(args, index++, flag);
-    else if (flag === '--json') options.json = true;
-    else if (flag === '--help' || flag === '-h') return { help: true };
-    else if (action === 'start' && flag === '--phase') options.phase = valueAfter(args, index++, flag);
-    else if (action === 'start' && flag === '--execution-root') options.executionRoot = valueAfter(args, index++, flag);
-    else if (action === 'start' && flag === '--capability') options.capability = valueAfter(args, index++, flag);
-    else if (action === 'start' && flag === '--signal') options.signals.push(valueAfter(args, index++, flag));
-    else if (action === 'start' && flag === '--agent') options.agent = valueAfter(args, index++, flag);
-    else if (action === 'start' && flag === '--select') options.select = valueAfter(args, index++, flag);
-    else if (action === 'start' && flag === '--reason') options.reason = valueAfter(args, index++, flag);
-    else if (action === 'complete' && flag === '--evidence') options.evidence.push(valueAfter(args, index++, flag));
-    else if (action === 'complete' && flag === '--artifact') options.artifacts.push(valueAfter(args, index++, flag));
-    else if (action !== 'start' && flag === '--truth-decision') options.truthDecision = valueAfter(args, index++, flag);
-    else if (action !== 'start' && flag === '--truth-reason') options.truthReason = valueAfter(args, index++, flag);
-    else if (action === 'abandon' && flag === '--reason') options.reason = valueAfter(args, index++, flag);
-    else throw new CliError(`Unknown option for route${action === 'start' ? '' : ` ${action}`}: ${flag}`);
+  if (command==='bootstrap') return response(await bootstrap({project:options.project,goal:options.goal,success_evidence:options.success_evidence?.[0],scope_boundaries:options.scope_boundary,constraints:options.constraint,confirmed:options.confirmed,dry_run:options.dry_run,yes:options.yes}),options.json);
+  if (command==='context') {
+    if (action==='read') return response(await readContextHandle({project:options.project,handle:options._[1],offset:number(options.offset,'offset',0),limit:number(options.limit,'limit',8192)}),true);
+    return response(await buildContext({project:options.project,boundary:options.boundary,phase:options.phase?.[0],capability:options.capability?.[0],signals:options.signal,agent:options.agent,provider:options.provider,permissions:{network:options.network===true,external_write:options.external_write===true,code_write:options.code_write===true},task_text:options.task,paths:options.path??[]}),options.json);
   }
-  if (action === 'start') {
-    if (!options.phase || !options.capability) {
-      throw new CliError('Route start requires --phase and --capability together.');
+  if (command==='deep') {
+    if (action==='prepare') return response(await prepareDeep({project:options.project,task:options.task,slice:options.slice,success_evidence:options.success_evidence,facts:options.fact,assumptions:options.assumption,decisions:options.decision}),options.json);
+    if (action==='permit') return response(await grantDeepPermit({project:options.project,confirmed_by_user:options.confirmed_by_user===true,reason:options.reason,resolution:options.resolution_json?json(options.resolution_json,'resolution-json'):null}),options.json);
+    if (action==='revoke') return response(await revokeDeepPermit({project:options.project,reason:options.reason}),options.json);
+    if (action==='status') { const {runtime:rt}=await contextRuntime(options.project); return response(await readDeepState(rt.paths,{allowMissing:true})??{status:'not-prepared'},options.json); }
+    throw usageError('Unknown deep action.');
+  }
+  if (command==='step') {
+    if (action==='start') {
+      let classified=null;
+      if (options.task&&(!options.phase?.[0]||!options.capability?.[0])) {
+        const context=await discoverContract(options.project??process.cwd());
+        classified=classifyTaskText(options.task,{intentStatus:parseIntent(context.intentSource).status,currentPhase:'DISCOVER'});
+      }
+      return response(await startStep({project:options.project,phase:options.phase?.[0]??classified?.phase,capability:options.capability?.[0]??classified?.capability,slice:options.slice??options.task,task_text:options.task,classification:classified,deep:options.deep===true,confirmed_by_user:options.confirmed_by_user===true,decision_reason:options.decision_reason,scope_paths:options.path??[],success_evidence:options.success_evidence,success_checks:(options.success_check_json??[]).map((item)=>json(item,'success-check-json')),signals:[...new Set([...(options.signal??[]),...(classified?.signals??[])])],agent:options.agent,provider:options.provider,network:options.network,external_write:options.external_write,code_write:options.code_write}),options.json);
     }
-    if (options.agent && !['codex', 'claude'].includes(options.agent)) {
-      throw new CliError(`Invalid --agent value: ${options.agent}`);
+    if (action==='finish') return response(await finishStep({project:options.project,evidence_commands:(options.evidence_command_json??[]).map((item)=>json(item,'evidence-command-json')),evidence_artifacts:options.evidence_artifact??[],evidence:options.evidence,truth_decision:options.truth_decision,truth_path:options.truth_path,experience_ids:options.experience_id,capture_class:options.capture,outputs:options.output??[],exit_evidence:options.exit_evidence??[],output_proofs:(options.output_proof_json??[]).map((item)=>json(item,'output-proof-json')),exit_proofs:(options.exit_proof_json??[]).map((item)=>json(item,'exit-proof-json'))}),options.json);
+    if (action==='abandon') return response(await abandonStep({project:options.project,reason:options.reason,truth_decision:options.truth_decision,truth_path:options.truth_path}),options.json);
+    if (action==='heartbeat') return response(await heartbeatStep({project:options.project}),options.json);
+    if (action==='reanchor') return response(await reanchorStep({project:options.project,reason:options.reason}),options.json);
+    if (action==='break-lease') { const {runtime}=await contextRuntime(options.project); const route=await breakLease(runtime.paths,options.reason); return response({status:'lease-broken',route_status:route?.status??null,route_id:route?.id??null},options.json); }
+    throw usageError('Unknown step action.');
+  }
+  if (command==='truth') {
+    const context=await discoverContract(options.project??process.cwd()); const map=parseTruthMap(context.truthSource);
+    if (!action||action==='list') return response(map,options.json);
+    let next;
+    if (action==='add') next=addTruthCandidate(map,{path:options.path?.[0]??options.path,role:options.role,scope:options.scope??'.',phases:options.phase??[],operations:options.operation??[],directionality:options.directionality,source:options.source,reason:options.reason,supersedes:options.supersedes});
+    else if (action==='confirm') next=confirmTruthCandidate(map,options.path?.[0]??options.path);
+    else if (action==='decline') next=declineTruthCandidate(map,options.path?.[0]??options.path,options.reason);
+    else throw usageError('Unknown truth action.');
+    if (!options.yes) throw conflictError('Truth changes require --yes.','CONFIRMATION_REQUIRED');
+    await writeProjectText(context.root,context.manifest.truth_index,renderTruthMap(next)); return response({status:action,path:options.path?.[0]??options.path},options.json);
+  }
+  if (command==='experience') {
+    const {context,authority,runtime}=await contextRuntime(options.project); validateExperienceIndex(context.experience); const skillsDigest=skillsLockDigest(context.skills);
+    if (action==='add') {
+      const next=createExperienceCandidate(context.experience,{id:options.id,use_when:options.trigger,systems:options.systems?options.systems.split(','):[],artifacts:options.artifact??[],revalidate_when:options.revalidate_when?options.revalidate_when.split(','):[]});
+      if (!options.yes) throw conflictError('Experience changes require --yes.','CONFIRMATION_REQUIRED'); await writeProjectJson(context.root,context.manifest.experience_index,next); return response({status:'candidate',id:options.id},options.json);
     }
-    if (options.select && !options.reason) throw new CliError('--reason is required when --select is used.');
-    if (options.reason && !options.select) throw new CliError('--select is required when --reason is used.');
-  } else {
-    if (Boolean(options.truthDecision) !== Boolean(options.truthReason)) {
-      throw new CliError('--truth-decision and --truth-reason are required together.');
+    if (action==='confirm') { const next=await confirmExperience(context,runtime.paths,context.experience,options.id,{authorityDigest:authority.authority_digest,skillsDigest,evidenceIds:options.evidence_id??[],artifactPaths:options.artifact??[],reviewDays:number(options.review_days,'review-days',90)}); if (!options.yes) throw conflictError('Experience confirmation requires --yes.','CONFIRMATION_REQUIRED'); await writeProjectJson(context.root,context.manifest.experience_index,next); return response({status:'proven',id:options.id},options.json); }
+    if (action==='status') { const next=updateExperienceStatus(context.experience,options.id,options.status,options.reason); if (!options.yes) throw conflictError('Experience status changes require --yes.','CONFIRMATION_REQUIRED'); await writeProjectJson(context.root,context.manifest.experience_index,next); return response({status:options.status,id:options.id},options.json); }
+    if (action==='audit') return response(await auditExperience(context,runtime.paths,context.experience,{authorityDigest:authority.authority_digest,skillsDigest,signals:options.signal??[]}),options.json);
+    throw usageError('Unknown experience action.');
+  }
+  if (command==='worktree') {
+    if (action==='attach') return response(await attachFromDirectory(options.project??process.cwd(),options.contract_root),options.json);
+    if (action==='list') return response(await listAttachedWorktrees(options.project),options.json);
+    if (action==='create') return response(await createWorktree({project:options.project,target:options.path?.[0]??options.path,branch:options.branch,startPoint:options.start_point}),options.json);
+    if (action==='remove') return response(await removeWorktree({project:options.project,target:options.path?.[0]??options.path,force:options.force}),options.json);
+    if (action==='prune') return response(await pruneWorktrees(options.project),options.json);
+    if (action==='handoff') {
+      const sub=options._[1]; const {context,runtime}=await contextRuntime(options.project);
+      if (sub==='create') return response(await createHandoff(context,runtime.paths,{slice:options.slice,success_evidence:options.success_evidence,protected_capabilities:options.protected_capability,permissions:options.permissions_json?json(options.permissions_json,'permissions-json'):{code_write:false,truth_write:false}}),options.json);
+      if (sub==='accept') return response(await acceptHandoff(context,runtime.paths,options.id),options.json);
+      if (sub==='finish') return response(await finishHandoff(runtime.paths,options.id,options.evidence_id??[]),options.json);
     }
-    if (options.truthDecision && options.truthDecision !== 'no-material-change') {
-      throw new CliError('Route exit supports only --truth-decision no-material-change; use truth reconcile for other decisions.');
+    throw usageError('Unknown worktree action.');
+  }
+  if (command==='skills') {
+    if (action==='search') return response(await searchSkills(options.query??options._[1]??''),options.json);
+    if (action==='inspect') return response(await inspectSkill(options.id??options._[1]),options.json);
+    if (action==='import') {
+      const card=await importProvider({id:options.id,source:options.source,source_label:options.source_label,version:options.version,license:options.license,capabilities:options.capability,phases:options.phase,positive_triggers:options.trigger,negative_triggers:options.negative_trigger,hosts:options.host,operating_systems:options.os,network:options.network,external_write:options.external_write,code_write:options.code_write});
+      if (options.project) { const context=await discoverContract(options.project); await writeSkills(context,(lock)=>({...lock,pins:[...lock.pins.filter((pin)=>pin.id!==card.id),{id:card.id,object_hash:card.object_hash,fingerprint:card.fingerprint,source:card.source,version:card.version,license:card.license}]})); }
+      return response(card,options.json);
     }
+    if (action==='evaluate') return response(await evaluateProvider(options.id,{true_positive:number(options.true_positive,'true-positive',0),false_positive:number(options.false_positive,'false-positive',0),false_negative:number(options.false_negative,'false-negative',0),output_gain:Number(options.output_gain??0),notes:options.notes}),options.json);
+    if (action==='approve') return response(await approveProvider(options.id),options.json);
+    if (action==='promote') return response(await promoteProvider(options.id),options.json);
+    if (action==='activate') { const {context,runtime}=await contextRuntime(options.project); const route=await readRoute(runtime.paths,{allowMissing:true}); if (!route||route.status!=='active') throw conflictError('Activation requires an active step.','ACTIVE_STEP_REQUIRED'); const registry=await loadProviderRegistry(); const routes=context.routes?validateRoutes(context.routes,registry.capabilities,registry.providers):null; const stats=await loadProviderStats(runtime.paths); const broker=brokerSkills(registry,{phase:route.phase,capability:route.capability,signals:route.signals,agent:options.agent??'codex',provider:options.id,permissions:route.permissions},context.skills,routes,stats); return response(await activateSkill(context,runtime.paths,{...route,selected:broker.selected}),options.json); }
+    if (action==='read') { const {runtime}=await contextRuntime(options.project); return response(await readSkillResource(runtime.paths,options.activation_id,options.resource??'entry',{offset:number(options.offset,'offset',0),limit:number(options.limit,'limit',8192)}),true); }
+    if (action==='exec') { const {runtime}=await contextRuntime(options.project); return response(await execSkillScript(runtime.paths,options.activation_id,options.script,options.arg??[]),options.json); }
+    if (action==='expose') { const context=await discoverContract(options.project??process.cwd()); return response(await exposeProvider(context,options.id,{agent:options.agent??'codex',scope:options.scope??'user'}),options.json); }
+    if (['disable','prefer','hotset'].includes(action)) {
+      const context=await discoverContract(options.project??process.cwd()); const id=options.id;
+      const next=await writeSkills(context,(lock)=>{
+        if (action==='disable') return {...lock,disabled:[...new Set([...lock.disabled,id])],hotset:lock.hotset.filter((item)=>item!==id)};
+        if (action==='prefer') return {...lock,preferences:[id,...lock.preferences.filter((item)=>item!==id)]};
+        if (!id) return lock;
+        const hotset=[...new Set([...lock.hotset,id])]; if (hotset.length>lock.hotset_max) throw conflictError('Hotset exceeds hotset_max.','HOTSET_LIMIT'); return {...lock,hotset};
+      });
+      return response(action==='hotset'?await providerHotset(next):next,options.json);
+    }
+    if (action==='optimize') { const {context,runtime}=await contextRuntime(options.project); return response(await optimizeSkills(runtime.paths,context.skills),options.json); }
+    throw usageError('Unknown skills action.');
   }
-  return options;
+  if (command==='capabilities') return response(await showCapabilities({project:options.project,phase:options.phase?.[0],capability:options.capability?.[0],signals:options.signal,agent:options.agent,provider:options.provider,permissions:{network:options.network===true,external_write:options.external_write===true,code_write:options.code_write===true},task_text:options.task,paths:options.path??[]}),options.json);
+  if (command==='doctor') { const report=await inspectProject({project:options.project,boundary:options.boundary,json:options.json,agent:options.agent}); return response(report,options.json); }
+  if (command==='global') {
+    if (action==='install') return response(await installGlobalEntry({agent:options.agent??'both',bin_dir:options.bin_dir,dry_run:options.dry_run,yes:options.yes}),options.json);
+    if (action==='uninstall') return response(await uninstallGlobalEntry({agent:options.agent??'both',bin_dir:options.bin_dir,dry_run:options.dry_run,yes:options.yes}),options.json);
+    throw usageError('Unknown global action.');
+  }
+  if (command==='migrate') {
+    if (action==='rollback') return response(await rollbackMigration({id:options.id,yes:options.yes}),options.json);
+    return response(options.dry_run?await planMigration({project:options.project,control_mode:options.control_mode}):await migrate({project:options.project,control_mode:options.control_mode,agent:options.agent,dry_run:options.dry_run,yes:options.yes}),options.json);
+  }
+  if (command==='upgrade') {
+    if (action==='rollback') return response(await rollbackUpgrade({id:options.id,yes:options.yes}),options.json);
+    return response(options.dry_run?await planUpgrade({project:options.project,agent:options.agent}):await upgradeProject({project:options.project,agent:options.agent,yes:options.yes}),options.json);
+  }
+  if (command==='uninstall') return response(await uninstallProject({project:options.project,agent:options.agent,dry_run:options.dry_run,yes:options.yes,remove_contract:options.remove_contract}),options.json);
+  throw usageError(`Unknown command: ${command}`);
 }
-
-function parseTruth(args) {
-  if (args[0] !== 'reconcile') throw new CliError('Truth command requires the reconcile action.');
-  const options = {
-    project: process.cwd(),
-    decision: null,
-    reason: null,
-    candidate: null,
-    json: false,
-  };
-  for (let index = 1; index < args.length; index += 1) {
-    const flag = args[index];
-    if (flag === '--project') options.project = valueAfter(args, index++, flag);
-    else if (flag === '--decision') options.decision = valueAfter(args, index++, flag);
-    else if (flag === '--reason') options.reason = valueAfter(args, index++, flag);
-    else if (flag === '--candidate') options.candidate = valueAfter(args, index++, flag);
-    else if (flag === '--json') options.json = true;
-    else if (flag === '--help' || flag === '-h') return { help: true };
-    else throw new CliError(`Unknown option for truth reconcile: ${flag}`);
-  }
-  if (!options.decision) throw new CliError('Truth reconcile requires --decision.');
-  if (!options.reason) throw new CliError('Truth reconcile requires --reason.');
-  return options;
-}
-
-async function version() {
-  const data = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
-  return `${data.version}\n`;
-}
-
-export async function main(args = process.argv.slice(2), runtime = {}) {
-  if (args.length === 0 || args[0] === '--help' || args[0] === '-h') return HELP;
-  if (args[0] === '--version' || args[0] === '-v') return version();
-  if (args[0] === 'init') {
-    const options = parseInit(args.slice(1), 'init');
-    if (options.help) return HELP;
-    return runInit(options, runtime);
-  }
-  if (args[0] === 'bootstrap') {
-    const options = parseInit(args.slice(1), 'bootstrap');
-    if (options.help) return HELP;
-    return runBootstrap(options, runtime);
-  }
-  if (args[0] === 'doctor') {
-    const options = parseSimple(args.slice(1), 'doctor');
-    if (options.help) return HELP;
-    return inspectProject(options);
-  }
-  if (args[0] === 'capabilities') {
-    const options = parseCapabilities(args.slice(1));
-    if (options.help) return HELP;
-    return showCapabilities(options);
-  }
-  if (args[0] === 'customize') {
-    const options = parseCustomize(args.slice(1));
-    if (options.help) return HELP;
-    return runCustomize(options, runtime);
-  }
-  if (args[0] === 'route') {
-    const options = parseRoute(args.slice(1));
-    if (options.help) return HELP;
-    return runRoute(options);
-  }
-  if (args[0] === 'truth') {
-    const options = parseTruth(args.slice(1));
-    if (options.help) return HELP;
-    return runTruthReconciliation(options);
-  }
-  if (args[0] === 'uninstall') {
-    const options = parseSimple(args.slice(1), 'uninstall');
-    if (options.help) return HELP;
-    return uninstall(options);
-  }
-  throw new CliError(`Unknown command: ${args[0]}`);
-}
-
-export { CliError, HELP };

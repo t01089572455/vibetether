@@ -1,0 +1,2695 @@
+{
+  "schema_version": 1,
+  "providers": [
+    {
+      "id": "addy-api-and-interface-design",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "web"
+      ],
+      "version": "commit:98967c4",
+      "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "product-design"
+      ],
+      "phases": [
+        "DESIGN"
+      ],
+      "positive_triggers": [
+        "api-design",
+        "interface-design"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 10307,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Guides stable API and interface design. Use when designing APIs, module boundaries, or any public interface. Use when creating REST or GraphQL endpoints, defining type contracts between modules, or establishing boundaries between frontend and backend.",
+      "path": "registry/community/addy-api-and-interface-design",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "alternative"
+    },
+    {
+      "id": "addy-browser-testing-with-devtools",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "production"
+      ],
+      "version": "commit:98967c4",
+      "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "browser-verification"
+      ],
+      "phases": [
+        "VERIFY"
+      ],
+      "positive_triggers": [
+        "browser"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": true,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 14539,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Tests in real browsers via Chrome DevTools MCP. Use when building or debugging anything that runs in a browser. Use when you need to inspect the DOM, capture console errors, analyze network requests, profile performance, or verify visual output with real runtime data. Requires the chrome-devtools MCP server to be configured.",
+      "path": "registry/community/addy-browser-testing-with-devtools",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": true,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "addy-ci-cd-and-automation",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "production"
+      ],
+      "version": "commit:98967c4",
+      "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "ci-cd"
+      ],
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "positive_triggers": [
+        "ci"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": true
+      },
+      "context_bytes": 11332,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Automates CI/CD pipeline setup. Use when setting up or modifying build and deployment pipelines. Use when you need to automate quality gates, configure test runners in CI, or establish deployment strategies.",
+      "path": "registry/community/addy-ci-cd-and-automation",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "addy-code-review-and-quality",
+      "channel": "beta",
+      "builtin": true,
+      "packs": [
+        "production"
+      ],
+      "version": "commit:98967c4",
+      "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "code-review"
+      ],
+      "phases": [
+        "REVIEW"
+      ],
+      "positive_triggers": [
+        "code-review",
+        "quality-review"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 20543,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Conducts multi-axis code review. Use before merging any change. Use when reviewing code written by yourself, another agent, or a human. Use when you need to assess code quality across multiple dimensions before it enters the main branch.",
+      "path": "registry/community/addy-code-review-and-quality",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": true,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "alternative"
+    },
+    {
+      "id": "addy-context-engineering",
+      "channel": "beta",
+      "builtin": true,
+      "packs": [
+        "production"
+      ],
+      "version": "commit:98967c4",
+      "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "production-engineering"
+      ],
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "positive_triggers": [
+        "context-engineering",
+        "long-task"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": true
+      },
+      "context_bytes": 11070,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Optimizes agent context setup. Use when starting a new session, when agent output quality degrades, when switching between tasks, or when you need to configure rules files and context for a project.",
+      "path": "registry/community/addy-context-engineering",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "alternative"
+    },
+    {
+      "id": "addy-deprecation-and-migration",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "production"
+      ],
+      "version": "commit:98967c4",
+      "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "migration"
+      ],
+      "phases": [
+        "PLAN"
+      ],
+      "positive_triggers": [
+        "migration"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": true,
+        "code_write": false
+      },
+      "context_bytes": 12516,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Manages deprecation and migration. Use when removing old systems, APIs, or features. Use when migrating users from one implementation to another. Use when deciding whether to maintain or sunset existing code.",
+      "path": "registry/community/addy-deprecation-and-migration",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": true,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "addy-documentation-and-adrs",
+      "channel": "beta",
+      "builtin": true,
+      "packs": [
+        "production"
+      ],
+      "version": "commit:98967c4",
+      "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "document-alignment"
+      ],
+      "phases": [
+        "ALIGN"
+      ],
+      "positive_triggers": [
+        "documentation",
+        "adr"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 8734,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Records decisions and documentation. Use when making architectural decisions, changing public APIs, shipping features, or when you need to record context that future engineers and agents will need to understand the codebase.",
+      "path": "registry/community/addy-documentation-and-adrs",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "alternative"
+    },
+    {
+      "id": "addy-frontend-ui-engineering",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "web"
+      ],
+      "version": "commit:98967c4",
+      "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "frontend-engineering"
+      ],
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "positive_triggers": [
+        "frontend",
+        "user-visible-ui"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": true
+      },
+      "context_bytes": 10705,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Builds production-quality, accessible, responsive user-facing UIs. Use when building or modifying interfaces and pages, creating components, implementing layouts, meeting WCAG accessibility requirements, managing state, or when the output needs to look and feel production-quality rather than AI-generated.",
+      "path": "registry/community/addy-frontend-ui-engineering",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "alternative"
+    },
+    {
+      "id": "addy-git-workflow-and-versioning",
+      "channel": "beta",
+      "builtin": true,
+      "packs": [
+        "production"
+      ],
+      "version": "commit:98967c4",
+      "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "branch-finish"
+      ],
+      "phases": [
+        "SHIP"
+      ],
+      "positive_triggers": [
+        "git",
+        "branch-finish"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 14000,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Structures git workflow practices. Use when making any code change. Use when committing, branching, resolving conflicts, or when you need to organize work across multiple parallel streams. Use when cutting a release, choosing a semantic version bump, tagging, or writing a changelog.",
+      "path": "registry/community/addy-git-workflow-and-versioning",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": true,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "alternative"
+    },
+    {
+      "id": "addy-incremental-implementation",
+      "channel": "beta",
+      "builtin": true,
+      "packs": [
+        "production"
+      ],
+      "version": "commit:98967c4",
+      "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "implementation"
+      ],
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "positive_triggers": [
+        "incremental-implementation",
+        "multi-step-change"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": true
+      },
+      "context_bytes": 9249,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Delivers changes incrementally. Use when implementing any feature or change that touches more than one file. Use when you're about to write a large amount of code at once, or when a task feels too big to land in one step.",
+      "path": "registry/community/addy-incremental-implementation",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "alternative"
+    },
+    {
+      "id": "addy-observability-and-instrumentation",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "production"
+      ],
+      "version": "commit:98967c4",
+      "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "observability"
+      ],
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "positive_triggers": [
+        "observability"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": true,
+        "external_write": false,
+        "code_write": true
+      },
+      "context_bytes": 11047,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Instruments code so production behavior is visible and diagnosable. Use when adding logging, metrics, tracing, or alerting. Use when shipping any feature that runs in production and you need evidence it works. Use when production issues are reported but you can't tell what happened from the available data.",
+      "path": "registry/community/addy-observability-and-instrumentation",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "addy-performance-optimization",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "production"
+      ],
+      "version": "commit:98967c4",
+      "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "performance"
+      ],
+      "phases": [
+        "VERIFY"
+      ],
+      "positive_triggers": [
+        "performance"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 11658,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Optimizes application performance across frontend, backend, queries, and databases. Use when performance requirements exist, when you suspect performance regressions, when Core Web Vitals or load times need improvement, when N+1 query patterns need fixing, or when profiling reveals bottlenecks.",
+      "path": "registry/community/addy-performance-optimization",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "addy-security-and-hardening",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "production"
+      ],
+      "version": "commit:98967c4",
+      "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "security-review"
+      ],
+      "phases": [
+        "REVIEW"
+      ],
+      "positive_triggers": [
+        "security"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 20511,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Hardens code against vulnerabilities. Use when handling user input, authentication, data storage, or external integrations. Use when building any feature that accepts untrusted data, manages user sessions, or interacts with third-party services.",
+      "path": "registry/community/addy-security-and-hardening",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": true,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "addy-shipping-and-launch",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "production"
+      ],
+      "version": "commit:98967c4",
+      "source": "https://github.com/addyosmani/agent-skills.git@98967c45a42b88d6b8fb3a88b7ff6273920763d6",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "release-verification"
+      ],
+      "phases": [
+        "SHIP"
+      ],
+      "positive_triggers": [
+        "release"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": true,
+        "external_write": true,
+        "code_write": false
+      },
+      "context_bytes": 10045,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Prepares production launches. Use when preparing to deploy to production. Use when you need a pre-launch checklist, when setting up monitoring, when planning a staged rollout, or when you need a rollback strategy.",
+      "path": "registry/community/addy-shipping-and-launch",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "anthropic-frontend-design",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "extended"
+      ],
+      "version": "commit:9d2f1ae",
+      "source": "https://github.com/anthropics/skills.git@9d2f1ae187231d8199c64b5b762e1bdf2244733d",
+      "license": "Apache-2.0",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "frontend-product-design"
+      ],
+      "phases": [
+        "DESIGN"
+      ],
+      "positive_triggers": [
+        "user-visible-ui"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 8260,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one. Helps with aesthetic direction, typography, and making choices that don't read as templated defaults.",
+      "path": "registry/community/anthropic-frontend-design",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "mattpocock-code-review",
+      "channel": "beta",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v1.1.0",
+      "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "code-review"
+      ],
+      "phases": [
+        "REVIEW"
+      ],
+      "positive_triggers": [
+        "code-review",
+        "review-feedback"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 6740,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes — Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/PRD asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\".",
+      "path": "registry/community/mattpocock-code-review",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "alternative"
+    },
+    {
+      "id": "mattpocock-codebase-design",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v1.1.0",
+      "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "codebase-orientation"
+      ],
+      "phases": [
+        "ALIGN"
+      ],
+      "positive_triggers": [
+        "codebase-unfamiliar",
+        "entry-points-unclear"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 6488,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary.",
+      "path": "registry/community/mattpocock-codebase-design",
+      "resources": [
+        "DEEPENING.md",
+        "DESIGN-IT-TWICE.md"
+      ],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "mattpocock-diagnosing-bugs",
+      "channel": "beta",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v1.1.0",
+      "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "debugging"
+      ],
+      "phases": [
+        "DIAGNOSE"
+      ],
+      "positive_triggers": [
+        "unexpected-behavior",
+        "runtime-failure"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 8536,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Diagnosis loop for hard bugs and performance regressions. Use when the user says \"diagnose\"/\"debug this\", or reports something broken/throwing/failing/slow.",
+      "path": "registry/community/mattpocock-diagnosing-bugs",
+      "resources": [],
+      "scripts": [
+        "scripts/hitl-loop.template.sh"
+      ],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "alternative"
+    },
+    {
+      "id": "mattpocock-domain-modeling",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v1.1.0",
+      "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "domain-modeling"
+      ],
+      "phases": [
+        "ALIGN",
+        "DESIGN"
+      ],
+      "positive_triggers": [],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 3427,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Build and sharpen a project's domain model. Use when the user wants to pin down domain terminology or a ubiquitous language, record an architectural decision, or when another skill needs to maintain the domain model.",
+      "path": "registry/community/mattpocock-domain-modeling",
+      "resources": [
+        "ADR-FORMAT.md",
+        "CONTEXT-FORMAT.md"
+      ],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "mattpocock-grill-me",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v1.1.0",
+      "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "explicit-requirements-interview"
+      ],
+      "phases": [
+        "DISCOVER"
+      ],
+      "positive_triggers": [],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 147,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "A relentless interview to sharpen a plan or design.",
+      "path": "registry/community/mattpocock-grill-me",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "mattpocock-grill-with-docs",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v1.1.0",
+      "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "explicit-document-alignment"
+      ],
+      "phases": [
+        "ALIGN"
+      ],
+      "positive_triggers": [],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 245,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go.",
+      "path": "registry/community/mattpocock-grill-with-docs",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "mattpocock-grilling",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v1.1.0",
+      "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "requirements-clarification",
+        "document-alignment",
+        "project-bootstrap"
+      ],
+      "phases": [
+        "DISCOVER",
+        "ALIGN"
+      ],
+      "positive_triggers": [
+        "greenfield-directory",
+        "intent-unresolved",
+        "requirements-unclear",
+        "truth-sources-missing",
+        "vague-request"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 821,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Grill the user relentlessly about a plan or design. Use when the user wants to stress-test a plan before building, or uses any 'grill' trigger phrases.",
+      "path": "registry/community/mattpocock-grilling",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "mattpocock-prototype",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v1.1.0",
+      "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "prototype"
+      ],
+      "phases": [
+        "DESIGN"
+      ],
+      "positive_triggers": [
+        "runnable-experiment-needed",
+        "design-uncertainty"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 3002,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like.",
+      "path": "registry/community/mattpocock-prototype",
+      "resources": [
+        "LOGIC.md",
+        "UI.md"
+      ],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "mattpocock-research",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v1.1.0",
+      "source": "https://github.com/mattpocock/skills.git@d574778f94cf620fcc8ce741584093bc650a61d3",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "research"
+      ],
+      "phases": [
+        "DISCOVER"
+      ],
+      "positive_triggers": [
+        "primary-source-research-needed",
+        "external-facts-uncertain"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": true,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 799,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent.",
+      "path": "registry/community/mattpocock-research",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "superpowers-brainstorming",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v5.1.0",
+      "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "product-design"
+      ],
+      "phases": [
+        "DESIGN"
+      ],
+      "positive_triggers": [],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 10634,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "You MUST use this before any creative work - creating features, building components, adding functionality, or modifying behavior. Explores user intent, requirements and design before implementation.",
+      "path": "registry/community/superpowers-brainstorming",
+      "resources": [
+        "spec-document-reviewer-prompt.md",
+        "visual-companion.md"
+      ],
+      "scripts": [
+        "scripts/frame-template.html",
+        "scripts/helper.js",
+        "scripts/server.cjs",
+        "scripts/start-server.sh",
+        "scripts/stop-server.sh"
+      ],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "superpowers-dispatching-parallel-agents",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v5.1.0",
+      "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "parallel-execution"
+      ],
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "positive_triggers": [
+        "multiple-independent-tasks",
+        "subagents-available",
+        "delegation-authorized"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": true
+      },
+      "context_bytes": 6441,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies",
+      "path": "registry/community/superpowers-dispatching-parallel-agents",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "superpowers-executing-plans",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v5.1.0",
+      "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "plan-execution"
+      ],
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "positive_triggers": [],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": true
+      },
+      "context_bytes": 2469,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Use when you have a written implementation plan to execute in a separate session with review checkpoints",
+      "path": "registry/community/superpowers-executing-plans",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "superpowers-finishing-a-development-branch",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v5.1.0",
+      "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "branch-finish",
+        "release-verification"
+      ],
+      "phases": [
+        "SHIP"
+      ],
+      "positive_triggers": [],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": true,
+        "external_write": true,
+        "code_write": false
+      },
+      "context_bytes": 7061,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Use when implementation is complete, all tests pass, and you need to decide how to integrate the work - guides completion of development work by presenting structured options for merge, PR, or cleanup",
+      "path": "registry/community/superpowers-finishing-a-development-branch",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "superpowers-receiving-code-review",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v5.1.0",
+      "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "review-feedback"
+      ],
+      "phases": [
+        "REVIEW",
+        "EXECUTE_ONE"
+      ],
+      "positive_triggers": [
+        "review-feedback-received"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": true
+      },
+      "context_bytes": 6314,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Use when receiving code review feedback, before implementing suggestions, especially if feedback seems unclear or technically questionable - requires technical rigor and verification, not performative agreement or blind implementation",
+      "path": "registry/community/superpowers-receiving-code-review",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "superpowers-requesting-code-review",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v5.1.0",
+      "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "code-review"
+      ],
+      "phases": [
+        "REVIEW"
+      ],
+      "positive_triggers": [],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 2808,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Use when completing tasks, implementing major features, or before merging to verify work meets requirements",
+      "path": "registry/community/superpowers-requesting-code-review",
+      "resources": [
+        "code-reviewer.md"
+      ],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "superpowers-subagent-driven-development",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v5.1.0",
+      "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "plan-execution-with-subagents",
+        "plan-execution"
+      ],
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "positive_triggers": [
+        "subagents-available",
+        "delegation-authorized"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": true
+      },
+      "context_bytes": 12546,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Use when executing implementation plans with independent tasks in the current session",
+      "path": "registry/community/superpowers-subagent-driven-development",
+      "resources": [
+        "code-quality-reviewer-prompt.md",
+        "implementer-prompt.md",
+        "spec-reviewer-prompt.md"
+      ],
+      "scripts": [],
+      "worker_recommended": true,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "superpowers-systematic-debugging",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v5.1.0",
+      "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "debugging"
+      ],
+      "phases": [
+        "DIAGNOSE"
+      ],
+      "positive_triggers": [],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 9884,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Use when encountering any bug, test failure, or unexpected behavior, before proposing fixes",
+      "path": "registry/community/superpowers-systematic-debugging",
+      "resources": [
+        "condition-based-waiting-example.ts",
+        "condition-based-waiting.md",
+        "CREATION-LOG.md",
+        "defense-in-depth.md",
+        "find-polluter.sh",
+        "root-cause-tracing.md",
+        "test-academic.md",
+        "test-pressure-1.md",
+        "test-pressure-2.md",
+        "test-pressure-3.md"
+      ],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "superpowers-test-driven-development",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v5.1.0",
+      "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "tdd"
+      ],
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "positive_triggers": [],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": true
+      },
+      "context_bytes": 9867,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Use when implementing any feature or bugfix, before writing implementation code",
+      "path": "registry/community/superpowers-test-driven-development",
+      "resources": [
+        "testing-anti-patterns.md"
+      ],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "superpowers-using-git-worktrees",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v5.1.0",
+      "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "git-isolation"
+      ],
+      "phases": [
+        "PLAN",
+        "EXECUTE_ONE"
+      ],
+      "positive_triggers": [
+        "isolation-needed"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": true
+      },
+      "context_bytes": 7983,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Use when starting feature work that needs isolation from current workspace or before executing implementation plans - ensures an isolated workspace exists via native tools or git worktree fallback",
+      "path": "registry/community/superpowers-using-git-worktrees",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "superpowers-verification-before-completion",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v5.1.0",
+      "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "completion-verification"
+      ],
+      "phases": [
+        "VERIFY"
+      ],
+      "positive_triggers": [],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 4201,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Use when about to claim work is complete, fixed, or passing, before committing or creating PRs - requires running verification commands and confirming output before making any success claims; evidence before assertions always",
+      "path": "registry/community/superpowers-verification-before-completion",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "superpowers-writing-plans",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v5.1.0",
+      "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "planning"
+      ],
+      "phases": [
+        "PLAN"
+      ],
+      "positive_triggers": [],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 6100,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Use when you have a spec or requirements for a multi-step task, before touching code",
+      "path": "registry/community/superpowers-writing-plans",
+      "resources": [
+        "plan-document-reviewer-prompt.md"
+      ],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "superpowers-writing-skills",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "standard"
+      ],
+      "version": "v5.1.0",
+      "source": "https://github.com/obra/superpowers.git@f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "skill-authoring"
+      ],
+      "phases": [
+        "PLAN",
+        "DESIGN",
+        "EXECUTE_ONE",
+        "VERIFY"
+      ],
+      "positive_triggers": [
+        "skill-creation-or-update"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": true
+      },
+      "context_bytes": 22624,
+      "quality": {
+        "trigger_precision": 0.8,
+        "trigger_recall": 0.8,
+        "output_gain": 0.1,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "Use when creating new skills, editing existing skills, or verifying skills work before deployment",
+      "path": "registry/community/superpowers-writing-skills",
+      "resources": [
+        "anthropic-best-practices.md",
+        "graphviz-conventions.dot",
+        "persuasion-principles.md",
+        "render-graphs.js",
+        "testing-skills-with-subagents.md",
+        "examples/CLAUDE_MD_TESTING.md"
+      ],
+      "scripts": [],
+      "worker_recommended": true,
+      "evaluation": {
+        "source": "v0.6.3-curated-catalog",
+        "status": "requires-rc-held-out-evaluation"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "vibetether-built-in-alignment",
+      "channel": "stable",
+      "builtin": true,
+      "version": "1.0.0-rc.3",
+      "source": "vibetether",
+      "license": "MIT",
+      "fingerprint": null,
+      "capabilities": [
+        "requirements-clarification"
+      ],
+      "phases": [
+        "DISCOVER"
+      ],
+      "positive_triggers": [
+        "vague-request",
+        "intent-unresolved",
+        "requirements-unclear"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 1024,
+      "quality": {
+        "trigger_precision": 1,
+        "trigger_recall": 1,
+        "output_gain": 0.01,
+        "evaluated_at": "2026-07-20"
+      },
+      "description": "Clarify one unresolved user-owned decision after investigating discoverable facts.",
+      "path": "registry/builtins/vibetether-built-in-alignment",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "vibetether-built-in-debugging",
+      "channel": "stable",
+      "builtin": true,
+      "version": "1.0.0-rc.3",
+      "source": "vibetether",
+      "license": "MIT",
+      "fingerprint": null,
+      "capabilities": [
+        "debugging"
+      ],
+      "phases": [
+        "DIAGNOSE"
+      ],
+      "positive_triggers": [
+        "unexpected-behavior",
+        "flaky-test",
+        "runtime-failure"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 1024,
+      "quality": {
+        "trigger_precision": 1,
+        "trigger_recall": 1,
+        "output_gain": 0.01,
+        "evaluated_at": "2026-07-20"
+      },
+      "description": "Reproduce before changing code, isolate variables, and prove root cause.",
+      "path": "registry/builtins/vibetether-built-in-debugging",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "vibetether-built-in-design",
+      "channel": "stable",
+      "builtin": true,
+      "version": "1.0.0-rc.3",
+      "source": "vibetether",
+      "license": "MIT",
+      "fingerprint": null,
+      "capabilities": [
+        "product-design"
+      ],
+      "phases": [
+        "DESIGN"
+      ],
+      "positive_triggers": [
+        "product-design",
+        "ui-direction",
+        "architecture-choice"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 1024,
+      "quality": {
+        "trigger_precision": 1,
+        "trigger_recall": 1,
+        "output_gain": 0.01,
+        "evaluated_at": "2026-07-20"
+      },
+      "description": "Present bounded alternatives and trade-offs without propagating an unapproved direction.",
+      "path": "registry/builtins/vibetether-built-in-design",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "vibetether-built-in-document-alignment",
+      "channel": "stable",
+      "builtin": true,
+      "version": "1.0.0-rc.3",
+      "source": "vibetether",
+      "license": "MIT",
+      "fingerprint": null,
+      "capabilities": [
+        "document-alignment"
+      ],
+      "phases": [
+        "ALIGN"
+      ],
+      "positive_triggers": [
+        "source-conflict",
+        "authority-conflict"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 1024,
+      "quality": {
+        "trigger_precision": 1,
+        "trigger_recall": 1,
+        "output_gain": 0.01,
+        "evaluated_at": "2026-07-20"
+      },
+      "description": "Compare applicable sources and isolate the exact authority conflict.",
+      "path": "registry/builtins/vibetether-built-in-document-alignment",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "vibetether-built-in-implementation",
+      "channel": "stable",
+      "builtin": true,
+      "version": "1.0.0-rc.3",
+      "source": "vibetether",
+      "license": "MIT",
+      "fingerprint": null,
+      "capabilities": [
+        "implementation"
+      ],
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "positive_triggers": [
+        "new-behavior",
+        "bug-fix",
+        "refactor"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": true
+      },
+      "context_bytes": 1024,
+      "quality": {
+        "trigger_precision": 1,
+        "trigger_recall": 1,
+        "output_gain": 0.01,
+        "evaluated_at": "2026-07-20"
+      },
+      "description": "Make the smallest reversible change that satisfies the approved slice.",
+      "path": "registry/builtins/vibetether-built-in-implementation",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "vibetether-built-in-planning",
+      "channel": "stable",
+      "builtin": true,
+      "version": "1.0.0-rc.3",
+      "source": "vibetether",
+      "license": "MIT",
+      "fingerprint": null,
+      "capabilities": [
+        "planning",
+        "worktree-isolation"
+      ],
+      "phases": [
+        "PLAN"
+      ],
+      "positive_triggers": [
+        "multi-step-change",
+        "planning",
+        "isolation-needed"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 1024,
+      "quality": {
+        "trigger_precision": 1,
+        "trigger_recall": 1,
+        "output_gain": 0.01,
+        "evaluated_at": "2026-07-20"
+      },
+      "description": "Plan small slices with files, checks, stop conditions, and isolation.",
+      "path": "registry/builtins/vibetether-built-in-planning",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "vibetether-built-in-recall",
+      "channel": "stable",
+      "builtin": true,
+      "version": "1.0.0-rc.3",
+      "source": "vibetether",
+      "license": "MIT",
+      "fingerprint": null,
+      "capabilities": [
+        "proven-path-recall"
+      ],
+      "phases": [
+        "DISCOVER",
+        "ALIGN",
+        "PLAN",
+        "EXECUTE_ONE",
+        "VERIFY",
+        "SHIP"
+      ],
+      "positive_triggers": [
+        "repeatable-work",
+        "build",
+        "ci",
+        "deploy",
+        "publish",
+        "migration",
+        "authentication",
+        "recovery"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 1024,
+      "quality": {
+        "trigger_precision": 1,
+        "trigger_recall": 1,
+        "output_gain": 0.01,
+        "evaluated_at": "2026-07-20"
+      },
+      "description": "Read only matching proven artifacts whose hashes and evidence remain current.",
+      "path": "registry/builtins/vibetether-built-in-recall",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "vibetether-built-in-release",
+      "channel": "stable",
+      "builtin": true,
+      "version": "1.0.0-rc.3",
+      "source": "vibetether",
+      "license": "MIT",
+      "fingerprint": null,
+      "capabilities": [
+        "release"
+      ],
+      "phases": [
+        "SHIP"
+      ],
+      "positive_triggers": [
+        "release",
+        "publish",
+        "deploy"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 1024,
+      "quality": {
+        "trigger_precision": 1,
+        "trigger_recall": 1,
+        "output_gain": 0.01,
+        "evaluated_at": "2026-07-20"
+      },
+      "description": "Require authorization, full gates, rollback, and reproducible release evidence.",
+      "path": "registry/builtins/vibetether-built-in-release",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "vibetether-built-in-review",
+      "channel": "stable",
+      "builtin": true,
+      "version": "1.0.0-rc.3",
+      "source": "vibetether",
+      "license": "MIT",
+      "fingerprint": null,
+      "capabilities": [
+        "review"
+      ],
+      "phases": [
+        "REVIEW"
+      ],
+      "positive_triggers": [
+        "code-review",
+        "review-requested"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 1024,
+      "quality": {
+        "trigger_precision": 1,
+        "trigger_recall": 1,
+        "output_gain": 0.01,
+        "evaluated_at": "2026-07-20"
+      },
+      "description": "Review request, authority, diff, and raw evidence; report actionable findings.",
+      "path": "registry/builtins/vibetether-built-in-review",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "vibetether-built-in-surgical-change-policy",
+      "channel": "stable",
+      "builtin": true,
+      "packs": [
+        "core"
+      ],
+      "version": "1.0.0-rc.3",
+      "source": "VibeTether built-in",
+      "license": "MIT",
+      "object_hash": null,
+      "fingerprint": null,
+      "capabilities": [
+        "implementation"
+      ],
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "positive_triggers": [
+        "new-behavior",
+        "bug-fix",
+        "refactor"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": true
+      },
+      "context_bytes": 515,
+      "quality": {
+        "trigger_precision": 1,
+        "trigger_recall": 1,
+        "output_gain": 0.05,
+        "evaluated_at": "2026-07-20T00:00:00.000Z"
+      },
+      "description": "A compact VibeTether-owned policy overlay for bounded, simple, assumption-aware, and freshly verified implementation changes.",
+      "path": "registry/builtins/vibetether-built-in-surgical-change-policy",
+      "resources": [],
+      "scripts": [],
+      "worker_recommended": false,
+      "evaluation": {
+        "source": "vibetether-conformance-suite",
+        "status": "release-candidate"
+      },
+      "created_at": "2026-07-20T00:00:00.000Z",
+      "updated_at": "2026-07-20T00:00:00.000Z",
+      "workflow_role": "overlay"
+    },
+    {
+      "id": "vibetether-built-in-tdd",
+      "channel": "stable",
+      "builtin": true,
+      "version": "1.0.0-rc.3",
+      "source": "vibetether",
+      "license": "MIT",
+      "fingerprint": null,
+      "capabilities": [
+        "tdd"
+      ],
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "positive_triggers": [
+        "new-behavior",
+        "bug-fix",
+        "test-first"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": true
+      },
+      "context_bytes": 1024,
+      "quality": {
+        "trigger_precision": 1,
+        "trigger_recall": 1,
+        "output_gain": 0.01,
+        "evaluated_at": "2026-07-20"
+      },
+      "description": "Observe a failing check, implement the minimum change, then rerun focused checks.",
+      "path": "registry/builtins/vibetether-built-in-tdd",
+      "workflow_role": "primary"
+    },
+    {
+      "id": "vibetether-built-in-verification",
+      "channel": "stable",
+      "builtin": true,
+      "version": "1.0.0-rc.3",
+      "source": "vibetether",
+      "license": "MIT",
+      "fingerprint": null,
+      "capabilities": [
+        "verification"
+      ],
+      "phases": [
+        "VERIFY"
+      ],
+      "positive_triggers": [
+        "completion-claim",
+        "verification",
+        "acceptance"
+      ],
+      "negative_triggers": [],
+      "hosts": [
+        "codex",
+        "claude"
+      ],
+      "operating_systems": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "permissions": {
+        "network": false,
+        "external_write": false,
+        "code_write": false
+      },
+      "context_bytes": 1024,
+      "quality": {
+        "trigger_precision": 1,
+        "trigger_recall": 1,
+        "output_gain": 0.01,
+        "evaluated_at": "2026-07-20"
+      },
+      "description": "Use fresh commands or artifacts and distinguish proxies from requested outcomes.",
+      "path": "registry/builtins/vibetether-built-in-verification",
+      "workflow_role": "primary"
+    }
+  ]
+}

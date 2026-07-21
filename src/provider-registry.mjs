@@ -1,271 +1,119 @@
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readdir, readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { PROVIDER_CHANNELS } from './constants.mjs';
+import { conflictError } from './errors.mjs';
+import { assertSafeId, hashTree, readJsonFile, rejectAbsoluteSymlinkChain } from './files.mjs';
+import { cacheHome } from './paths.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const registryPath = path.join(packageRoot, 'registry', 'bundles.json');
-const capabilityPath = path.join(packageRoot, 'registry', 'capabilities.json');
-const scenarioPath = path.join(packageRoot, 'registry', 'scenarios.json');
-const coreProviderPath = path.join(packageRoot, 'registry', 'providers', 'core.json');
-const registryRoot = path.dirname(registryPath);
+const CARD_KEYS = new Set([
+  'id','channel','builtin','version','source','license','object_hash','fingerprint','capabilities','phases',
+  'positive_triggers','negative_triggers','hosts','operating_systems','permissions','context_bytes','quality',
+  'description','path','resources','scripts','worker_recommended','evaluation','created_at','updated_at','packs','workflow_role'
+]);
+const QUALITY_KEYS = new Set(['trigger_precision','trigger_recall','output_gain','evaluated_at']);
+const PERMISSION_KEYS = new Set(['network','external_write','code_write']);
 
-function catalogPath(relativePath) {
-  const target = path.resolve(registryRoot, relativePath);
-  const relative = path.relative(registryRoot, target);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw new Error(`Provider catalog path escapes the registry: ${relativePath}`);
+function only(value, allowed, label) {
+  for (const key of Object.keys(value)) if (!allowed.has(key)) throw conflictError(`${label} contains unsupported field: ${key}`, 'INVALID_PROVIDER');
+}
+function stringArray(value, label, { allowEmpty = false } = {}) {
+  if (!Array.isArray(value) || (!allowEmpty && value.length === 0) || value.some((item) => typeof item !== 'string' || !item.trim())) throw conflictError(`${label} must be ${allowEmpty ? 'an' : 'a non-empty'} array of strings.`, 'INVALID_PROVIDER');
+  return [...new Set(value.map((item) => item.trim()))];
+}
+
+export function validateProviderCard(card) {
+  if (!card || typeof card !== 'object' || Array.isArray(card)) throw conflictError('Provider card must be an object.', 'INVALID_PROVIDER');
+  only(card, CARD_KEYS, `Provider ${card.id ?? ''}`);
+  assertSafeId(card.id, 'Provider id');
+  if (!PROVIDER_CHANNELS.has(card.channel)) throw conflictError(`Provider ${card.id} has an invalid channel.`, 'INVALID_PROVIDER');
+  if (typeof card.builtin !== 'boolean') throw conflictError(`Provider ${card.id} builtin must be boolean.`, 'INVALID_PROVIDER');
+  if (typeof card.version !== 'string' || !card.version.trim()) throw conflictError(`Provider ${card.id} requires a version.`, 'INVALID_PROVIDER');
+  if (typeof card.source !== 'string' || !card.source.trim() || typeof card.license !== 'string' || !card.license.trim()) throw conflictError(`Provider ${card.id} requires source and license.`, 'INVALID_PROVIDER');
+  card.capabilities = stringArray(card.capabilities, `Provider ${card.id} capabilities`);
+  card.phases = stringArray(card.phases, `Provider ${card.id} phases`);
+  card.packs = stringArray(card.packs ?? ['core'], `Provider ${card.id} packs`);
+  card.workflow_role = card.workflow_role ?? 'primary';
+  if (!['primary','alternative','overlay'].includes(card.workflow_role)) throw conflictError(`Provider ${card.id} workflow_role is invalid.`, 'INVALID_PROVIDER');
+  for (const field of ['positive_triggers','negative_triggers','hosts','operating_systems','resources','scripts']) card[field] = stringArray(card[field] ?? [], `Provider ${card.id} ${field}`, { allowEmpty: true });
+  if (!card.permissions || typeof card.permissions !== 'object' || Array.isArray(card.permissions)) throw conflictError(`Provider ${card.id} permissions must be an object.`, 'INVALID_PROVIDER');
+  only(card.permissions, PERMISSION_KEYS, `Provider ${card.id} permissions`);
+  for (const key of PERMISSION_KEYS) if (typeof card.permissions[key] !== 'boolean') throw conflictError(`Provider ${card.id} permission ${key} must be boolean.`, 'INVALID_PROVIDER');
+  if (!Number.isInteger(card.context_bytes) || card.context_bytes < 1 || card.context_bytes > 1024 * 1024) throw conflictError(`Provider ${card.id} context_bytes is invalid.`, 'INVALID_PROVIDER');
+  if (!card.quality || typeof card.quality !== 'object' || Array.isArray(card.quality)) throw conflictError(`Provider ${card.id} quality must be an object.`, 'INVALID_PROVIDER');
+  only(card.quality, QUALITY_KEYS, `Provider ${card.id} quality`);
+  for (const key of ['trigger_precision','trigger_recall']) if (typeof card.quality[key] !== 'number' || card.quality[key] < 0 || card.quality[key] > 1) throw conflictError(`Provider ${card.id} quality ${key} is invalid.`, 'INVALID_PROVIDER');
+  if (typeof card.quality.output_gain !== 'number' || card.quality.output_gain < -1 || card.quality.output_gain > 10) throw conflictError(`Provider ${card.id} output_gain is invalid.`, 'INVALID_PROVIDER');
+  if (!Number.isFinite(Date.parse(card.quality.evaluated_at))) throw conflictError(`Provider ${card.id} quality evaluated_at is invalid.`, 'INVALID_PROVIDER');
+  if (typeof card.description !== 'string' || !card.description.trim() || Buffer.byteLength(card.description, 'utf8') > 1000) throw conflictError(`Provider ${card.id} description is invalid.`, 'INVALID_PROVIDER');
+  if (typeof card.path !== 'string' || !card.path.trim()) throw conflictError(`Provider ${card.id} path is invalid.`, 'INVALID_PROVIDER');
+  if (card.builtin) {
+    if (card.object_hash !== null && card.object_hash !== undefined && !/^[a-f0-9]{64}$/.test(card.object_hash)) throw conflictError(`Provider ${card.id} object_hash is invalid.`, 'INVALID_PROVIDER');
+  } else {
+    if (!/^[a-f0-9]{64}$/.test(card.object_hash ?? '') || !/^[a-f0-9]{64}$/.test(card.fingerprint ?? '')) throw conflictError(`External Provider ${card.id} requires object_hash and fingerprint.`, 'INVALID_PROVIDER');
   }
-  return target;
+  return card;
+}
+
+export async function loadCapabilities() {
+  const value = JSON.parse(await readFile(path.join(packageRoot, 'registry', 'capabilities.json'), 'utf8'));
+  if (!value || value.schema_version !== 1 || !Array.isArray(value.capabilities)) throw conflictError('Capability registry is invalid.', 'INVALID_REGISTRY');
+  const ids = new Set();
+  for (const capability of value.capabilities) {
+    assertSafeId(capability.id, 'Capability id');
+    if (ids.has(capability.id)) throw conflictError(`Duplicate capability: ${capability.id}`, 'INVALID_REGISTRY');
+    ids.add(capability.id);
+    if (!Array.isArray(capability.phases) || !capability.phases.length || typeof capability.fallback !== 'string') throw conflictError(`Capability ${capability.id} is invalid.`, 'INVALID_REGISTRY');
+  }
+  return value;
+}
+
+async function externalCards() {
+  const directory = path.join(cacheHome(), 'providers', 'cards');
+  let entries;
+  try { entries = await readdir(directory, { withFileTypes: true }); } catch (error) { if (error.code === 'ENOENT') return []; throw error; }
+  const cards = [];
+  for (const entry of entries.sort((a,b) => a.name.localeCompare(b.name))) {
+    if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
+    const card = validateProviderCard(await readJsonFile(path.join(directory, entry.name), 'Provider card'));
+    const objectRoot = path.join(cacheHome(), 'providers', 'objects', card.object_hash);
+    await rejectAbsoluteSymlinkChain(objectRoot, { allowMissing: false });
+    const actual = await hashTree(objectRoot);
+    if (actual !== card.fingerprint || actual !== card.object_hash) throw conflictError(`Provider cache object is corrupt: ${card.id}`, 'PROVIDER_FINGERPRINT');
+    cards.push({ ...card, resolved_path: objectRoot });
+  }
+  return cards;
+}
+
+let packagedRegistryPromise = null;
+
+async function loadPackagedRegistry() {
+  const [capabilities, source] = await Promise.all([
+    loadCapabilities(),
+    readFile(path.join(packageRoot, 'registry', 'providers.json'), 'utf8'),
+  ]);
+  const parsed = JSON.parse(source);
+  if (!parsed || parsed.schema_version !== 1 || !Array.isArray(parsed.providers)) throw conflictError('Provider registry is invalid.', 'INVALID_REGISTRY');
+  const providers = [];
+  for (const raw of parsed.providers) {
+    const card = validateProviderCard(raw);
+    const resolved = path.resolve(packageRoot, card.path);
+    await rejectAbsoluteSymlinkChain(resolved, { allowMissing: false });
+    const fingerprint = await hashTree(resolved);
+    providers.push({ ...card, fingerprint, object_hash: fingerprint, resolved_path: resolved });
+  }
+  return { capabilities, providers };
 }
 
 export async function loadProviderRegistry() {
-  const [registry, capabilities, scenarios, coreProviders] = await Promise.all([
-    JSON.parse(await readFile(registryPath, 'utf8')),
-    JSON.parse(await readFile(capabilityPath, 'utf8')),
-    JSON.parse(await readFile(scenarioPath, 'utf8')),
-    JSON.parse(await readFile(coreProviderPath, 'utf8')),
-  ]);
-  const catalogSources = await Promise.all(
-    (registry.catalogs ?? []).map(async (relativePath) => JSON.parse(await readFile(catalogPath(relativePath), 'utf8'))),
-  );
-  return {
-    ...registry,
-    sources: [...(registry.sources ?? []), ...catalogSources],
-    capability_catalog: capabilities.capabilities ?? [],
-    scenario_catalog: scenarios.scenarios ?? [],
-    readiness_gate: capabilities.readiness_gate,
-    built_in_providers: coreProviders.providers ?? [],
-  };
-}
-
-function profileSkillIds(registry, profileName, seen = new Set()) {
-  const profile = registry.profiles?.[profileName];
-  if (!profile) throw new Error(`Unknown profile: ${profileName}`);
-  if (seen.has(profileName)) throw new Error(`Profile inheritance cycle at ${profileName}`);
-  seen.add(profileName);
-  const inherited = profile.extends ? profileSkillIds(registry, profile.extends, seen) : [];
-  return [...inherited, ...(profile.skills ?? [])];
-}
-
-function profileCatalogSourceIds(registry, profileName, seen = new Set()) {
-  const profile = registry.profiles?.[profileName];
-  if (!profile) throw new Error(`Unknown profile: ${profileName}`);
-  if (seen.has(profileName)) throw new Error(`Profile inheritance cycle at ${profileName}`);
-  seen.add(profileName);
-  const inherited = profile.extends ? profileCatalogSourceIds(registry, profile.extends, seen) : [];
-  return [...inherited, ...(profile.catalog_sources ?? [])];
-}
-
-function providerRecord(source, skill) {
-  return {
-    ...skill,
-    source_id: source.id,
-    repository: source.repository,
-    ref: source.ref,
-    commit: source.commit,
-    license: source.license,
-    license_path: source.license_path,
-    license_evidence: source.license_evidence,
-  };
-}
-
-export function resolveProfileProviders(registry, profileName) {
-  const selected = new Set(profileSkillIds(registry, profileName));
-  const providers = [];
-  for (const source of registry.sources ?? []) {
-    for (const skill of source.skills ?? []) {
-      if (!selected.has(skill.id)) continue;
-      providers.push(providerRecord(source, skill));
-      selected.delete(skill.id);
-    }
-  }
-  if (selected.size > 0) throw new Error(`Unknown provider skills in ${profileName}: ${[...selected].join(', ')}`);
-  return providers;
-}
-
-export function resolveCatalogSources(registry, profileName, bundles = []) {
-  const selected = new Set(profileCatalogSourceIds(registry, profileName));
-  for (const bundleName of bundles) {
-    const bundle = registry.bundles?.[bundleName];
-    if (!bundle) throw new Error(`Unknown provider bundle: ${bundleName}`);
-    for (const sourceId of bundle.catalog_sources ?? []) selected.add(sourceId);
-  }
-  const sources = registry.sources.filter((source) => selected.has(source.id));
-  const missing = [...selected].filter((sourceId) => !sources.some((source) => source.id === sourceId));
-  if (missing.length > 0) throw new Error(`Unknown catalog sources: ${missing.join(', ')}`);
-  return sources;
-}
-
-export function resolveExposurePlan(registry, profileName, options = {}) {
-  const selected = new Map(resolveProfileProviders(registry, profileName).map((provider) => [provider.id, provider]));
-  const signals = new Set(options.signals ?? []);
-  const explicit = new Set(options.explicit_bundles ?? []);
-  for (const bundleName of options.bundles ?? []) {
-    const bundle = registry.bundles?.[bundleName];
-    if (!bundle) throw new Error(`Unknown provider bundle: ${bundleName}`);
-    const sourceIds = new Set(bundle.catalog_sources ?? []);
-    for (const source of registry.sources.filter((candidate) => sourceIds.has(candidate.id))) {
-      for (const skill of source.skills) {
-        if (skill.exposure !== 'bundle') continue;
-        if (!explicit.has(bundleName) && skill.when_any?.length > 0 && !skill.when_any.some((signal) => signals.has(signal))) {
-          continue;
-        }
-        selected.set(skill.id, providerRecord(source, skill));
-      }
-    }
-  }
-  return [...selected.values()];
-}
-
-export function validateProviderRegistry(registry) {
+  packagedRegistryPromise ??= loadPackagedRegistry();
+  const packaged = await packagedRegistryPromise;
+  const providers = [...packaged.providers, ...await externalCards()];
   const ids = new Set();
-  const exposedNames = new Set();
-  const capabilityIds = new Set((registry.capability_catalog ?? []).map((capability) => capability.id));
-  const defaultScopes = new Set(['lifecycle', 'capability']);
-  for (const provider of registry.built_in_providers ?? []) {
-    if (provider.kind !== 'built-in' || provider.workflow_role !== 'primary' || !provider.enabled_by_default) continue;
-    if (!defaultScopes.has(provider.default_scope)) {
-      throw new Error(`Enabled built-in primary ${provider.id} requires a default_scope of lifecycle or capability`);
-    }
+  for (const card of providers) {
+    if (ids.has(card.id)) throw conflictError(`Duplicate Provider id: ${card.id}`, 'INVALID_REGISTRY');
+    ids.add(card.id);
   }
-  for (const source of registry.sources ?? []) {
-    if (registry.schema_version >= 2) {
-      if (!['complete', 'selected'].includes(source.catalog_mode) || !source.skill_root) {
-        throw new Error(`Provider source ${source.id} has incomplete catalog classification`);
-      }
-      if (!['full-text', 'readme-declaration'].includes(source.license_evidence?.mode)) {
-        throw new Error(`Provider source ${source.id} has incomplete license evidence`);
-      }
-      if (
-        source.license_evidence.mode === 'readme-declaration' &&
-        (!source.license_evidence.declaration || !/^[a-f0-9]{64}$/.test(source.license_evidence.sha256 ?? ''))
-      ) {
-        throw new Error(`Provider source ${source.id} has incomplete declared license evidence`);
-      }
-    }
-    for (const skill of source.skills ?? []) {
-      if (ids.has(skill.id)) throw new Error(`Duplicate provider id: ${skill.id}`);
-      ids.add(skill.id);
-      if (registry.schema_version >= 2) {
-        for (const field of ['catalog_status', 'workflow_role', 'invocation_policy', 'exposure', 'fallback']) {
-          if (!skill[field]) throw new Error(`Provider classification for ${skill.id} is missing ${field}`);
-        }
-        for (const field of ['capabilities', 'conflicts', 'required_outputs', 'exit_evidence']) {
-          if (!Array.isArray(skill[field])) {
-            throw new Error(`Provider classification for ${skill.id} is missing ${field}`);
-          }
-        }
-      }
-      for (const capability of skill.capabilities ?? []) {
-        if (!capabilityIds.has(capability)) {
-          throw new Error(`Provider ${skill.id} references unknown capability ${capability}`);
-        }
-      }
-      if (
-        skill.workflow_role === 'competing-router' &&
-        !['catalog-only', 'explicit-only'].includes(skill.exposure)
-      ) {
-        throw new Error(`Competing router ${skill.install_name} cannot be automatically exposed`);
-      }
-      if (skill.exposure !== 'catalog-only') {
-        if (exposedNames.has(skill.install_name)) {
-          throw new Error(`Duplicate exposed provider install name: ${skill.install_name}`);
-        }
-        exposedNames.add(skill.install_name);
-      }
-    }
-  }
-  return registry;
-}
-
-export function buildRoutingDocument(registry, profileName) {
-  validateProviderRegistry(registry);
-  if (
-    registry.readiness_gate?.mode !== 'automatic' ||
-    !Array.isArray(registry.readiness_gate.dimensions) ||
-    registry.readiness_gate.dimensions.length === 0 ||
-    !registry.readiness_gate.implementation_requires
-  ) {
-    throw new Error('The registry requires a complete automatic readiness gate');
-  }
-  const selectedProviders = resolveProfileProviders(registry, profileName);
-  const installed = new Set(selectedProviders.map((provider) => provider.install_name));
-  const routes = (registry.routes ?? [])
-    .filter((route) => route.profiles.includes(profileName))
-    .map(({ profiles, priority = 0, ...route }) => ({ ...route, priority }));
-  const primaryOwners = new Map();
-  for (const route of routes.filter((candidate) => candidate.workflow_role === 'primary')) {
-    const signature = JSON.stringify({
-      phase: route.phase,
-      capability: route.capability,
-      priority: route.priority,
-      when_all: [...(route.when_all ?? [])].sort(),
-      when_any: [...(route.when_any ?? [])].sort(),
-    });
-    const previous = primaryOwners.get(signature);
-    if (previous && previous.provider !== route.provider) {
-      throw new Error(
-        `Ambiguous primary routes ${previous.id} and ${route.id} have equal ownership for ${route.phase}/${route.capability}`,
-      );
-    }
-    primaryOwners.set(signature, route);
-  }
-  const builtInProviders = new Set(
-    (registry.built_in_providers ?? [])
-      .filter((provider) => provider.kind === 'built-in')
-      .map((provider) => provider.id),
-  );
-  for (const route of routes) {
-    if (!installed.has(route.provider) && !builtInProviders.has(route.provider)) {
-      throw new Error(`Route ${route.id} recommends ${route.provider}, which is not installed by profile ${profileName}`);
-    }
-  }
-  for (const provider of selectedProviders) {
-    if (provider.invocation_policy !== 'upstream-explicit-alias') continue;
-    if (!Array.isArray(provider.auto_covered_by) || provider.auto_covered_by.length === 0) {
-      throw new Error(`Upstream explicit alias ${provider.install_name} requires automatic coverage`);
-    }
-    for (const automaticProvider of provider.auto_covered_by) {
-      if (!installed.has(automaticProvider)) {
-        throw new Error(`Automatic coverage for ${provider.install_name} references unavailable provider ${automaticProvider}`);
-      }
-      if (!routes.some((route) => route.provider === automaticProvider)) {
-        throw new Error(`Automatic coverage provider ${automaticProvider} for ${provider.install_name} has no route in ${profileName}`);
-      }
-    }
-  }
-  return {
-    schema_version: 1,
-    profile: profileName,
-    selection_policy: {
-      entry_skill: 'vibe-tether',
-      one_primary_workflow_provider_per_phase: true,
-      project_truth_overrides_provider_advice: true,
-      runtime_auto_install: false,
-      provider_selection: 'advisory',
-      readiness_assessment: 'automatic-before-consequential-work',
-      live_availability: 'check-recorded-installation-paths-before-selection',
-      missing_provider: 'use-declared-fallback-and-record-the-choice',
-    },
-    routes,
-  };
-}
-
-function routeMatches(route, signals) {
-  if (route.when_all?.some((signal) => !signals.has(signal))) return false;
-  if (route.when_any?.length > 0 && !route.when_any.some((signal) => signals.has(signal))) return false;
-  return true;
-}
-
-export function matchingRoutes(routing, request) {
-  const phase = String(request.phase ?? '').toUpperCase();
-  const signals = new Set(request.signals ?? []);
-  return routing.routes
-    .filter((route) => route.phase.toUpperCase() === phase && route.capability === request.capability)
-    .filter((route) => routeMatches(route, signals))
-    .sort((left, right) => right.priority - left.priority);
-}
-
-export function resolveRoute(routing, request) {
-  return matchingRoutes(routing, request)[0] ?? null;
+  return { capabilities: packaged.capabilities, providers, packageRoot };
 }

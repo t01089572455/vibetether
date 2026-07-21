@@ -1,0 +1,15 @@
+schema_version: 1
+entries:
+  - id: sanitized-publication-path
+    use_when:
+      - publication
+      - delivery-verification
+    systems:
+      - windows
+    artifacts:
+      - docs/operations/runbook.md
+    verified_at: 2026-07-19
+    revalidate_when:
+      - artifact-changed
+      - environment-changed
+    status: proven

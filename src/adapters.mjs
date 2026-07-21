@@ -1,136 +1,54 @@
-export const MANAGED_START = '<!-- vibetether:start -->';
-export const MANAGED_END = '<!-- vibetether:end -->';
+import { MANAGED_END, MANAGED_START } from './constants.mjs';
+import { conflictError } from './errors.mjs';
+import { normalizePortableText, portableTextEqual } from './files.mjs';
 
-const legacySharedRules = [
-  '## VibeTether drift control',
-  '',
-  'Invoke the `vibe-tether` Skill before each consequential action in a long-running task.',
-  'Re-read `.vibetether/project.yaml` and its applicable truth sources before choosing direction.',
-  'Ask the user when product direction, architecture, visual direction, destructive data changes, or release scope is ambiguous.',
-  'Make low-risk, reversible, goal-aligned technical choices autonomously and record material decisions.',
-  'After compaction, resume, handoff, repeated failure, or a phase change, perform a full VibeTether re-anchor before continuing.',
-].join('\n');
-
-const preReadinessSharedRules = [
-  '## VibeTether drift control and capability routing',
-  '',
-  'Invoke the `vibe-tether` Skill before consequential actions in long-running work and after compaction, resume, handoff, repeated failure, or a phase change.',
-  'Consult `.vibetether/capabilities.yaml` for the current phase, signals, recommended Skill, alternatives, availability, expected outputs, and exit evidence.',
-  'For a live provider decision, run the installed offline resolver or `vibetether capabilities`; do not rely only on initialization-time availability.',
-  'Provider recommendations are advisory: use the recommended Skill when it fits, or select a better installed alternative and record the material reason in the checkpoint.',
-  'Do not install providers during an active task; use the declared built-in fallback when an optional provider is unavailable.',
-  'Re-read `.vibetether/project.yaml` and its applicable truth sources before choosing direction.',
-  'Ask the user when product direction, architecture, visual direction, destructive data changes, permissions, or release scope is ambiguous.',
-  'Make low-risk, reversible, goal-aligned technical choices autonomously and record material decisions.',
-].join('\n');
-
-const preSuccessCaptureSharedRules = [
-  '## VibeTether drift control and capability routing',
-  '',
-  'Invoke the `vibe-tether` Skill before consequential actions in long-running work and after compaction, resume, handoff, repeated failure, or a phase change.',
-  'Consult `.vibetether/capabilities.yaml` and automatically assess its work-readiness dimensions before implementation; do not start product work from guessed direction.',
-  'Investigate discoverable facts autonomously. Route unresolved directional gaps to the recommended clarification provider and ask the user one recommended decision question at a time.',
-  'For a live provider decision, run the installed offline resolver or `vibetether capabilities`; do not rely only on initialization-time availability.',
-  'Provider recommendations are advisory: use the recommended Skill when it fits, or select a better installed alternative and record the material reason in the checkpoint.',
-  'Do not install providers during an active task; use the declared built-in fallback when an optional provider is unavailable.',
-  'Re-read `.vibetether/project.yaml` and its applicable truth sources before choosing direction.',
-  'Ask the user when product direction, architecture, visual direction, destructive data changes, permissions, or release scope is ambiguous.',
-  'Make low-risk, reversible, goal-aligned technical choices autonomously and record material decisions.',
-].join('\n');
-
-const preExperienceRecallSharedRules = [
-  '## VibeTether drift control, capability routing, and success capture',
-  '',
-  'Automatically apply the `vibe-tether` Skill at task entry, before consequential actions, after compaction, resume, handoff, repeated failure, or a phase change, and before completion, the next slice, merge, release, or publication.',
-  'Consult `.vibetether/capabilities.yaml` and automatically assess its work-readiness dimensions before implementation; do not start product work from guessed direction.',
-  'Investigate discoverable facts autonomously. Route unresolved directional gaps to the recommended clarification provider and ask the user one recommended decision question at a time.',
-  'Provider recommendations are advisory: use the recommended installed Skill when it fits, otherwise use an installed alternative or declared fallback and record the material reason in the checkpoint.',
-  'Re-read `.vibetether/project.yaml` and its applicable truth sources before choosing direction or reusing an operational path.',
-  'Ask the user when product direction, architecture, visual direction, destructive data changes, permissions, or release scope is ambiguous.',
-  'Make low-risk, reversible, goal-aligned technical choices autonomously and record material decisions.',
-  'After every verified user-level or engineering-level success, run the Success Capture Gate. A reusable workflow that succeeds for the first time is a `first-proven-path` and must be captured immediately; recovered or materially changed paths must update their Proven Path, while unchanged repeated paths must not create duplicate documentation.',
-  'Record `captured`, `already-encoded`, or `not-reusable` in checkpoint `experience_feedback`, with a reason and artifact paths. Never persist credentials, private keys, one-time codes, private reasoning, or sensitive tool output. A completion-like state must pass `vibetether doctor` with no pending disposition.',
-].join('\n');
-
-const prePhaseHandshakeSharedRules = [
-  preExperienceRecallSharedRules,
-  'Query applicable experience at task entry from `.vibetether/experience-index.yaml`, at phase changes, resume, and before repeatable build, environment, CI, deployment, publication, migration, authentication, external-service, recovery, or release actions.',
-  'Read the returned artifacts before inventing a new operational path; record selected experience paths or the material reason a candidate was stale or inapplicable in the checkpoint.',
-  'Treat provisional or changed-environment paths as requiring fresh revalidation, then update the natural artifact and metadata index after verified success.',
-].join('\n');
-
-const preLocalCliSharedRules = [
-  '## VibeTether project control, routing, and experience recall',
-  '',
-  'Automatically apply the `vibe-tether` Skill at task entry, before consequential actions, after compaction, resume, handoff, repeated failure, goal or phase changes, and before completion, the next slice, merge, deployment, release, or publication.',
-  'Read `.vibetether/project.yaml`, `.vibetether/TRUTH.md`, `.vibetether/intent.md`, `.vibetether/state/current.yaml`, and then only the confirmed truth sources applicable to the current role and scope. Candidates are non-authoritative and must not guide implementation.',
-  'A fresh installation must not activate discovered repository documents. The Agent may propose or record candidates, including documents generated during discussion, but every active addition, removal, role change, scope change, or supersession requires user confirmation.',
-  'A request to continue with candidate content does not silently activate its file; require explicit approval of governing path, role, scope, and supersession. A materially changed confirmed directional source requires a blocked or alignment checkpoint and user decision unless the user explicitly approved that exact change.',
-  'On changed goal, phase, scope, risk, authority, source, compaction, resume, handoff, merge, deployment, release, or publication boundaries, perform a full re-anchor. For an unchanged low-risk slice, compare checkpoint and source fingerprints and reread only affected confirmed sources.',
-  'Consult `.vibetether/capabilities.yaml` and automatically assess work readiness before implementation. Investigate discoverable facts autonomously; ask one recommended user decision question when direction remains unresolved.',
-  'Provider recommendations are advisory. Use the recommended installed Skill when it fits, otherwise use an installed alternative or declared fallback and record the material reason. The live `.vibetether/routes.local.yaml` overlay may extend routing but cannot weaken authority, readiness, evidence, high-risk, destructive-data, permission, or release gates.',
-  'Make low-risk, reversible, goal-aligned technical choices autonomously. Ask the user when product direction, architecture, visual direction, destructive data, permissions, or release scope is ambiguous.',
-  'Before advancing a phase, run `vibetether route --project . --phase <PHASE> --capability <CAPABILITY>` with observable signals, then close it with `vibetether route complete --project . --evidence <EVIDENCE>` or `vibetether route abandon --project . --reason <REASON>`.',
-  'Treat phase or slice transitions, directional or structural decisions, destructive or external actions, and completion or release boundaries as consequential. Do not run the full protocol for every edit, read-only query, or routine test inside one unchanged approved slice.',
-  'Before implementation or the next slice, define the smallest verifiable outcome that meaningfully advances the approved user goal. Keep the current slice, including delegated work, inside that boundary; do not turn this scope rule into a Subagent count or orchestration policy.',
-  'Query applicable experience at task entry from `.vibetether/experience-index.yaml` and before repeatable build, environment, CI, deployment, publication, migration, authentication, recovery, or release work. Read the returned artifacts before inventing a new operational path, and record selected experience paths or the material reason a candidate is inapplicable.',
-  'Experience is procedural evidence, not project authority. If confirmed truth and experience conflict, stop the affected action, explain the mismatch, recommend a durable correction, and ask the user.',
-  'After every verified user-level or engineering-level success, run the Success Capture Gate. A first reusable success is a `first-proven-path`: immediately create or update a sanitized Proven Path candidate. Active experience indexing requires user confirmation; keep `experience_feedback` pending until that decision, then record `captured`, `already-encoded`, or `not-reusable` with a reason and artifact paths.',
-  'Never persist credentials, private keys, one-time codes, private reasoning, or sensitive tool output. Run `vibetether doctor` before a completion-like state; a route record proves lifecycle disposition, not semantic correctness.',
-].join('\n');
-
-const preManifestTruthIndexSharedRules = [
-  '## VibeTether project control, routing, and experience recall',
-  '',
-  'Automatically apply the `vibe-tether` Skill at task entry, before consequential actions, after compaction, resume, handoff, repeated failure, goal or phase changes, and before completion, the next slice, merge, deployment, release, or publication.',
-  'Read `.vibetether/project.yaml`, `.vibetether/TRUTH.md`, `.vibetether/intent.md`, `.vibetether/state/current.yaml`, and then only the confirmed truth sources applicable to the current role and scope. Candidates are non-authoritative and must not guide implementation.',
-  'A fresh installation must not activate discovered repository documents. The Agent may propose or record candidates, including documents generated during discussion, but every active addition, removal, role change, scope change, or supersession requires user confirmation.',
-  'A request to continue with candidate content does not silently activate its file; require explicit approval of governing path, role, scope, and supersession. A materially changed confirmed directional source requires a blocked or alignment checkpoint and user decision unless the user explicitly approved that exact change.',
-  'On changed goal, phase, scope, risk, authority, source, compaction, resume, handoff, merge, deployment, release, or publication boundaries, perform a full re-anchor. For an unchanged low-risk slice, compare checkpoint and source fingerprints and reread only affected confirmed sources.',
-  'Consult `.vibetether/capabilities.yaml` and automatically assess work readiness before implementation. Investigate discoverable facts autonomously; ask one recommended user decision question when direction remains unresolved.',
-  'Provider recommendations are advisory. Use the recommended installed Skill when it fits, otherwise use an installed alternative or declared fallback and record the material reason. The live `.vibetether/routes.local.yaml` overlay may extend routing but cannot weaken authority, readiness, evidence, high-risk, destructive-data, permission, or release gates.',
-  'Make low-risk, reversible, goal-aligned technical choices autonomously. Ask the user when product direction, architecture, visual direction, destructive data, permissions, or release scope is ambiguous.',
-  'Before advancing a phase, run `node .vibetether/bin/vibetether.mjs route --project . --execution-root <ACTUAL_PROJECT_CONTAINED_ROOT> --phase <PHASE> --capability <CAPABILITY>` with observable signals. Pass the real worktree or execution directory rather than assuming it is the project root.',
-  'Close the route with `node .vibetether/bin/vibetether.mjs route complete --project . --evidence <EVIDENCE>` or `route abandon`. If confirmed authority did not change, include `--truth-decision no-material-change --truth-reason <REASON>`; otherwise use `truth reconcile` and never activate a candidate without the required user confirmation.',
-  'Treat phase or slice transitions, directional or structural decisions, destructive or external actions, and completion or release boundaries as consequential. Do not run the full protocol for every edit, read-only query, or routine test inside one unchanged approved slice.',
-  'Before implementation or the next slice, define the smallest verifiable outcome that meaningfully advances the approved user goal. Keep the current slice, including delegated work, inside that boundary; do not turn this scope rule into a Subagent count or orchestration policy.',
-  'Query applicable experience at task entry from `.vibetether/experience-index.yaml` and before repeatable build, environment, CI, deployment, publication, migration, authentication, recovery, or release work. Read the returned artifacts before inventing a new operational path, and record selected experience paths or the material reason a candidate is inapplicable.',
-  'Experience is procedural evidence, not project authority. If confirmed truth and experience conflict, stop the affected action, explain the mismatch, recommend a durable correction, and ask the user.',
-  'After every verified user-level or engineering-level success, run the Success Capture Gate. A first reusable success is a `first-proven-path`: immediately create or update a sanitized Proven Path candidate. Active experience indexing requires user confirmation; keep `experience_feedback` pending until that decision, then record `captured`, `already-encoded`, or `not-reusable` with a reason and artifact paths.',
-  'Never persist credentials, private keys, one-time codes, private reasoning, or sensitive tool output. Before a completion, handoff, merge, deployment, release, or publication boundary, run `node .vibetether/bin/vibetether.mjs doctor --project . --boundary <BOUNDARY>`; a route record proves lifecycle disposition, not semantic correctness.',
-].join('\n');
-
-const sharedRules = preManifestTruthIndexSharedRules.replace(
-  'Read `.vibetether/project.yaml`, `.vibetether/TRUTH.md`, `.vibetether/intent.md`, `.vibetether/state/current.yaml`, and then only the confirmed truth sources applicable to the current role and scope.',
-  'Read `.vibetether/project.yaml`, the `truth_index` path declared there (normally `.vibetether/TRUTH.md`), `.vibetether/intent.md`, `.vibetether/state/current.yaml`, and then only the confirmed truth sources applicable to the current role and scope.',
-);
-
-export const LEGACY_MANAGED_BODIES = new Set([
-  legacySharedRules,
-  preReadinessSharedRules,
-  preSuccessCaptureSharedRules,
-  preExperienceRecallSharedRules,
-  prePhaseHandshakeSharedRules,
-  preLocalCliSharedRules,
-  preManifestTruthIndexSharedRules,
-]);
+export const MANAGED_BODY = `Use the \`vibe-tether\` Skill at task entry, after compaction or resume, before a consequential decision, and before completion or handoff.\n\nRun \`vibetether context --boundary <boundary> --json\` before reading VibeTether state. Follow only its confirmed truth handles, current slice, blockers, selected provider, and fresh applicable experience.\n\nDo not read raw VibeTether runtime state, provider catalogs, unselected Skills, or unselected experience. For an explicit deep request or unresolved direction, use the \`vibe-tether-deep\` Skill and do not write product code until its Start Card has a user-confirmed Implementation Permit. Do not alter project direction or activate project truth without the required user confirmation.`;
 
 export const ADAPTERS = {
-  codex: {
-    instructionFile: 'AGENTS.md',
-    skillDirectory: '.agents/skills/vibe-tether',
-    managedBody: sharedRules,
-  },
-  claude: {
-    instructionFile: 'CLAUDE.md',
-    skillDirectory: '.claude/skills/vibe-tether',
-    managedBody: sharedRules,
-  },
+  codex: { instruction: 'AGENTS.md', skill: '.agents/skills/vibe-tether/SKILL.md', deepSkill: '.agents/skills/vibe-tether-deep/SKILL.md', userSkillRoot: '.codex/skills' },
+  claude: { instruction: 'CLAUDE.md', skill: '.claude/skills/vibe-tether/SKILL.md', deepSkill: '.claude/skills/vibe-tether-deep/SKILL.md', userSkillRoot: '.claude/skills' },
 };
 
-export const GITIGNORE_BODY = ['.vibetether/state/', '.vibetether/providers/catalog/'].join('\n');
-
-export function selectedAdapters(agent) {
+export function selectedAdapters(agent = 'both') {
   if (agent === 'both') return ['codex', 'claude'];
+  if (!Object.hasOwn(ADAPTERS, agent)) throw conflictError('Agent must be codex, claude, or both.', 'INVALID_AGENT');
   return [agent];
+}
+
+export function managedBlock() {
+  return `${MANAGED_START}\n${MANAGED_BODY}\n${MANAGED_END}`;
+}
+
+export function hasCanonicalManagedBlock(source) {
+  return normalizePortableText(source ?? '').includes(managedBlock());
+}
+
+export function applyManagedBlock(source) {
+  const content = source ?? '';
+  const starts = content.split(MANAGED_START).length - 1;
+  const ends = content.split(MANAGED_END).length - 1;
+  if (starts !== ends || starts > 1 || (starts === 1 && content.indexOf(MANAGED_START) > content.indexOf(MANAGED_END))) {
+    throw conflictError('Instruction file contains malformed VibeTether markers.', 'MANAGED_BLOCK_CONFLICT');
+  }
+  const block = managedBlock();
+  if (starts === 1) {
+    const start = content.indexOf(MANAGED_START);
+    const end = content.indexOf(MANAGED_END, start) + MANAGED_END.length;
+    const existing = content.slice(start, end);
+    if (!portableTextEqual(existing, block)) throw conflictError('Managed instruction block was modified; preserve the customization and migrate it deliberately.', 'MANAGED_BLOCK_CONFLICT');
+    return content;
+  }
+  if (!content) return `${block}\n`;
+  return `${content}${content.endsWith('\n') ? '' : '\n'}\n${block}\n`;
+}
+
+export function removeManagedBlock(source) {
+  const content = source ?? '';
+  const starts = content.split(MANAGED_START).length - 1;
+  const ends = content.split(MANAGED_END).length - 1;
+  if (starts === 0 && ends === 0) return content;
+  if (starts !== 1 || ends !== 1) throw conflictError('Instruction file contains malformed VibeTether markers.', 'MANAGED_BLOCK_CONFLICT');
+  const start = content.indexOf(MANAGED_START);
+  const end = content.indexOf(MANAGED_END, start) + MANAGED_END.length;
+  return `${content.slice(0, start)}${content.slice(end)}`.replace(/^\n+|\n+$/g, '').trimEnd() + (content.slice(0, start).trim() || content.slice(end).trim() ? '\n' : '');
 }

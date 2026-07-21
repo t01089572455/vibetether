@@ -1,1194 +1,235 @@
-import { lstat, readFile, realpath } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { lstat, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
-import YAML from 'yaml';
-import { createAuthoritySnapshot } from './authority-snapshot.mjs';
-import { ADAPTERS, MANAGED_END, MANAGED_START } from './adapters.mjs';
-import { CliError } from './errors.mjs';
-import { managedBlockBody, rejectSymlinkPath } from './files.mjs';
-import { parseExperienceIndex, validateExperienceIndex } from './experience-index.mjs';
-import { isSafeProjectRelativeArtifactPath, isSensitiveArtifactPath } from './artifact-safety.mjs';
 import {
-  inspectVibeTetherIdentity,
-  skillFingerprint,
-  VIBETETHER_RELEASE_COMPATIBILITY,
-} from './skill-install.mjs';
+  COMPLETION_BOUNDARIES, EVIDENCE_REQUIRED_PHASES, ENTRY_SKILL_BUDGET_BYTES,
+  MANAGED_BLOCK_BUDGET_BYTES, TRACKED_CONTRACT_BUDGET_BYTES, VERSION,
+} from './constants.mjs';
+import { healthError } from './errors.mjs';
+import { discoverContract, skillsLockDigest } from './contract.mjs';
+import { parseIntent } from './intent.mjs';
+import { authoritySnapshot, parseTruthMap } from './truth.mjs';
+import { auditExperience, validateExperienceIndex } from './experience.mjs';
+import { attachWorktree } from './worktree.mjs';
 import {
-  currentLocalCliBaseline,
-  LOCAL_CLI_PATH,
-  releasePackage,
-  sha256Text,
-} from './local-cli.mjs';
-import { assertCapabilityBoard } from '../skills/vibe-tether/scripts/capability-routing.mjs';
-import { parseCanonicalManifest } from '../skills/vibe-tether/scripts/manifest.mjs';
-import { refreshBoardAvailability, resolveBoardRoute } from './capabilities.mjs';
-import { loadEffectiveProjectRoutes } from './project-routes.mjs';
-import { ROUTE_HANDSHAKE_PATH } from './route-handshake.mjs';
-import { inspectSkillRecovery } from './skill-upgrade-recovery.mjs';
-import { parseTruthMap, validateConfirmedTruth } from './truth-map.mjs';
-import {
-  captureExecutionSnapshot,
-  executionSnapshotsMatch,
-  validExecutionSnapshot,
-} from './execution-snapshot.mjs';
+  finalSnapshotMatches, inspectLease, loadEvidence, readCurrent, readRoute,
+} from './runtime.mjs';
+import { executionSnapshot, snapshotsMatchIgnoringPaths } from './git.mjs';
+import { loadActivation } from './skills.mjs';
+import { loadProviderRegistry } from './provider-registry.mjs';
+import { validateRoutes } from './routes.mjs';
+import { buildContext } from './context.mjs';
+import { ADAPTERS, hasCanonicalManagedBlock, managedBlock } from './adapters.mjs';
+import { exists, hashTree, portableTextEqual, readProjectText, rejectSymlinkChain, resolveInside, sha256File } from './files.mjs';
 
-const COMPLETION_PHASES = new Set(['REVIEW', 'SHIP']);
-const COMPLETION_BOUNDARIES = new Set(['completion', 'handoff', 'merge', 'deployment', 'release', 'publication']);
-const CAPTURE_TRIGGERS = new Set(['first-proven-path', 'recovered-path', 'changed-proven-path']);
-const VALID_TRIGGERS = new Set([...CAPTURE_TRIGGERS, 'repeat-proven-path', 'routine-non-path']);
-const VALID_DISPOSITIONS = new Set(['captured', 'already-encoded', 'not-reusable']);
-const RESOLVED_TRUTH_RECONCILIATIONS = new Set(['no_material_change', 'applied', 'declined']);
-const PROVIDER_COLLISION_REASONS = new Set([
-  'different-preexisting-skill',
-  'modified-managed-skill',
-]);
+const packageRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const error=(code,message)=>({level:'error',code,message});
+const warning=(code,message)=>({level:'warning',code,message});
 
-function completionLike(state, boundary = 'ordinary') {
-  return COMPLETION_BOUNDARIES.has(boundary)
-    || COMPLETION_PHASES.has(String(state?.phase ?? '').toUpperCase());
+function completion(boundary,phase) { return COMPLETION_BOUNDARIES.has(boundary)||['REVIEW','SHIP'].includes(phase); }
+function portablePath(value) { return String(value??'').replaceAll('\\','/').replace(/^\.\//,'').replace(/\/+$/,''); }
+function pathWithinScope(relative,scopePaths=[]) {
+  const value=portablePath(relative);
+  return scopePaths.some((scope)=>{
+    const normalized=portablePath(scope);
+    return value===normalized||value.startsWith(`${normalized}/`);
+  });
 }
-
-function flattenSources(value) {
-  if (typeof value === 'string') return [value];
-  if (Array.isArray(value)) return value.flatMap(flattenSources);
-  if (value && typeof value === 'object') return Object.values(value).flatMap(flattenSources);
-  return [];
-}
-
-function issue(code, message) {
-  return { level: 'error', code, message };
-}
-
-function warning(code, message) {
-  return { level: 'warning', code, message };
-}
-
-function projectPath(root, relativePath) {
-  if (typeof relativePath !== 'string') return null;
-  const target = path.resolve(root, relativePath);
-  const relative = path.relative(root, target);
-  return relative.startsWith('..') || path.isAbsolute(relative) ? null : target;
-}
-
-async function projectEntryStatus(root, relativePath, expectedType = 'file') {
-  if (typeof relativePath !== 'string') return { status: 'invalid', target: null };
-  const target = projectPath(root, relativePath);
-  if (!target) return { status: 'escape', target: null };
-  try {
-    await rejectSymlinkPath(root, relativePath);
-    const metadata = await lstat(target);
-    if (expectedType === 'file' && !metadata.isFile()) return { status: 'wrong-type', target };
-    if (expectedType === 'directory' && !metadata.isDirectory()) return { status: 'wrong-type', target };
-    if (expectedType === 'any' && !metadata.isFile() && !metadata.isDirectory()) {
-      return { status: 'wrong-type', target };
-    }
-    return { status: 'ok', target };
-  } catch (error) {
-    if (error.code === 'ENOENT') return { status: 'missing', target };
-    return { status: 'unsafe', target };
-  }
-}
-
-function unsafeAuthorityMessage(label, expectedType = 'file') {
-  const kind = expectedType === 'directory'
-    ? 'directory'
-    : expectedType === 'any'
-      ? 'regular non-linked file or directory'
-      : 'regular non-linked file';
-  return `${label} must be a safe project-contained ${kind}`;
-}
-
-function portablePath(value) {
-  return String(value ?? '').replaceAll('\\', '/');
-}
-
-function normalizedArtifactPath(value) {
-  return portablePath(value).replace(/^\.\//, '');
-}
-
-function normalizedAuthorityPath(value) {
-  return normalizedArtifactPath(value).replace(/\/+$/, '');
-}
-
-function isBuiltInExperienceArtifact(artifact) {
-  const normalized = normalizedArtifactPath(artifact);
-  return normalized.startsWith('skills/vibe-tether/') || normalized.startsWith('evals/');
-}
-
-async function feedbackArtifactStatus(root, artifact) {
-  if (!isSafeProjectRelativeArtifactPath(artifact) || isSensitiveArtifactPath(artifact)) return 'unsafe';
-  const target = projectPath(root, artifact);
-  if (!target) return 'escape';
-  try {
-    await rejectSymlinkPath(root, artifact);
-    const metadata = await lstat(target);
-    return metadata.isFile() && !metadata.isSymbolicLink() ? 'ok' : 'unsafe';
-  } catch (error) {
-    if (error.code === 'ENOENT') return 'missing';
-    return 'unsafe';
-  }
-}
-
-async function validateExperienceFeedback(root, state, manifest, experienceIndex, issues, boundary) {
-  const feedback = state.experience_feedback;
-  const atCompletion = completionLike(state, boundary);
-  if (!feedback || feedback.disposition === 'pending') {
-    if (atCompletion) {
-      issues.push(issue(
-        'pending-experience-feedback',
-        'Completion-like checkpoint requires a captured, already-encoded, or not-reusable experience disposition',
-      ));
-    }
-    return;
-  }
-  if (typeof feedback !== 'object' || Array.isArray(feedback)) {
-    issues.push(issue('invalid-experience-feedback', 'Checkpoint experience_feedback must be a mapping'));
-    return;
-  }
-
-  const trigger = feedback.trigger;
-  const disposition = feedback.disposition;
-  const reason = typeof feedback.reason === 'string' ? feedback.reason.trim() : '';
-  const artifacts = feedback.artifacts;
-  const invalid =
-    !VALID_TRIGGERS.has(trigger) ||
-    !VALID_DISPOSITIONS.has(disposition) ||
-    !reason ||
-    !Array.isArray(artifacts) ||
-    (CAPTURE_TRIGGERS.has(trigger) && !['captured', 'not-reusable'].includes(disposition)) ||
-    (trigger === 'repeat-proven-path' && disposition !== 'already-encoded') ||
-    (trigger === 'routine-non-path' && disposition !== 'not-reusable') ||
-    (disposition !== 'not-reusable' && artifacts.length === 0) ||
-    (disposition === 'not-reusable' && artifacts.length !== 0);
-  if (invalid) {
-    issues.push(issue(
-      'invalid-experience-feedback',
-      'Checkpoint experience_feedback trigger, disposition, reason, and artifacts are inconsistent',
-    ));
-    return;
-  }
-
-  const indexedArtifacts = new Set(
-    (experienceIndex?.entries ?? [])
-      .filter((entry) => entry.status !== 'obsolete')
-      .flatMap((entry) => entry.artifacts)
-      .map(normalizedArtifactPath),
-  );
-  const requiresIndex = disposition === 'captured' || disposition === 'already-encoded';
-
-  for (const artifact of artifacts) {
-    if (typeof artifact !== 'string' || !artifact.trim()) {
-      issues.push(issue('invalid-experience-feedback', 'Experience artifact paths must be non-empty strings'));
-      continue;
-    }
-    const artifactStatus = await feedbackArtifactStatus(root, artifact);
-    if (artifactStatus === 'escape') {
-      issues.push(issue('experience-artifact-escape', 'Experience artifact path must stay inside the project'));
-    } else if (artifactStatus === 'missing') {
-      issues.push(issue('missing-experience-artifact', 'Missing experience artifact'));
-    } else if (artifactStatus !== 'ok') {
-      issues.push(issue('unsafe-experience-artifact', 'Experience artifact must be a safe project-contained regular non-linked file'));
-    }
-    if (artifactStatus === 'ok' && /\.md$/i.test(artifact)) {
-      const normalizedArtifact = portablePath(artifact).replace(/^\.\//, '');
-      const declaredSources = manifest.truth_index
-        ? []
-        : [manifest.goal_source, manifest.intent_contract, ...flattenSources(manifest.sources)]
-          .filter(Boolean)
-          .map((source) => portablePath(source).replace(/^\.\//, '').replace(/\/+$/, ''));
-      const routed = indexedArtifacts.has(normalizedArtifactPath(artifact)) || declaredSources.some(
-        (source) => normalizedArtifact === source || normalizedArtifact.startsWith(`${source}/`),
-      );
-      if (!routed) {
-        issues.push(issue(
-          'unrouted-experience-artifact',
-          `Captured Markdown experience artifact is not routed by the project manifest: ${artifact}`,
-        ));
-      }
-    }
-    if (artifactStatus === 'ok'
-      && requiresIndex
-      && !isBuiltInExperienceArtifact(artifact)
-      && !indexedArtifacts.has(normalizedArtifactPath(artifact))) {
-      issues.push(issue(
-        'unindexed-experience-artifact',
-        `Reusable experience artifact is not indexed: ${artifact}`,
-      ));
-    }
-  }
-}
-
-async function readTruthIndex(root, manifest, issues) {
-  const relativePath = manifest.truth_index;
-  if (typeof relativePath !== 'string' || !relativePath.trim()) {
-    issues.push(issue('missing-truth-index-field', 'Manifest truth_index is required'));
-    return null;
-  }
-  const entry = await projectEntryStatus(root, relativePath);
-  if (entry.status === 'escape') {
-    issues.push(issue('truth-index-escape', 'Truth index path must stay inside the project'));
-    return null;
-  }
-  if (entry.status === 'missing') {
-    issues.push(issue('missing-truth-index', 'Missing project truth map declared by the manifest'));
-    return null;
-  }
-  if (entry.status !== 'ok') {
-    issues.push(issue('unsafe-truth-index', unsafeAuthorityMessage('Truth index')));
-    return null;
-  }
-  try {
-    const parsed = parseTruthMap(await readFile(entry.target, 'utf8'));
-    for (const problem of await validateConfirmedTruth(root, parsed)) {
-      issues.push(issue(
-        problem.code,
-        problem.code === 'missing-confirmed-truth'
-          ? `Confirmed project truth is missing: ${problem.path}`
-          : `Confirmed project truth is unsafe: ${problem.path}`,
-      ));
-    }
-    return parsed;
-  } catch {
-    issues.push(issue('invalid-truth-index', 'Invalid project truth map. Preserve it, repair the reported structure, and rerun vibetether doctor.'));
-    return null;
-  }
-}
-
-function controlPlaneSummary(issues, warnings) {
-  const areas = {
-    bootstrap: ['manifest', 'harness', 'instructions', 'managed-block', 'skill', 'recovery'],
-    cli: ['cli', 'launcher'],
-    intent: ['intent'],
-    truth: ['truth', 'source', 'authority'],
-    state: ['checkpoint'],
-    execution: ['execution'],
-    routing: ['route', 'capability', 'project-routes'],
-    experience: ['experience'],
-    providers: ['provider', 'catalog', 'license'],
-  };
-  return Object.fromEntries(Object.entries(areas).map(([area, tokens]) => {
-    const has = (entries) => entries.some((entry) => tokens.some((token) => entry.code.includes(token)));
-    return [area, has(issues) ? 'error' : has(warnings) ? 'attention' : 'healthy'];
+function areaSummary(issues,warnings) {
+  const areas={contract:['CONTRACT','MANIFEST','INTENT'],truth:['TRUTH','AUTHORITY'],runtime:['RUNTIME','ROUTE','LEASE','EVIDENCE','ACTIVATION'],experience:['EXPERIENCE'],skills:['PROVIDER','SKILL','ROUTES'],worktree:['WORKTREE','GIT'],budget:['BUDGET','LARGE']};
+  return Object.fromEntries(Object.entries(areas).map(([name,tokens])=>{
+    const has=(items)=>items.some((item)=>tokens.some((token)=>item.code.includes(token)));
+    return [name,has(issues)?'error':has(warnings)?'attention':'healthy'];
   }));
 }
 
-async function validateLocalCli(root, manifest, atCompletion, issues, warnings) {
-  const baseline = manifest.cli;
-  if (baseline === undefined) {
-    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
-      'cli-baseline-not-established',
-      'Run VibeTether init to install and record the project-local CLI launcher.',
-    ));
-    return;
+async function trackedBudget(context,issues) {
+  if (!context.tracked) return;
+  const files=['.vibetether/project.json',context.manifest.intent,context.manifest.truth_index,context.manifest.experience_index,context.manifest.skills_lock,context.manifest.routes,context.manifest.launcher];
+  let bytes=0;
+  for (const relative of files) {
+    try { bytes+=(await lstat(path.join(context.root,...relative.split('/')))).size; }
+    catch { /* Structural reads already report this. */ }
   }
-  const hash = /^[a-f0-9]{64}$/;
-  const version = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
-  const valid = baseline
-    && typeof baseline === 'object'
-    && !Array.isArray(baseline)
-    && portablePath(baseline.launcher) === LOCAL_CLI_PATH
-    && hash.test(baseline.launcher_sha256 ?? '')
-    && typeof baseline.package === 'string'
-    && baseline.package.trim() !== ''
-    && version.test(baseline.expected_version ?? '');
-  if (!valid) {
-    issues.push(issue(
-      'invalid-local-cli-baseline',
-      'Manifest cli must declare the canonical launcher path, SHA-256, package, and semantic release version.',
-    ));
-    return;
-  }
-  if (baseline.package !== releasePackage(baseline.expected_version)) {
-    issues.push(issue(
-      'invalid-local-cli-package',
-      'Manifest cli package must use the versioned release tag matching expected_version.',
-    ));
-  }
+  if (bytes>TRACKED_CONTRACT_BUDGET_BYTES) issues.push(error('CONTRACT_BUDGET_EXCEEDED',`Tracked Contract is ${bytes} bytes; budget is ${TRACKED_CONTRACT_BUDGET_BYTES}.`));
+  if (await exists(path.join(context.root,'.vibetether','providers'))) issues.push(error('PROJECT_PROVIDER_CATALOG_PRESENT','Provider catalogs must live in the external content-addressed cache.'));
+  if (await exists(path.join(context.root,'.vibetether','state'))) issues.push(error('PROJECT_RUNTIME_PRESENT','Runtime state must not live in the project Contract.'));
+}
 
-  const entry = await projectEntryStatus(root, baseline.launcher);
-  if (entry.status === 'missing') {
-    issues.push(issue('missing-local-cli-launcher', 'The project-local VibeTether CLI launcher is missing.'));
-  } else if (entry.status !== 'ok') {
-    issues.push(issue('unsafe-local-cli-launcher', unsafeAuthorityMessage('Local CLI launcher')));
-  } else {
-    const actualHash = sha256Text(await readFile(entry.target, 'utf8'));
-    if (actualHash !== baseline.launcher_sha256) {
-      issues.push(issue(
-        'changed-local-cli-launcher',
-        'The project-local VibeTether CLI launcher differs from its managed manifest fingerprint.',
-      ));
-    }
-  }
-
-  const currentVersion = VIBETETHER_RELEASE_COMPATIBILITY.current.version;
-  if (baseline.expected_version !== currentVersion) {
-    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
-      'cli-version-mismatch',
-      `The running VibeTether CLI is ${currentVersion}, while this project expects ${baseline.expected_version}. Run the expected project-local launcher or upgrade with init.`,
-    ));
-  } else {
-    const current = currentLocalCliBaseline();
-    if (baseline.package !== current.manifest.package
-      || baseline.launcher_sha256 !== current.manifest.launcher_sha256) {
-      issues.push(issue(
-        'noncanonical-local-cli-baseline',
-        'The current-version project-local CLI baseline is not the canonical VibeTether launcher.',
-      ));
-    }
+async function hostAssets(context,issues,warnings) {
+  if (!context.tracked) return;
+  const entry=await readFile(path.join(packageRoot,'skills','vibe-tether','SKILL.md'),'utf8');
+  const deepEntry=await readFile(path.join(packageRoot,'skills','vibe-tether-deep','SKILL.md'),'utf8');
+  if (Buffer.byteLength(entry,'utf8')>ENTRY_SKILL_BUDGET_BYTES) issues.push(error('ENTRY_SKILL_BUDGET_EXCEEDED','VibeTether entry Skill exceeds its context budget.'));
+  if (Buffer.byteLength(managedBlock(),'utf8')>MANAGED_BLOCK_BUDGET_BYTES) issues.push(error('MANAGED_BLOCK_BUDGET_EXCEEDED','Managed host instruction block exceeds its context budget.'));
+  for (const [agent,config] of Object.entries(ADAPTERS)) {
+    const instruction=await readProjectText(context.root,config.instruction,`${agent} instructions`,{allowMissing:true});
+    const installed=await readProjectText(context.root,config.skill,`${agent} entry Skill`,{allowMissing:true});
+    if (instruction===null&&installed===null) continue;
+    if (instruction===null||!hasCanonicalManagedBlock(instruction)) issues.push(error('MANAGED_BLOCK_MISSING',`${agent} instruction file lacks the canonical VibeTether block.`));
+    if (installed===null) issues.push(error('ENTRY_SKILL_MISSING',`${agent} entry Skill is missing.`));
+    else if (!portableTextEqual(installed,entry)) issues.push(error('ENTRY_SKILL_CHANGED',`${agent} entry Skill differs from the release copy.`));
+    const deepInstalled=await readProjectText(context.root,config.deepSkill,`${agent} deep entry Skill`,{allowMissing:true});
+    if (deepInstalled===null) issues.push(error('DEEP_ENTRY_SKILL_MISSING',`${agent} deep entry Skill is missing.`));
+    else if (!portableTextEqual(deepInstalled,deepEntry)) issues.push(error('DEEP_ENTRY_SKILL_CHANGED',`${agent} deep entry Skill differs from the release copy.`));
   }
 }
 
-async function validateAuthoritySnapshot(root, manifest, truth, state, issues, warnings, boundary) {
-  const snapshot = state.authority_snapshot;
-  const atCompletion = completionLike(state, boundary);
-  if (!snapshot) {
-    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
-      'authority-snapshot-not-established',
-      'Run a full VibeTether route re-anchor so the checkpoint records current project truth fingerprints.',
-    ));
-    return;
+function governanceIgnoredPaths(context, route, issues) {
+  const allowed = new Set([context.manifest.experience_index]);
+  if (route?.success_capture?.candidate_id) allowed.add(`docs/operations/vibetether-candidates/${route.success_capture.candidate_id}.md`);
+  const declared = Array.isArray(route?.governance_writes) ? route.governance_writes : [];
+  const unsupported = declared.filter((item) => !allowed.has(item));
+  if (unsupported.length) issues.push(error('UNSAFE_GOVERNANCE_WRITE', `Step declared unsupported evidence-ignore paths: ${unsupported.join(', ')}`));
+  return [...new Set(declared.filter((item) => allowed.has(item)))];
+}
+
+export async function inspectProject(options={}) {
+  const boundary=options.boundary??'ordinary'; const issues=[]; const warnings=[];
+  let context;
+  try { context=await discoverContract(options.project??process.cwd()); }
+  catch (cause) {
+    const report={ok:false,schema_version:1,boundary,project:null,issues:[error(cause.code??'CONTRACT_NOT_FOUND',cause.message)],warnings:[],control_plane:{contract:'error'}};
+    if (options.throw_on_error!==false) throw healthError(report,options.json===true); return report;
   }
-  const hash = /^[a-f0-9]{64}$/;
-  const hasConfirmedProjection = snapshot.confirmed_projection_sha256 !== undefined;
-  const valid = typeof snapshot.anchored_at === 'string'
-    && snapshot.truth_index?.path === manifest.truth_index
-    && hash.test(snapshot.truth_index?.sha256 ?? '')
-    && (!hasConfirmedProjection || hash.test(snapshot.confirmed_projection_sha256 ?? ''))
-    && Array.isArray(snapshot.confirmed_sources)
-    && snapshot.confirmed_sources.every((entry) => (
-      typeof entry?.path === 'string'
-      && typeof entry?.role === 'string'
-      && typeof entry?.scope === 'string'
-      && hash.test(entry?.sha256 ?? '')
-    ));
-  if (!valid) {
-    issues.push(issue('invalid-authority-snapshot', 'Checkpoint authority_snapshot is structurally invalid.'));
-    return;
+  let intent,truth,authority,runtime,current,route;
+  try { intent=parseIntent(context.intentSource); } catch (cause) { issues.push(error(cause.code??'INVALID_INTENT',cause.message)); }
+  try { truth=parseTruthMap(context.truthSource); } catch (cause) { issues.push(error(cause.code??'INVALID_TRUTH',cause.message)); }
+  try { validateExperienceIndex(context.experience); } catch (cause) { issues.push(error(cause.code??'INVALID_EXPERIENCE',cause.message)); }
+  try { if (truth) authority=await authoritySnapshot(context.executionRoot,truth,context.intentSource); } catch (cause) { issues.push(error(cause.code??'INVALID_AUTHORITY',cause.message)); }
+  if (authority) {
+    try { runtime=await attachWorktree(context,authority.authority_digest); current=await readCurrent(runtime.paths); route=await readRoute(runtime.paths,{allowMissing:true}); }
+    catch (cause) { issues.push(error(cause.code??'INVALID_RUNTIME',cause.message)); }
   }
-  if (!hasConfirmedProjection) {
-    warnings.push(warning(
-      'authority-projection-not-established',
-      'Legacy authority snapshot has no confirmed-only Truth projection; rerun the current route to establish it.',
-    ));
-  }
-  let current;
-  try {
-    current = await createAuthoritySnapshot(root, manifest, snapshot.anchored_at);
-  } catch {
-    issues.push(issue('invalid-authority-snapshot', 'Current project authority cannot be fingerprinted safely.'));
-    return;
-  }
-  const truthMapChanged = snapshot.truth_index.sha256 !== current.truth_index.sha256;
-  const confirmedProjectionChanged = hasConfirmedProjection
-    && snapshot.confirmed_projection_sha256 !== current.confirmed_projection_sha256;
-  if (confirmedProjectionChanged) {
-    issues.push(issue(
-      'changed-confirmed-truth-map',
-      'Confirmed Truth Map entries changed after the last full re-anchor.',
-    ));
-  } else if (truthMapChanged && hasConfirmedProjection) {
-    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
-      'changed-truth-metadata',
-      'Truth Map candidates, declined entries, or other metadata changed after the last full re-anchor.',
-    ));
-  } else if (truthMapChanged) {
-    issues.push(issue('changed-truth-index', 'Project truth map changed after the last full re-anchor.'));
-  }
-  if ((snapshot.intent?.sha256 ?? null) !== (current.intent?.sha256 ?? null)) {
-    issues.push(issue('changed-intent-contract', 'Intent Contract changed after the last full re-anchor.'));
-  }
-  const currentSources = new Map(
-    current.confirmed_sources.map((entry) => [normalizedAuthorityPath(entry.path), entry]),
-  );
-  const snapshotSources = new Map(
-    snapshot.confirmed_sources.map((entry) => [normalizedAuthorityPath(entry.path), entry]),
-  );
-  for (const entry of truth?.confirmed ?? []) {
-    const sourcePath = normalizedAuthorityPath(entry.path);
-    const before = snapshotSources.get(sourcePath);
-    const after = currentSources.get(sourcePath);
-    if (!before || !after || before.sha256 !== after.sha256 || before.role !== entry.role || before.scope !== entry.scope) {
-      issues.push(issue('changed-confirmed-truth', `Confirmed project truth changed after the last full re-anchor: ${entry.path}`));
+  const atCompletion=completion(boundary,current?.phase);
+  if (context.manifest.vibetether_version!==VERSION) (atCompletion?issues:warnings).push((atCompletion?error:warning)('VERSION_MISMATCH',`Project expects ${context.manifest.vibetether_version}; running CLI is ${VERSION}.`));
+  if (intent?.status!=='confirmed') (atCompletion?issues:warnings).push((atCompletion?error:warning)('INTENT_UNCONFIRMED','Intent Contract is not confirmed.'));
+  if (current&&authority&&current.authority_digest!==authority.authority_digest) (atCompletion?issues:warnings).push((atCompletion?error:warning)('AUTHORITY_CHANGED','Runtime checkpoint is anchored to older confirmed authority.'));
+  if (current&&current.control_generation!==context.manifest.control_generation) issues.push(error('CONTROL_GENERATION_CHANGED','Runtime checkpoint uses a different control generation.'));
+  if (atCompletion&&!route) issues.push(error('MISSING_CONTROLLED_SESSION','Completion-like boundary requires a completed controlled step with current evidence.'));
+  if (atCompletion&&route&&route.status!=='satisfied') issues.push(error('ROUTE_NOT_SATISFIED',`Completion-like boundary requires a satisfied step; current route status is ${route.status}.`));
+  if (route?.status==='active'&&atCompletion) issues.push(error('ACTIVE_ROUTE','Completion-like boundary cannot retain an active step.'));
+  if (route?.status==='broken'&&atCompletion) issues.push(error('BROKEN_ROUTE','Completion-like boundary cannot accept a step whose lease was broken.'));
+  if (route?.status==='active'&&authority&&route.authority_start!==authority.authority_digest) issues.push(error('ACTIVE_ROUTE_AUTHORITY_DRIFT','Confirmed authority changed during the active step.'));
+  if (route&&route.status!=='active'&&route.truth_reconciliation?.status==='pending') (atCompletion?issues:warnings).push((atCompletion?error:warning)('PENDING_TRUTH_RECONCILIATION','Exited step still has pending Truth reconciliation.'));
+  if (runtime) {
+    const lease=await inspectLease(runtime.paths).catch(()=>null);
+    if (route?.status==='active'&&!lease) issues.push(error('MISSING_LEASE','Active step has no writer lease.'));
+    if (route?.status!=='active'&&lease) warnings.push(warning('STALE_LEASE','Inactive worktree retains a writer lease.'));
+    if (route?.status==='active'&&!route.activation_id) issues.push(error('ACTIVATION_MISSING','Active step has no Provider activation receipt.'));
+    if (route?.status==='active'&&route.activation_id) {
+      try { const activation=await loadActivation(runtime.paths,route.activation_id); if (activation.route_id!==route.id) throw new Error('route mismatch'); }
+      catch (cause) { issues.push(error(cause.code??'INVALID_ACTIVATION','Activation receipt is missing, modified, or belongs to another step.')); }
     }
-  }
-}
-
-async function readExperienceIndex(root, manifest, issues) {
-  const relativePath = manifest.experience_index;
-  if (typeof relativePath !== 'string' || !relativePath.trim()) {
-    issues.push(issue('missing-experience-index-field', 'Manifest experience_index is required'));
-    return null;
-  }
-  const entry = await projectEntryStatus(root, relativePath);
-  if (entry.status === 'escape') {
-    issues.push(issue('experience-index-escape', 'Experience index path must stay inside the project'));
-    return null;
-  }
-  if (entry.status === 'missing') {
-    issues.push(issue('missing-experience-index', 'Missing experience index declared by the project manifest'));
-    return null;
-  }
-  if (entry.status !== 'ok') {
-    issues.push(issue(
-      'invalid-experience-index',
-      'Experience index must be a safe project-contained regular non-linked file. Fix the index and rerun vibetether doctor.',
-    ));
-    return null;
-  }
-  try {
-    const index = parseExperienceIndex(await readFile(entry.target, 'utf8'));
-    await validateExperienceIndex(index, root);
-    return index;
-  } catch {
-    issues.push(issue(
-      'invalid-experience-index',
-      'Cannot validate experience index. Fix the index and rerun vibetether doctor.',
-    ));
-    return null;
-  }
-}
-
-async function readYamlArtifact(root, relativePath, label, issues) {
-  if (!relativePath) {
-    issues.push(issue(`missing-${label}-field`, `Manifest ${label.replaceAll('-', '_')} is required`));
-    return null;
-  }
-  const entry = await projectEntryStatus(root, relativePath);
-  if (entry.status === 'escape') {
-    issues.push(issue(`${label}-escape`, `${label} path escapes the project`));
-    return null;
-  }
-  if (entry.status === 'missing') {
-    issues.push(issue(`missing-${label}`, `Missing ${label}`));
-    return null;
-  }
-  if (entry.status !== 'ok') {
-    issues.push(issue(`unsafe-${label}`, unsafeAuthorityMessage(label.replaceAll('-', ' '))));
-    return null;
-  }
-  try {
-    const value = YAML.parse(await readFile(entry.target, 'utf8'));
-    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('document must be a mapping');
-    return value;
-  } catch {
-    issues.push(issue(
-      `invalid-${label}`,
-      `Invalid ${label} YAML. Fix the document and rerun vibetether doctor.`,
-    ));
-    return null;
-  }
-}
-
-async function readRouteHandshake(root, issues) {
-  const entry = await projectEntryStatus(root, ROUTE_HANDSHAKE_PATH);
-  if (entry.status === 'missing') return null;
-  if (entry.status !== 'ok') {
-    issues.push(issue('invalid-route-handshake', unsafeAuthorityMessage('Route handshake')));
-    return null;
-  }
-  try {
-    const value = YAML.parse(await readFile(entry.target, 'utf8'));
-    const valid = value
-      && typeof value === 'object'
-      && !Array.isArray(value)
-      && value.schema_version === 1
-      && ['codex', 'claude'].includes(value.agent)
-      && typeof value.phase === 'string'
-      && typeof value.capability === 'string'
-      && Array.isArray(value.signals)
-      && typeof value.selected_skill === 'string'
-      && (value.execution_start === undefined || validExecutionSnapshot(value.execution_start))
-      && (value.execution_end === undefined || validExecutionSnapshot(value.execution_end))
-      && ['active', 'satisfied', 'abandoned'].includes(value.status);
-    if (!valid) throw new Error('invalid handshake');
-    return value;
-  } catch {
-    issues.push(issue('invalid-route-handshake', 'Route handshake is structurally invalid; rerun the current phase route.'));
-    return null;
-  }
-}
-
-function routeCandidates(result) {
-  return [result.recommendation, ...(result.alternatives ?? [])].filter(Boolean);
-}
-
-function validateTruthReconciliation(checkpoint, handshake, atCompletion, issues, warnings) {
-  const reconciliation = checkpoint?.truth_reconciliation;
-  if (handshake
-      && (typeof handshake.route_instance_id !== 'string'
-        || !handshake.route_instance_id.trim())) {
-    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
-      'route-instance-not-established',
-      'Legacy route state has no unique route-instance identity; start and dispose a fresh route.',
-    ));
-  }
-  if (!reconciliation) {
-    warnings.push(warning(
-      'truth-reconciliation-not-established',
-      'Legacy checkpoint has no Truth reconciliation state; the next consequential route will establish it.',
-    ));
-    return;
-  }
-  if (typeof reconciliation !== 'object' || Array.isArray(reconciliation)) {
-    issues.push(issue('invalid-truth-reconciliation', 'Checkpoint truth_reconciliation must be a mapping.'));
-    return;
-  }
-  const status = reconciliation.status;
-  if (status === 'unknown') {
-    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
-      'truth-reconciliation-not-established',
-      'Truth reconciliation is unknown after legacy migration; run and reconcile a fresh consequential route.',
-    ));
-    return;
-  }
-  if (['pending', 'candidate_pending'].includes(status)) {
-    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
-      status === 'pending' ? 'pending-truth-reconciliation' : 'candidate-truth-reconciliation',
-      status === 'pending'
-        ? 'The exited route still needs an explicit Truth reconciliation disposition.'
-        : 'A Truth candidate is still awaiting user confirmation or decline.',
-    ));
-    return;
-  }
-  const valid = RESOLVED_TRUTH_RECONCILIATIONS.has(status)
-    && typeof reconciliation.reason === 'string'
-    && reconciliation.reason.trim()
-    && typeof reconciliation.updated_at === 'string'
-    && (status === 'no_material_change'
-      ? reconciliation.candidate_path === null
-      : typeof reconciliation.candidate_path === 'string' && reconciliation.candidate_path.trim());
-  if (!valid) {
-    issues.push(issue('invalid-truth-reconciliation', 'Checkpoint Truth reconciliation fields are inconsistent.'));
-    return;
-  }
-  if (handshake?.route_instance_id
-      && reconciliation.route_instance_id !== handshake.route_instance_id) {
-    issues.push(issue(
-      'stale-truth-reconciliation',
-      'Truth reconciliation belongs to a different route instance.',
-    ));
-  }
-}
-
-async function validateExecutionControlState(root, handshake, atCompletion, issues, warnings) {
-  if (!handshake) return;
-  if (!handshake.execution_start) {
-    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
-      'execution-snapshot-not-established',
-      'Legacy route has no execution-root snapshot; start a fresh route from the actual execution root.',
-    ));
-    return;
-  }
-  if (handshake.status === 'active') return;
-  if (!handshake.execution_end) {
-    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
-      'execution-exit-not-established',
-      'Exited route has no completion execution snapshot.',
-    ));
-    return;
-  }
-  let current;
-  try {
-    current = await captureExecutionSnapshot(root, handshake.execution_end.root);
-  } catch {
-    issues.push(issue(
-      'invalid-execution-root',
-      'The recorded execution root can no longer be inspected safely.',
-    ));
-    return;
-  }
-  if (!executionSnapshotsMatch(handshake.execution_end, current)) {
-    (atCompletion ? issues : warnings).push((atCompletion ? issue : warning)(
-      'stale-execution-snapshot',
-      'Git worktree, HEAD, branch, or working-tree state changed after route completion.',
-    ));
-  }
-}
-
-async function validateRouteControlState({
-  root,
-  manifest,
-  baseBoard,
-  checkpoint,
-  handshake,
-  issues,
-  warnings,
-  boundary,
-}) {
-  let board;
-  try {
-    board = (await loadEffectiveProjectRoutes(root, manifest, baseBoard)).board;
-    board = await refreshBoardAvailability(board, root);
-  } catch (error) {
-    const ambiguous = /equally matching primary|duplicate project route id/i.test(error.message);
-    issues.push(issue(
-      ambiguous ? 'ambiguous-local-route' : 'invalid-project-routes',
-      ambiguous
-        ? 'Project routes contain an ambiguous local primary; make phase, capability, and signals deterministic.'
-        : 'Project routes are missing, unsafe, or invalid; fix routes.local.yaml and rerun doctor.',
-    ));
-    return;
-  }
-
-  const atCompletion = completionLike(checkpoint, boundary);
-  if (!handshake) {
-    if (atCompletion) {
-      issues.push(issue(
-        'missing-route-handshake',
-        'Completion-like checkpoint requires a current satisfied phase route handshake.',
-      ));
-    } else if (checkpoint) {
-      warnings.push(warning(
-        'route-handshake-not-established',
-        'Establish a route handshake before the next consequential phase transition.',
-      ));
-    }
-    return;
-  }
-
-  const checkpointPhase = String(checkpoint?.phase ?? '').toUpperCase();
-  if (checkpointPhase && checkpointPhase !== handshake.phase) {
-    issues.push(issue(
-      handshake.status === 'active' ? 'pending-route-exit' : 'stale-route-handshake',
-      handshake.status === 'active'
-        ? 'The active route must be completed or abandoned before the checkpoint advances phases.'
-        : 'The route handshake phase does not match the current checkpoint phase.',
-    ));
-  } else if (atCompletion && handshake.status === 'active') {
-    issues.push(issue(
-      'pending-route-exit',
-      'Completion-like checkpoint requires the active route to be completed or abandoned.',
-    ));
-  }
-
-  let result;
-  try {
-    result = resolveBoardRoute(board, {
-      phase: handshake.phase,
-      capability: handshake.capability,
-      signals: handshake.signals,
-      harness: handshake.agent,
-    });
-  } catch {
-    issues.push(issue(
-      'route-selection-mismatch',
-      'The saved route no longer resolves against the effective capability board.',
-    ));
-    return;
-  }
-
-  const candidates = routeCandidates(result);
-  const selectedCandidate = candidates.find((candidate) => candidate.skill === handshake.selected_skill);
-  const effectiveSelection = result.selection?.skill;
-  const localRoute = (board.project_routes ?? []).find((route) => route.id === handshake.route_id);
-  if (handshake.selection_source === 'project-local' && !localRoute) {
-    issues.push(issue(
-      'route-source-missing',
-      'The selected project-local route no longer exists; rerun the current phase route.',
-    ));
-  }
-  if (localRoute && !(localRoute.available_in ?? []).includes(handshake.agent)) {
-    issues.push(issue(
-      'selected-skill-unavailable',
-      'The selected project-local Skill is no longer available in the recorded agent harness.',
-    ));
-  } else if (selectedCandidate && selectedCandidate.available === false) {
-    issues.push(issue(
-      'selected-skill-unavailable',
-      'The selected Skill is no longer available in the recorded agent harness.',
-    ));
-  }
-
-  const justifiedAlternative = Boolean(
-    handshake.alternative_reason
-      && selectedCandidate
-      && selectedCandidate.available === true,
-  );
-  if (handshake.selected_skill !== effectiveSelection && !justifiedAlternative) {
-    issues.push(issue(
-      'route-selection-mismatch',
-      'The selected Skill no longer matches the effective route and has no valid alternative reason.',
-    ));
-  }
-}
-
-export async function inspectProject(options) {
-  let root;
-  try {
-    root = await realpath(path.resolve(options.project));
-  } catch {
-    throw new CliError(`Project directory does not exist: ${options.project}`);
-  }
-  const issues = [];
-  const warnings = [];
-  const boundary = options.boundary ?? 'ordinary';
-  let manifest = null;
-  const manifestEntry = await projectEntryStatus(root, '.vibetether/project.yaml');
-  if (manifestEntry.status === 'missing') {
-    issues.push(issue('missing-manifest', 'Missing .vibetether/project.yaml'));
-  } else if (manifestEntry.status !== 'ok') {
-    issues.push(issue('unsafe-manifest', unsafeAuthorityMessage('Manifest')));
-  } else {
-    try {
-      manifest = parseCanonicalManifest(await readFile(manifestEntry.target, 'utf8'));
-    } catch {
-      issues.push(issue('invalid-manifest', 'Invalid manifest YAML. Use the canonical VibeTether manifest format and rerun vibetether doctor.'));
-    }
-  }
-
-  if (manifest && manifest.schema_version !== 1) {
-    issues.push(issue('unsupported-schema', `Expected schema_version 1, found ${manifest.schema_version ?? 'none'}`));
-  }
-
-  const pendingRecoveryHarnesses = new Set();
-  const recoveryHarnesses = manifest
-    ? Object.entries(manifest.harnesses ?? {})
-        .filter(([name, harness]) => harness?.enabled && ADAPTERS[name])
-        .map(([name]) => name)
-    : Object.keys(ADAPTERS);
-  for (const harness of recoveryHarnesses) {
-    try {
-      const recovery = await inspectSkillRecovery(root, harness);
-      if (!recovery) continue;
-      if (recovery.kind === 'pending-skill-upgrade') {
-        pendingRecoveryHarnesses.add(harness);
-        warnings.push(warning(
-          'pending-skill-upgrade',
-          `A verified ${harness} Skill upgrade is waiting for host release. Close Codex and Claude, then rerun init.`,
-        ));
-      } else if (recovery.kind === 'recoverable-missing-skill') {
-        warnings.push(warning(
-          'recoverable-missing-skill',
-          `The missing ${harness} Skill has one authoritative recovery candidate. Rerun init before other work.`,
-        ));
-      } else if (recovery.kind === 'ambiguous-recovery') {
-        issues.push(issue(
-          'ambiguous-recovery',
-          `Multiple verified ${harness} Skill recovery candidates remain and none has unique peer authority.`,
-        ));
-      } else {
-        issues.push(issue(
-          'unrecoverable-skill-state',
-          `The missing ${harness} Skill has only modified, linked, or unknown recovery candidates.`,
-        ));
-      }
-    } catch {
-      issues.push(issue('unrecoverable-skill-state', `Cannot validate ${harness} Skill recovery state.`));
-    }
-  }
-
-  if (manifest) {
-    let checkpointState = null;
-    if (!manifest.intent_contract) {
-      issues.push(issue('missing-intent-contract', 'Manifest intent_contract is required'));
-    }
-    const truth = await readTruthIndex(root, manifest, issues);
-    const declared = [
-      manifest.intent_contract,
-      ...(truth ? truth.confirmed.map((entry) => entry.path) : flattenSources(manifest.sources)),
-    ].filter(Boolean);
-    for (const source of [...new Set(declared)]) {
-      const sourceEntry = await projectEntryStatus(root, source, 'any');
-      if (sourceEntry.status === 'escape') {
-        issues.push(issue('source-escape', 'Declared source escapes the project'));
-      } else if (sourceEntry.status === 'missing') {
-        issues.push(issue('missing-source', 'Missing declared source'));
-      } else if (sourceEntry.status !== 'ok') {
-        issues.push(issue('unsafe-source', unsafeAuthorityMessage('Declared source', 'any')));
-      }
-    }
-
-    for (const [name, harness] of Object.entries(manifest.harnesses ?? {})) {
-      if (!harness?.enabled) continue;
-      const adapter = ADAPTERS[name];
-      if (!adapter) {
-        issues.push(issue('unknown-harness', 'Unknown enabled harness in the project manifest'));
-        continue;
-      }
-      const instructionRelativePath = harness.instruction_file ?? adapter.instructionFile;
-      const instructionEntry = await projectEntryStatus(root, instructionRelativePath);
-      if (instructionEntry.status === 'missing') {
-        issues.push(issue('missing-instructions', `Missing instruction file for ${name}`));
-      } else if (instructionEntry.status !== 'ok') {
-        issues.push(issue('unsafe-instructions', unsafeAuthorityMessage('Instruction file')));
-      } else {
-        const instructions = await readFile(instructionEntry.target, 'utf8');
-        const starts = instructions.split(MANAGED_START).length - 1;
-        const ends = instructions.split(MANAGED_END).length - 1;
-        if (starts !== 1 || ends !== 1) {
-          issues.push(issue('invalid-managed-block', 'Expected one VibeTether managed block in the instruction file'));
-        } else if (managedBlockBody(instructions) !== adapter.managedBody.trim()) {
-          issues.push(issue('changed-managed-block', 'VibeTether managed block changed in the instruction file'));
-        }
-      }
-      const skillDirectory = await projectEntryStatus(root, adapter.skillDirectory, 'directory');
-      const skillEntry = await projectEntryStatus(root, path.join(adapter.skillDirectory, 'SKILL.md'));
-      if (skillDirectory.status === 'missing' || skillEntry.status === 'missing') {
-        issues.push(issue('missing-skill', `Missing installed Skill for ${name}`));
-      } else if (skillDirectory.status !== 'ok' || skillEntry.status !== 'ok') {
-        issues.push(issue('unsafe-skill', unsafeAuthorityMessage('Installed Skill', 'directory')));
-      } else {
-        try {
-          const identity = await inspectVibeTetherIdentity(skillDirectory.target);
-          if (identity.state === 'legacy') {
-            warnings.push(warning('legacy-skill', `Installed Skill for ${name} is a registered canonical earlier release; rerun init to upgrade it.`));
-          } else if (identity.state === 'unknown') {
-            issues.push(issue('changed-skill', `Installed Skill changed for ${name}`));
-          }
-        } catch {
-          issues.push(issue('invalid-skill', `Cannot verify installed Skill for ${name}`));
-        }
-      }
-    }
-
-    const experienceIndex = await readExperienceIndex(root, manifest, issues);
-    const board = await readYamlArtifact(root, manifest.capability_board, 'capability-board', issues);
-    const lock = await readYamlArtifact(root, manifest.provider_lock, 'provider-lock', issues);
-    if (board) {
+    if (route?.status!=='active'&&route?.activation_id) issues.push(error('STALE_ACTIVATION','Exited step still references a live Provider activation.'));
+    const validatedEvidence = [];
+    for (const evidenceId of route?.evidence_ids??[]) {
       try {
-        assertCapabilityBoard(board);
-      } catch (error) {
-        issues.push(issue('invalid-capability-board', error.message));
-      }
-      if (board.selection_policy?.provider_selection !== 'advisory') {
-        issues.push(issue('invalid-capability-policy', 'Capability board provider selection must be advisory'));
-      }
+        const evidence=await loadEvidence(runtime.paths,evidenceId);
+        if (!evidence.successful) issues.push(error('EVIDENCE_FAILED',`Evidence receipt failed: ${evidenceId}`));
+        if (EVIDENCE_REQUIRED_PHASES.has(route.phase)&&evidence.kind==='assertion') issues.push(error('PROXY_EVIDENCE',`Phase ${route.phase} cannot be completed by assertion-only evidence.`));
+        if (evidence.route_id!==route.id||evidence.authority_digest!==route.authority_start||evidence.skills_digest!==route.skills_digest) issues.push(error('EVIDENCE_SCOPE_MISMATCH',`Evidence receipt does not match the step: ${evidenceId}`));
+        if (!evidence.execution_before || !evidence.execution_after) issues.push(error('EVIDENCE_SNAPSHOT_MISSING',`Evidence receipt lacks before/after execution snapshots: ${evidenceId}`));
+        const declaredCheck=(route.success_checks??[]).find((item)=>item.id===evidence.check_id);
+        if (!declaredCheck||declaredCheck.claim!==evidence.claim) issues.push(error('EVIDENCE_CHECK_MISMATCH',`Evidence is not bound to a predeclared success check: ${evidenceId}`));
+        if (!Array.isArray(evidence.coverage_artifacts)||evidence.coverage_artifacts.some((item)=>item.present!==true||typeof item.path!=='string'||!/^[a-f0-9]{64}$/.test(item.sha256??''))) issues.push(error('EVIDENCE_COVERAGE_INVALID',`Evidence lacks validated product coverage: ${evidenceId}`));
+        validatedEvidence.push(evidence);
+      } catch (cause) { issues.push(error(cause.code??'MISSING_EVIDENCE',`Evidence receipt cannot be validated: ${evidenceId}`)); }
     }
-    if (lock) {
-      const validV1 = lock.schema_version === 1 && Array.isArray(lock.sources) && Array.isArray(lock.skills);
-      const validV2 =
-        lock.schema_version === 2 &&
-        Array.isArray(lock.sources) &&
-        Array.isArray(lock.catalog) &&
-        Array.isArray(lock.exposures) &&
-        Array.isArray(lock.skills);
-      if (!validV1 && !validV2) {
-        issues.push(issue('invalid-provider-lock', 'Provider lock must use schema_version 1 or 2 and declare its provider arrays'));
-      }
-    }
-    if (board && lock && board.profile !== lock.profile) {
-      issues.push(issue('provider-profile-mismatch', 'Capability board profile does not match provider lock profile'));
-    }
-
-    const lockedExposures = Array.isArray(lock?.skills)
-      ? lock.skills
-      : Array.isArray(lock?.exposures)
-        ? lock.exposures
-        : [];
-    const lockedCatalog = Array.isArray(lock?.catalog) ? lock.catalog : [];
-    const lockedSources = Array.isArray(lock?.sources) ? lock.sources : [];
-    const activeProviders = lockedExposures.filter((skill) => skill?.active);
-    const activeSourceIds = new Set([
-      ...activeProviders.map((skill) => skill?.source_id),
-      ...lockedCatalog.filter((skill) => skill?.active).map((skill) => skill?.source_id),
-    ]);
-    for (const source of lockedSources) {
-      if (!source || typeof source !== 'object' || Array.isArray(source)) {
-        issues.push(issue('invalid-provider-lock', 'Provider lock contains an invalid source record'));
-        continue;
-      }
-      const installation = source.license_installation;
-      if (!installation?.path || !source.license_sha256) {
-        if (activeSourceIds.has(source.id) && source.license_evidence?.mode !== 'readme-declaration') {
-          issues.push(issue('missing-provider-license-record', 'An active provider source lacks an installed license record'));
-        }
-        continue;
-      }
-      const expectedLicensePath = `.vibetether/licenses/${source.id}.LICENSE.txt`;
-      if (portablePath(installation.path) !== expectedLicensePath) {
-        issues.push(issue('provider-license-path-mismatch', 'Provider license path does not match the expected project path'));
-        continue;
-      }
-      const licenseEntry = await projectEntryStatus(root, installation.path);
-      if (licenseEntry.status === 'escape') {
-        issues.push(issue('provider-license-path-escape', 'Provider license path escapes the project'));
-        continue;
-      }
-      if (licenseEntry.status === 'missing') {
-        if (activeSourceIds.has(source.id)) {
-          issues.push(issue('missing-provider-license', 'Missing installed license for an active provider source'));
-        }
-        continue;
-      }
-      if (licenseEntry.status !== 'ok') {
-        issues.push(issue('unsafe-provider-license', unsafeAuthorityMessage('Provider license')));
-        continue;
-      }
-      const actual = createHash('sha256').update(await readFile(licenseEntry.target)).digest('hex');
-      if (actual !== source.license_sha256) {
-        const managed = installation.ownership === 'vibetether';
-        (managed ? issues : warnings).push((managed ? issue : warning)(
-          managed ? 'changed-managed-provider-license' : 'changed-preexisting-provider-license',
-          `${managed ? 'VibeTether-managed' : 'Pre-existing'} provider license changed`,
-        ));
-      }
-    }
-    const availableProviders = new Set();
-    for (const skill of lockedExposures) {
-      if (!skill || typeof skill !== 'object' || Array.isArray(skill)
-        || !skill.id || !skill.install_name || !/^[a-f0-9]{64}$/.test(skill.fingerprint ?? '')) {
-        issues.push(issue('invalid-provider-lock', 'Provider lock contains an invalid Skill record'));
-        continue;
-      }
-      const installations = skill.installations;
-      if (!installations || typeof installations !== 'object' || Array.isArray(installations)) {
-        issues.push(issue('invalid-provider-installation', 'Invalid provider installation record'));
-        continue;
-      }
-      for (const [harness, installation] of Object.entries(installations)) {
-        if (!installation?.path || !['vibetether', 'preexisting'].includes(installation?.ownership)) {
-          issues.push(issue('invalid-provider-installation', 'Invalid provider installation record'));
-          continue;
-        }
-        const adapter = ADAPTERS[harness];
-        const expectedPath = adapter
-          ? portablePath(path.join(path.dirname(adapter.skillDirectory), skill.install_name))
-          : null;
-        if (!expectedPath || portablePath(installation.path) !== expectedPath) {
-          issues.push(issue(
-            'provider-installation-path-mismatch',
-            'Provider install path does not match the expected project path',
-          ));
-          continue;
-        }
-        const providerEntry = await projectEntryStatus(root, installation.path, 'directory');
-        if (providerEntry.status === 'escape') {
-          issues.push(issue('provider-path-escape', 'Provider path escapes the project'));
-          continue;
-        }
-        if (providerEntry.status === 'missing') {
-          if (skill.active) {
-            warnings.push(warning(
-              'missing-optional-provider',
-              'An optional provider is missing; use the capability board fallback and record the selection reason.',
-            ));
-          }
-          continue;
-        }
-        if (providerEntry.status !== 'ok') {
-          issues.push(issue('unsafe-provider', unsafeAuthorityMessage('Provider installation', 'directory')));
-          continue;
-        }
-        try {
-          const installedFingerprint = await skillFingerprint(providerEntry.target);
-          if (installedFingerprint !== skill.fingerprint) {
-            const managed = installation.ownership === 'vibetether';
-            (managed ? issues : warnings).push((managed ? issue : warning)(
-              managed ? 'changed-managed-provider' : 'changed-preexisting-provider',
-              `${managed ? 'VibeTether-managed' : 'Pre-existing'} provider changed`,
-            ));
-          } else if (skill.active) {
-            availableProviders.add(skill.id);
-          }
-        } catch {
-          issues.push(issue('invalid-provider', 'Cannot verify provider installation'));
-        }
-      }
-      const collisions = skill.collisions ?? {};
-      if (!collisions || typeof collisions !== 'object' || Array.isArray(collisions)) {
-        issues.push(issue('invalid-provider-collision', 'Invalid provider collision record'));
-        continue;
-      }
-      for (const [harness, collision] of Object.entries(collisions)) {
-        if (!collision || typeof collision !== 'object' || Array.isArray(collision)
-          || collision.preserved !== true
-          || !PROVIDER_COLLISION_REASONS.has(collision.reason)) {
-          issues.push(issue('invalid-provider-collision', 'Invalid provider collision record'));
-          continue;
-        }
-        if (Object.hasOwn(installations, harness)) {
-          issues.push(issue(
-            'provider-collision-overlap',
-            'A provider harness cannot be both a verified installation and a preserved collision',
-          ));
-          continue;
-        }
-        const adapter = ADAPTERS[harness];
-        const expectedPath = adapter
-          ? portablePath(path.join(path.dirname(adapter.skillDirectory), skill.install_name))
-          : null;
-        if (!expectedPath || portablePath(collision.path) !== expectedPath) {
-          issues.push(issue(
-            'provider-collision-path-mismatch',
-            'Provider collision path does not match the expected project Skill path',
-          ));
-          continue;
-        }
-        const collisionEntry = await projectEntryStatus(root, collision.path, 'directory');
-        if (collisionEntry.status === 'escape') {
-          issues.push(issue('provider-collision-path-escape', 'Provider collision path escapes the project'));
-          continue;
-        }
-        if (collisionEntry.status === 'missing') {
-          issues.push(issue('missing-provider-collision-target', 'Preserved provider collision target is missing'));
-          continue;
-        }
-        if (collisionEntry.status !== 'ok') {
-          issues.push(issue('unsafe-provider-collision', unsafeAuthorityMessage('Provider collision', 'directory')));
-          continue;
-        }
-        const code = collision.reason === 'modified-managed-skill'
-          ? 'modified-managed-provider-preserved'
-          : 'optional-provider-name-collision';
-        warnings.push(warning(
-          code,
-          `Preserved ${collision.path}; the reviewed ${skill.install_name} provider is unavailable in ${harness}.`,
-        ));
-      }
-    }
-
-    for (const skill of lockedCatalog) {
-      if (!skill || typeof skill !== 'object' || Array.isArray(skill)
-        || !skill.id || !skill.install_name || !/^[a-f0-9]{64}$/.test(skill.fingerprint ?? '')) {
-        issues.push(issue('invalid-provider-lock', 'Provider lock contains an invalid catalog record'));
-        continue;
-      }
-      const installation = skill.installation;
-      if (!['vibetether', 'preexisting'].includes(installation?.ownership)) {
-        issues.push(issue('invalid-catalog-installation', 'Catalog provider has invalid ownership metadata'));
-        continue;
-      }
-      const expectedPath = `.vibetether/providers/catalog/${skill.source_id}/${skill.install_name}`;
-      if (!installation?.path || portablePath(installation.path) !== expectedPath) {
-        issues.push(issue('catalog-installation-path-mismatch', 'Catalog path does not match the expected project path'));
-        continue;
-      }
-      const catalogEntry = await projectEntryStatus(root, installation.path, 'directory');
-      if (catalogEntry.status === 'escape') {
-        issues.push(issue('catalog-path-escape', 'Catalog path escapes the project'));
-        continue;
-      }
-      if (catalogEntry.status === 'missing') {
-        if (skill.active) issues.push(issue('missing-catalog-provider', 'Missing catalog provider installation'));
-        continue;
-      }
-      if (catalogEntry.status !== 'ok') {
-        issues.push(issue('unsafe-catalog-provider', unsafeAuthorityMessage('Catalog provider', 'directory')));
-        continue;
-      }
-      try {
-        const installedFingerprint = await skillFingerprint(catalogEntry.target);
-        if (installedFingerprint !== skill.fingerprint) {
-          const managed = installation.ownership === 'vibetether';
-          (managed ? issues : warnings).push((managed ? issue : warning)(
-            managed ? 'changed-managed-catalog-provider' : 'changed-preexisting-catalog-provider',
-            `${managed ? 'VibeTether-managed' : 'Pre-existing'} catalog provider changed`,
-          ));
-        }
-      } catch {
-        issues.push(issue('invalid-catalog-provider', 'Cannot verify catalog provider installation'));
-      }
-    }
-
-    manifest.__providerSummary = {
-      active: activeProviders.length,
-      available: availableProviders.size,
-      total: lockedExposures.length,
-    };
-
-    const checkpoint = manifest.checkpoint;
-    if (checkpoint?.path) {
-      const checkpointEntry = await projectEntryStatus(root, checkpoint.path);
-      if (checkpointEntry.status === 'escape') {
-        issues.push(issue('checkpoint-escape', 'Checkpoint path escapes the project'));
-      } else if (checkpointEntry.status === 'missing') {
-        issues.push(issue('missing-checkpoint', 'Missing runtime checkpoint'));
-      } else if (checkpointEntry.status !== 'ok') {
-        issues.push(issue('unsafe-checkpoint', unsafeAuthorityMessage('Checkpoint')));
+    if (route?.status==='satisfied') {
+      const contract=route.output_contract;
+      if (!contract || !Array.isArray(contract.required_outputs) || !Array.isArray(contract.exit_evidence) || !Array.isArray(contract.output_proofs) || !Array.isArray(contract.exit_proofs) || !Array.isArray(contract.success_checks)) {
+        issues.push(error('ROUTE_CONTRACT_MISSING','Satisfied step has no validated route output contract.'));
       } else {
-        try {
-          const state = YAML.parse(await readFile(checkpointEntry.target, 'utf8'));
-          if (
-            state?.schema_version !== 1 ||
-            !state?.goal ||
-            !state?.phase ||
-            !state?.slice ||
-            !state?.last_reanchor ||
-            !state?.next_intended_action
-          ) {
-            issues.push(issue('invalid-checkpoint', 'Runtime checkpoint is missing required recovery fields'));
-          } else {
-            const updatedAt = Date.parse(state.last_reanchor);
-            const maxAge = Number(checkpoint.max_age_hours ?? 168) * 60 * 60 * 1000;
-            if (!Number.isFinite(updatedAt)) {
-              issues.push(issue('invalid-checkpoint', 'Runtime checkpoint has an invalid last_reanchor value'));
-            } else if (Date.now() - updatedAt > maxAge) {
-              issues.push(issue('stale-checkpoint', `Runtime checkpoint is older than ${checkpoint.max_age_hours ?? 168} hours`));
-            }
-            await validateAuthoritySnapshot(root, manifest, truth, state, issues, warnings, boundary);
-            await validateExperienceFeedback(root, state, manifest, experienceIndex, issues, boundary);
-            checkpointState = state;
+        if ((contract.missing_outputs??[]).length) issues.push(error('REQUIRED_OUTPUT_MISSING',`Satisfied step is missing required outputs: ${contract.missing_outputs.join(', ')}`));
+        if ((contract.missing_exit_evidence??[]).length) issues.push(error('EXIT_EVIDENCE_MISSING',`Satisfied step is missing exit evidence: ${contract.missing_exit_evidence.join(' | ')}`));
+        if (JSON.stringify(contract.required_outputs)!==JSON.stringify(route.required_outputs??[]) || JSON.stringify(contract.exit_evidence)!==JSON.stringify(route.exit_evidence??[])) issues.push(error('ROUTE_CONTRACT_MISMATCH','Validated output contract does not match the routed requirements.'));
+        const validatedIds=new Set(validatedEvidence.map((item)=>item.id));
+        const approvedPaths=Array.isArray(route.approved_paths)?route.approved_paths:[];
+        if (route.permissions?.code_write===true&&!approvedPaths.length) issues.push(error('APPROVED_SCOPE_MISSING','Satisfied code-writing step has no approved product scope.'));
+        for (const check of route.success_checks??[]) {
+          if (route.permissions?.code_write===true&&(!Array.isArray(check.consumer_paths)||!check.consumer_paths.length)) issues.push(error('REAL_CONSUMER_MISSING',`Success check has no declared real consumer path: ${check.id??'unknown'}`));
+          for (const relative of [...(check.covers_paths??[]),...(check.consumer_paths??[])]) if (approvedPaths.length&&!pathWithinScope(relative,approvedPaths)) issues.push(error('CHECK_OUTSIDE_APPROVED_SCOPE',`Success check path is outside the approved scope: ${relative}`));
+        }
+        const coveredPaths=new Set(validatedEvidence.flatMap((item)=>(item.coverage_artifacts??[]).filter((artifact)=>artifact.present).map((artifact)=>artifact.path)));
+        for (const changed of contract.material_product_changes??[]) {
+          if (String(changed).startsWith('@')) continue;
+          if (approvedPaths.length&&!pathWithinScope(changed,approvedPaths)) issues.push(error('PRODUCT_CHANGE_OUTSIDE_SCOPE',`Material product change is outside the approved scope: ${changed}`));
+          if (!coveredPaths.has(changed)) issues.push(error('UNCOVERED_PRODUCT_CHANGE',`Material product change lacks current evidence coverage: ${changed}`));
+        }
+        for (const proof of contract.output_proofs) {
+          if (!(route.required_outputs??[]).includes(proof.output)||!Array.isArray(proof.evidence_ids)||proof.evidence_ids.some((id)=>!validatedIds.has(id))) issues.push(error('OUTPUT_PROOF_INVALID',`Required output proof is not bound to current evidence: ${proof.output??'unknown'}`));
+          for (const artifact of proof.artifacts??[]) {
+            try {
+              await rejectSymlinkChain(context.executionRoot,artifact.path,{allowMissing:false});
+              const actual=await sha256File(resolveInside(context.executionRoot,artifact.path,'Output proof artifact'));
+              if (actual!==artifact.sha256) issues.push(error('REQUIRED_OUTPUT_CHANGED',`Output proof artifact changed after validation: ${artifact.path}`));
+              if (approvedPaths.length&&!pathWithinScope(artifact.path,approvedPaths)) issues.push(error('OUTPUT_PROOF_OUTSIDE_SCOPE',`Output proof artifact is outside the approved scope: ${artifact.path}`));
+              if ((contract.material_product_changes??[]).some((item)=>!String(item).startsWith('@'))&&!(contract.material_product_changes??[]).includes(artifact.path)) issues.push(error('OUTPUT_PROOF_NOT_CHANGED',`Output proof artifact was not changed in the satisfied slice: ${artifact.path}`));
+            } catch (cause) { issues.push(error(cause.code??'REQUIRED_OUTPUT_MISSING',`Output proof artifact cannot be validated: ${artifact.path}`)); }
           }
-        } catch {
-          issues.push(issue('invalid-checkpoint', 'Cannot parse runtime checkpoint'));
+        }
+        for (const proof of contract.exit_proofs) {
+          if (!(route.exit_evidence??[]).includes(proof.criterion)||!Array.isArray(proof.evidence_ids)||proof.evidence_ids.some((id)=>!validatedIds.has(id))) issues.push(error('EXIT_PROOF_INVALID',`Exit proof is not bound to current evidence: ${proof.criterion??'unknown'}`));
+          if (!Array.isArray(proof.artifacts)||!proof.artifacts.length) issues.push(error('EXIT_PROOF_ARTIFACT_MISSING',`Exit proof has no validated product artifact: ${proof.criterion??'unknown'}`));
+          for (const artifact of proof.artifacts??[]) {
+            try {
+              await rejectSymlinkChain(context.executionRoot,artifact.path,{allowMissing:false});
+              const actual=await sha256File(resolveInside(context.executionRoot,artifact.path,'Exit proof artifact'));
+              if (actual!==artifact.sha256) issues.push(error('EXIT_PROOF_ARTIFACT_CHANGED',`Exit proof artifact changed after validation: ${artifact.path}`));
+              if (approvedPaths.length&&!pathWithinScope(artifact.path,approvedPaths)) issues.push(error('EXIT_PROOF_OUTSIDE_SCOPE',`Exit proof artifact is outside the approved scope: ${artifact.path}`));
+              if ((contract.material_product_changes??[]).some((item)=>!String(item).startsWith('@'))&&!(contract.material_product_changes??[]).includes(artifact.path)) issues.push(error('EXIT_PROOF_NOT_CHANGED',`Exit proof artifact was not changed in the satisfied slice: ${artifact.path}`));
+            } catch (cause) { issues.push(error(cause.code??'EXIT_PROOF_ARTIFACT_MISSING',`Exit proof artifact cannot be validated: ${artifact.path}`)); }
+          }
+        }
+        for (const check of contract.success_checks) if (check.successful!==true||!validatedIds.has(check.evidence_id)) issues.push(error('SUCCESS_CHECK_INVALID',`Predeclared success check is incomplete: ${check.id??'unknown'}`));
+        if (route.permissions?.code_write===true&&!(contract.material_product_changes??[]).length) issues.push(error('NO_PRODUCT_CHANGE','Satisfied code-writing step has no material product change.'));
+      }
+      const finalEvidence = [...validatedEvidence].reverse().find((item) => item.successful && item.kind !== 'assertion');
+      if (EVIDENCE_REQUIRED_PHASES.has(route.phase) && !finalEvidence) {
+        issues.push(error('MISSING_FINAL_EVIDENCE','Satisfied step has no successful command or artifact evidence bound to final code bytes.'));
+      } else if (finalEvidence?.execution_after && route.execution_end) {
+        const ignored = governanceIgnoredPaths(context, route, issues);
+        if (!snapshotsMatchIgnoringPaths(finalEvidence.execution_after, route.execution_end, ignored)) {
+          issues.push(error('CODE_CHANGED_AFTER_EVIDENCE','Product worktree bytes changed after the final successful evidence was captured.'));
         }
       }
+      if (route.classification?.needs_user_decision===true && (route.user_decision_confirmed!==true || typeof route.user_decision_reason!=='string' || !route.user_decision_reason.trim())) {
+        issues.push(error('USER_DECISION_RECORD_MISSING','Direction-sensitive satisfied step lacks a durable user decision reason.'));
+      }
+      if (!route.success_capture?.disposition) issues.push(error('SUCCESS_CAPTURE_MISSING','Satisfied step has no Success Capture disposition.'));
+      if (route.task_mode==='deep'&&(!route.start_card_id||!route.implementation_permit_id||route.user_decision_confirmed!==true)) issues.push(error('IMPLEMENTATION_PERMIT_MISSING','Deep step lacks a user-confirmed Start Card and Implementation Permit.'));
+      const now=await executionSnapshot(context.executionRoot).catch(()=>null);
+      if (finalEvidence?.execution_after && now) {
+        const ignored = governanceIgnoredPaths(context, route, issues);
+        if (!snapshotsMatchIgnoringPaths(finalEvidence.execution_after, now, ignored)
+            && !issues.some((item)=>item.code==='CODE_CHANGED_AFTER_EVIDENCE')) {
+          issues.push(error('CODE_CHANGED_AFTER_EVIDENCE','Product worktree bytes changed after the final successful evidence was captured.'));
+        }
+      }
+      if (!now||!finalSnapshotMatches(route,now)) (atCompletion?issues:warnings).push((atCompletion?error:warning)('STALE_EXECUTION_SNAPSHOT','Worktree bytes, branch, or HEAD changed after step evidence.'));
+      if (!(route.evidence_ids??[]).length&&EVIDENCE_REQUIRED_PHASES.has(route.phase)) issues.push(error('MISSING_EVIDENCE','Satisfied step has no evidence receipts.'));
     }
-    if (checkpointState
-        && completionLike(checkpointState, boundary)
-        && pendingRecoveryHarnesses.size > 0) {
-      issues.push(issue(
-        'pending-skill-upgrade',
-        'Completion-like project state cannot retain a pending Skill upgrade transaction.',
-      ));
-    }
-    await validateLocalCli(
-      root,
-      manifest,
-      completionLike(checkpointState, boundary),
-      issues,
-      warnings,
-    );
-    if (board) {
-      const handshake = await readRouteHandshake(root, issues);
-      validateTruthReconciliation(
-        checkpointState,
-        handshake,
-        completionLike(checkpointState, boundary),
-        issues,
-        warnings,
-      );
-      await validateExecutionControlState(
-        root,
-        handshake,
-        completionLike(checkpointState, boundary),
-        issues,
-        warnings,
-      );
-      await validateRouteControlState({
-        root,
-        manifest,
-        baseBoard: board,
-        checkpoint: checkpointState,
-        handshake,
-        issues,
-        warnings,
-        boundary,
-      });
+    if (authority) {
+      try {
+        const skillsDigest=skillsLockDigest(context.skills);
+        const health=await auditExperience(context,runtime.paths,context.experience,{authorityDigest:authority.authority_digest,skillsDigest,signals:[]});
+        for (const item of health) if (item.declared_status==='proven'&&item.effective_status!=='proven') warnings.push(warning('STALE_EXPERIENCE',`Proven Experience ${item.id} is now suspect: ${item.reasons.join(', ')}`));
+      } catch (cause) { issues.push(error(cause.code??'INVALID_EXPERIENCE',cause.message)); }
     }
   }
-
-  const harnesses = Object.entries(manifest?.harnesses ?? {})
-    .filter(([name, value]) => value?.enabled && Object.hasOwn(ADAPTERS, name))
-    .map(([name]) => name);
-  const report = {
-    ok: issues.length === 0,
-    schema_version: manifest?.schema_version ?? null,
-    project: root,
-    boundary,
-    harnesses,
-    issues,
-    warnings,
-    control_plane: controlPlaneSummary(issues, warnings),
-    providers: manifest?.__providerSummary ?? { active: 0, available: 0, total: 0 },
-  };
-  if (manifest) delete manifest.__providerSummary;
-  const output = options.json
-    ? `${JSON.stringify(report, null, 2)}\n`
-    : report.ok
-      ? `VibeTether doctor: healthy (${harnesses.join(' + ') || 'no harnesses'})${warnings.length ? ` with ${warnings.length} warning(s):\n${warnings.map((value) => `  - [${value.code}] ${value.message}`).join('\n')}` : ''}\n`
-      : `VibeTether doctor found ${issues.length} issue(s)${warnings.length ? ` and ${warnings.length} warning(s)` : ''}:\n${[...issues, ...warnings].map((value) => `  - [${value.code}] ${value.message}`).join('\n')}\n`;
-
-  if (!report.ok) throw new CliError('Project health check failed.', 4, output, options.json ? 'stdout' : 'stderr');
-  return output;
+  try {
+    const registry=await loadProviderRegistry();
+    if (context.routes) validateRoutes(context.routes,registry.capabilities,registry.providers);
+    for (const pin of context.skills.pins) {
+      const provider=registry.providers.find((item)=>item.id===pin.id);
+      if (!provider||provider.object_hash!==pin.object_hash||provider.fingerprint!==pin.fingerprint) issues.push(error('PROVIDER_PIN_INVALID',`Pinned Provider is unavailable or changed: ${pin.id}`));
+    }
+  } catch (cause) { issues.push(error(cause.code??'INVALID_PROVIDER',cause.message)); }
+  try { await trackedBudget(context,issues); await hostAssets(context,issues,warnings); } catch (cause) { issues.push(error(cause.code??'BUDGET_CHECK_FAILED',cause.message)); }
+  try { const capsule=await buildContext({project:context.executionRoot,boundary,agent:options.agent??'codex'}); if (Buffer.byteLength(JSON.stringify(capsule),'utf8')>4096) issues.push(error('CONTEXT_BUDGET_EXCEEDED','Context Capsule exceeds 4096 bytes.')); }
+  catch (cause) { if (!issues.some((item)=>item.code===cause.code)) issues.push(error(cause.code??'CONTEXT_INVALID',cause.message)); }
+  const report={ok:issues.length===0,schema_version:1,boundary,project:context.root,execution_root:context.executionRoot,project_id:context.manifest.project_id,worktree_id:runtime?.paths.worktree_id??null,issues,warnings,control_plane:areaSummary(issues,warnings)};
+  if (!report.ok&&options.throw_on_error!==false) throw healthError(report,options.json===true);
+  return report;
 }

@@ -1,0 +1,9 @@
+Source: https://github.com/multica-ai/andrej-karpathy-skills.git
+Requested ref: commit:2c60614
+Resolved commit: 2c606141936f1eeef17fa3043a72095b4765b9c2
+Evidence path: README.md
+Declared license: MIT
+
+## License
+
+MIT
