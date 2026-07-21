@@ -40,7 +40,7 @@
 - Test: `test/safety-cli.test.mjs`
 - Test: `test/worktree.test.mjs`
 
-- [ ] **Step 1: Add an isolated host-environment helper and a path-equivalence assertion**
+- [x] **Step 1: Add an isolated host-environment helper and a path-equivalence assertion**
 
 ```js
 export async function withIsolatedUserRoots(base, action) {
@@ -62,13 +62,13 @@ export async function assertSameRealPath(actual, expected) {
 }
 ```
 
-- [ ] **Step 2: Run the three exact baseline files and observe their existing failures**
+- [x] **Step 2: Run the three exact baseline files and observe their existing failures**
 
 Run: `node --test test/init-context.test.mjs test/safety-cli.test.mjs test/worktree.test.mjs`
 
 Expected: FAIL showing long/8.3 path spelling mismatch, write under the real user `.codex` root, and malformed quoted `git -C` input.
 
-- [ ] **Step 3: Canonicalize Git command working directories without shell quoting**
+- [x] **Step 3: Canonicalize Git command working directories without shell quoting**
 
 ```js
 async function canonicalDirectory(value) {
@@ -84,7 +84,7 @@ export async function runGit(cwd, args, options = {}) {
 
 Keep `execFile`; do not concatenate a shell command. Update assertions to compare canonical paths while continuing to assert stable repository/worktree UUID equality.
 
-- [ ] **Step 4: Make global installation resolve an injectable user home**
+- [x] **Step 4: Make global installation resolve an injectable user home**
 
 ```js
 export function userHome() {
@@ -98,7 +98,7 @@ function skillRoot(agent) {
 
 Use `withIsolatedUserRoots()` in the global-entry test and assert that no path returned by the test starts with the real pre-test home.
 
-- [ ] **Step 5: Parse both TAP summary spellings and fail if no assertions were counted**
+- [x] **Step 5: Parse both TAP summary spellings and fail if no assertions were counted**
 
 ```js
 function tapCount(stdout, label) {
@@ -109,7 +109,7 @@ function tapCount(stdout, label) {
 
 For each successful file require a non-null pass count; aggregate `pass` and `fail`; add a runner self-test that rejects an exit-zero child with no TAP counts.
 
-- [ ] **Step 6: Run the focused tests and full check**
+- [x] **Step 6: Run the focused tests and full check**
 
 Run: `node --test test/init-context.test.mjs test/safety-cli.test.mjs test/worktree.test.mjs`
 
@@ -119,7 +119,7 @@ Run: `npm.cmd run check`
 
 Expected: PASS and `Test summary` reports the actual positive assertion count rather than zero.
 
-- [ ] **Step 7: Commit the bounded Windows/test-harness slice**
+- [x] **Step 7: Commit the bounded Windows/test-harness slice**
 
 ```bash
 git add src/git.mjs src/global-entry.mjs scripts/run-tests.mjs test/helpers.mjs test/init-context.test.mjs test/safety-cli.test.mjs test/worktree.test.mjs
@@ -237,7 +237,7 @@ Run: `node --test test/rc4-entry-readiness.test.mjs test/rc3-router-generalizati
 
 Expected: PASS; held-out requests do not become read-only or implementation-ready through wording tricks.
 
-- [ ] **Step 8: Commit the entry/readiness slice**
+- [x] **Step 8: Commit the entry/readiness slice**
 
 ```bash
 git add src/task-classifier.mjs src/deep.mjs src/context.mjs src/cli.mjs skills/vibe-tether/SKILL.md skills/vibe-tether-deep/SKILL.md README.md test/rc4-entry-readiness.test.mjs
@@ -255,17 +255,17 @@ git commit -m "fix: bind deep execution to user decisions"
 - Modify: `src/deep.mjs`
 - Test: `test/rc4-completion-races.test.mjs`
 
-- [ ] **Step 1: Add adversarial completion tests**
+- [x] **Step 1: Add adversarial completion tests**
 
 Test four deterministic barriers: revoke Permit during a long validator, break lease during it, expire Permit before commit, and change final bytes after evidence but before route satisfaction. Also assert that `node -e "0"` cannot prove a product claim and that explicit `routine-non-path` cannot suppress an automatically detected reusable recovery path.
 
-- [ ] **Step 2: Run the adversarial file and observe stale completion acceptance**
+- [x] **Step 2: Run the adversarial file and observe stale completion acceptance**
 
 Run: `node --test test/rc4-completion-races.test.mjs`
 
 Expected: FAIL because current `finishStep()` validates authority before the command and writes `satisfied` without a generation compare-and-set.
 
-- [ ] **Step 3: Add route, lease, Permit, and authority generations**
+- [x] **Step 3: Add route, lease, Permit, and authority generations**
 
 ```js
 const precondition = {
@@ -281,31 +281,33 @@ const precondition = {
 
 After validators finish, reacquire the worktree writer lock, reload all records, revalidate expiry/status/bindings, recompute final bytes, and write evidence plus `satisfied` in one transaction only when preconditions still match.
 
-- [ ] **Step 4: Restrict evidence commands to meaningful predeclared validators**
+- [x] **Step 4: Restrict evidence commands to meaningful predeclared validators**
 
 Reject commands whose observable contract is empty, whose only effect is exit zero, or whose covered product paths are absent. Require a declared check ID, claim, covered paths or external authority adapter, and actual post-command artifact digests.
 
-- [ ] **Step 5: Make success capture classification monotonic**
+- [x] **Step 5: Make success capture classification monotonic**
 
 ```js
 const rank = new Map([
   ['routine-non-path', 0], ['repeat-proven-path', 1],
   ['first-proven-path', 2], ['recovered-path', 3], ['changed-proven-path', 4],
 ]);
-const classification = rank.get(requested) > rank.get(automatic.classification)
-  ? requested
-  : automatic.classification;
+const classification = automatic.classification === 'routine-non-path'
+  ? automatic.classification
+  : rank.get(requested) > rank.get(automatic.classification)
+    ? requested
+    : automatic.classification;
 ```
 
-An explicit value may raise scrutiny but cannot lower an evidence-supported reusable classification. Experience confirmation updates must be part of the governance-aware final seal or explicitly trigger resealing.
+An explicit value cannot manufacture reusable evidence from a routine result, and it cannot lower an evidence-supported reusable classification. It may refine an already reusable lifecycle class upward. Experience confirmation updates must be part of the governance-aware final seal or explicitly trigger resealing.
 
-- [ ] **Step 6: Run focused and full evidence gates**
+- [x] **Step 6: Run focused and full evidence gates**
 
 Run: `node --test test/rc4-completion-races.test.mjs test/rc3-evidence-integrity.test.mjs test/rc3-evidence-semantic.test.mjs test/step-doctor.test.mjs test/rc3-success-capture-semantic.test.mjs`
 
 Expected: PASS; every injected concurrent change leaves the route blocked/broken and Doctor returns a nonzero health verdict.
 
-- [ ] **Step 7: Commit the atomic-completion slice**
+- [x] **Step 7: Commit the atomic-completion slice**
 
 ```bash
 git add src/runtime.mjs src/step.mjs src/doctor.mjs src/experience.mjs src/deep.mjs test/rc4-completion-races.test.mjs

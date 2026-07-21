@@ -6,7 +6,7 @@ import { parseTruthMap, authoritySnapshot } from './truth.mjs';
 import { attachWorktree } from './worktree.mjs';
 import {
   appendRuntimeEvent, readCurrent, readReceipt, readRoute, releaseLease,
-  writeCurrentProjection, writeReceipt, writeStepState,
+  withWorktreeStateLock, writeCurrentProjection, writeReceipt, writeStepState,
 } from './runtime.mjs';
 import { removeActivation } from './skills.mjs';
 
@@ -336,6 +336,7 @@ export async function invalidateActiveDeepRoute(value, permitId, reason, permitS
   const current = await readCurrent(value.runtime.paths);
   const activationId = route.activation_id;
   route.status = 'broken';
+  route.generation = (route.generation ?? 1) + 1;
   route.abandonment_reason = reason;
   route.implementation_permit_status = permitStatus;
   route.invalidated_activation_id = activationId ?? null;
@@ -379,8 +380,22 @@ export async function readDeepState(paths, { allowMissing = true } = {}) {
   }
 }
 
+export async function invalidateDeepPermitState(paths, permitId, reason = 'Deep Implementation Permit became invalid.') {
+  const state = await readDeepState(paths, { allowMissing: true });
+  if (!state?.permit || state.permit.id !== permitId || state.permit.status !== 'active') return state;
+  const permit = {
+    ...state.permit,
+    generation: (state.permit.generation ?? 1) + 1,
+    status: 'invalidated',
+    invalidated_at: new Date().toISOString(),
+    invalidate_reason: boundedText(reason, 1000, 'Permit invalidation reason'),
+  };
+  return writeReceipt(paths.deep, { ...state, status: 'permit-invalidated', permit, updated_at: new Date().toISOString() });
+}
+
 export async function prepareDeep(options = {}) {
   const value = await loaded(options.project);
+  return withWorktreeStateLock(value.runtime.paths, async () => {
   const route = await readRoute(value.runtime.paths, { allowMissing: true });
   if (route?.status === 'active') throw conflictError('Cannot prepare deep mode while a controlled step is active.', 'ACTIVE_STEP');
   const task = boundedText(options.task, 2000, 'Deep task');
@@ -429,10 +444,12 @@ export async function prepareDeep(options = {}) {
   await writeCurrentProjection(value.runtime.paths, current);
   await appendRuntimeEvent(value.runtime.paths, { type: 'deep-start-card-prepared', start_card_id: card.id });
   return receipt;
+  });
 }
 
 export async function answerDeepQuestion(options = {}) {
   const value = await loaded(options.project);
+  return withWorktreeStateLock(value.runtime.paths, async () => {
   const state = await readDeepState(value.runtime.paths, { allowMissing: false });
   if (state.status !== 'awaiting-user-answer') {
     throw conflictError('Deep mode is not awaiting another user answer.', 'INVALID_DEEP_STATE');
@@ -488,11 +505,13 @@ export async function answerDeepQuestion(options = {}) {
     remaining_questions: state.questions.length - decisionReceipts.length,
   });
   return receipt;
+  });
 }
 
 export async function grantDeepPermit(options = {}) {
   if (options.confirmed_by_user !== true) throw conflictError('Implementation Permit requires explicit --confirmed-by-user.', 'USER_DECISION_REQUIRED');
   const value = await loaded(options.project);
+  return withWorktreeStateLock(value.runtime.paths, async () => {
   const state = await readDeepState(value.runtime.paths, { allowMissing: false });
   if (state.status !== 'awaiting-final-confirmation' && state.status !== 'permit-revoked') throw conflictError('Deep questions must be answered one at a time before final Start Card confirmation.', 'DEEP_QUESTIONS_UNRESOLVED');
   if (state.start_card.authority_digest !== value.authority.authority_digest
@@ -515,6 +534,7 @@ export async function grantDeepPermit(options = {}) {
   }
   const permit = {
     id: `permit-${randomUUID()}`,
+    generation: 1,
     start_card_id: state.start_card.id,
     start_card_digest: startCardDigest(state.start_card),
     resolution,
@@ -545,6 +565,7 @@ export async function grantDeepPermit(options = {}) {
   await writeCurrentProjection(value.runtime.paths, current);
   await appendRuntimeEvent(value.runtime.paths, { type: 'deep-permit-granted', start_card_id: state.start_card.id, permit_id: permit.id });
   return receipt;
+  });
 }
 
 export async function validateDeepPermit(context, runtime, authority, { required = false, slice = null, envelope = null } = {}) {
@@ -581,23 +602,25 @@ export async function validateDeepPermit(context, runtime, authority, { required
 
 export async function revokeDeepPermit(options = {}) {
   const value = await loaded(options.project);
-  const state = await readDeepState(value.runtime.paths, { allowMissing: false });
-  const reason = boundedText(options.reason ?? 'Deep Implementation Permit was revoked.', 1000, 'Revoke reason');
-  const permit = state.permit ? { ...state.permit, status: 'revoked', revoked_at: new Date().toISOString(), revoke_reason: reason } : null;
-  const next = { ...state, status: 'permit-revoked', permit, updated_at: new Date().toISOString() };
-  const receipt = await writeReceipt(value.runtime.paths.deep, next);
-  await invalidateActiveDeepRoute(value, permit?.id ?? null, reason, 'revoked');
-  const current = await readCurrent(value.runtime.paths);
-  current.implementation_permit_id = null;
-  if (current.task_mode === 'deep') {
-    current.status = 'blocked';
-    current.open_risks = [reason];
-    current.next_action = 'Prepare or confirm a fresh Deep Start Card before consequential implementation.';
-  }
-  current.updated_at = new Date().toISOString();
-  await writeCurrentProjection(value.runtime.paths, current);
-  await appendRuntimeEvent(value.runtime.paths, { type: 'deep-permit-revoked', permit_id: permit?.id ?? null, reason });
-  return receipt;
+  return withWorktreeStateLock(value.runtime.paths, async () => {
+    const state = await readDeepState(value.runtime.paths, { allowMissing: false });
+    const reason = boundedText(options.reason ?? 'Deep Implementation Permit was revoked.', 1000, 'Revoke reason');
+    const permit = state.permit ? { ...state.permit, generation:(state.permit.generation??1)+1, status: 'revoked', revoked_at: new Date().toISOString(), revoke_reason: reason } : null;
+    const next = { ...state, status: 'permit-revoked', permit, updated_at: new Date().toISOString() };
+    const receipt = await writeReceipt(value.runtime.paths.deep, next);
+    await invalidateActiveDeepRoute(value, permit?.id ?? null, reason, 'revoked');
+    const current = await readCurrent(value.runtime.paths);
+    current.implementation_permit_id = null;
+    if (current.task_mode === 'deep') {
+      current.status = 'blocked';
+      current.open_risks = [reason];
+      current.next_action = 'Prepare or confirm a fresh Deep Start Card before consequential implementation.';
+    }
+    current.updated_at = new Date().toISOString();
+    await writeCurrentProjection(value.runtime.paths, current);
+    await appendRuntimeEvent(value.runtime.paths, { type: 'deep-permit-revoked', permit_id: permit?.id ?? null, reason });
+    return receipt;
+  });
 }
 
 export async function consumeDeepPermit(paths, permitId, reason = 'Controlled step exited.') {
@@ -606,7 +629,7 @@ export async function consumeDeepPermit(paths, permitId, reason = 'Controlled st
   const next = {
     ...state,
     status: 'permit-consumed',
-    permit: { ...state.permit, status: 'consumed', consumed_at: new Date().toISOString(), consume_reason: reason },
+    permit: { ...state.permit, generation:(state.permit.generation??1)+1, status: 'consumed', consumed_at: new Date().toISOString(), consume_reason: reason },
     updated_at: new Date().toISOString(),
   };
   return writeReceipt(paths.deep, next);

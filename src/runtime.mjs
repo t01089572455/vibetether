@@ -126,6 +126,10 @@ export async function writeStepState(paths,route,current) {
   ]);
 }
 
+export async function withWorktreeStateLock(paths, operation) {
+  return withFileLock(path.join(paths.worktree, '.state-lock'), operation, { staleMs: 120_000, retries: 250, delayMs: 20 });
+}
+
 export async function appendRuntimeEvent(paths,event) {
   if (containsSecret(event)) throw conflictError('Runtime event appears to contain a secret.', 'SECRET_VALUE');
   await appendBounded(paths.journal,JSON.stringify({schema_version:1,at:new Date().toISOString(),...event}),JOURNAL_MAX_BYTES);
@@ -139,7 +143,7 @@ async function leaseRecord(paths) {
   return readJsonFile(paths.lease,'Worktree lease',{allowMissing:true});
 }
 export async function acquireLease(paths,owner,{ttlMs=LEASE_TTL_MS}={}) {
-  const record = { schema_version:1, owner, pid:process.pid, acquired_at:new Date().toISOString(), expires_at:new Date(Date.now()+ttlMs).toISOString() };
+  const record = { schema_version:1, id:`lease-${randomUUID()}`, generation:1, owner, pid:process.pid, acquired_at:new Date().toISOString(), expires_at:new Date(Date.now()+ttlMs).toISOString() };
   await mkdir(path.dirname(paths.lease),{recursive:true});
   for (let attempt=0;attempt<2;attempt+=1) {
     try {
@@ -158,7 +162,7 @@ export async function acquireLease(paths,owner,{ttlMs=LEASE_TTL_MS}={}) {
 export async function renewLease(paths,owner,{ttlMs=LEASE_TTL_MS}={}) {
   const prior=await leaseRecord(paths);
   if (!prior || prior.owner!==owner) throw conflictError('Writer lease does not belong to this route.','LEASE_MISMATCH');
-  const next={...prior,pid:process.pid,expires_at:new Date(Date.now()+ttlMs).toISOString()};
+  const next={...prior,id:prior.id??`lease-${randomUUID()}`,generation:Number.isInteger(prior.generation)?prior.generation+1:1,pid:process.pid,expires_at:new Date(Date.now()+ttlMs).toISOString()};
   await atomicJson(paths.lease,next); return next;
 }
 export async function releaseLease(paths,owner) {
@@ -166,13 +170,14 @@ export async function releaseLease(paths,owner) {
   if (prior && prior.owner!==owner) throw conflictError('Writer lease belongs to another route.','LEASE_MISMATCH');
   await rm(paths.lease,{force:true});
 }
-export async function breakLease(paths, reason='Writer lease was explicitly broken for recovery.') {
+async function breakLeaseUnlocked(paths, reason='Writer lease was explicitly broken for recovery.') {
   const route=await readRoute(paths,{allowMissing:true});
   if (route?.status==='active') {
     const current=await readCurrent(paths);
     const boundedReason=boundedText(reason,500,'Lease-break reason');
     const activationId=route.activation_id;
     route.status='broken';
+    route.generation=(route.generation??1)+1;
     route.abandonment_reason=boundedReason;
     route.updated_at=new Date().toISOString();
     route.execution_end=null;
@@ -182,7 +187,7 @@ export async function breakLease(paths, reason='Writer lease was explicitly brok
       try {
         const deep=await readReceipt(paths.deep,'Deep-mode state');
         if (deep.permit?.id===route.implementation_permit_id&&deep.permit.status==='active') {
-          const permit={...deep.permit,status:'invalidated',invalidated_at:new Date().toISOString(),invalidate_reason:boundedReason};
+          const permit={...deep.permit,generation:(deep.permit.generation??1)+1,status:'invalidated',invalidated_at:new Date().toISOString(),invalidate_reason:boundedReason};
           await writeReceipt(paths.deep,{...deep,status:'permit-invalidated',permit,updated_at:new Date().toISOString()});
         }
       } catch (error) {
@@ -201,6 +206,9 @@ export async function breakLease(paths, reason='Writer lease was explicitly brok
   }
   await rm(paths.lease,{force:true});
   return route;
+}
+export async function breakLease(paths, reason='Writer lease was explicitly broken for recovery.') {
+  return withWorktreeStateLock(paths,()=>breakLeaseUnlocked(paths,reason));
 }
 export async function inspectLease(paths) { return leaseRecord(paths); }
 

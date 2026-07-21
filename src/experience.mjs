@@ -255,9 +255,12 @@ function successCaptureAssessment(route, explicit = null) {
   if (!explicit) return automatic;
   const requested = aliases[explicit] ?? explicit;
   if (!CAPTURE_CLASSES.has(requested)) throw conflictError(`Unsupported Success Capture classification: ${explicit}`, 'INVALID_EXPERIENCE');
-  if (requested === 'routine-non-path') return { classification: requested, reasons: ['The controlled task explicitly classified the result as routine and non-reusable.'], decisive_conditions: [] };
   if (automatic.classification === 'routine-non-path') return automatic;
-  if (requested === 'repeat-proven-path') return { ...automatic, classification: requested, reasons: [...automatic.reasons, 'The controlled task matched an existing reusable path.'] };
+  const rank = new Map([
+    ['routine-non-path', 0], ['repeat-proven-path', 1], ['first-proven-path', 2],
+    ['recovered-path', 3], ['changed-proven-path', 4],
+  ]);
+  if (rank.get(requested) <= rank.get(automatic.classification)) return automatic;
   return { ...automatic, classification: requested, reasons: [...automatic.reasons, 'The controlled task refined the reusable-path lifecycle classification without raising a routine result.'] };
 }
 

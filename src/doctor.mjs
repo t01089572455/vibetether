@@ -20,7 +20,10 @@ import { loadProviderRegistry } from './provider-registry.mjs';
 import { validateRoutes } from './routes.mjs';
 import { buildContext } from './context.mjs';
 import { ADAPTERS, hasCanonicalManagedBlock, managedBlock } from './adapters.mjs';
-import { exists, hashTree, portableTextEqual, readProjectText, rejectSymlinkChain, resolveInside, sha256File } from './files.mjs';
+import {
+  canonicalJson, exists, hashTree, portableTextEqual, readProjectText, rejectSymlinkChain,
+  resolveInside, sha256File, sha256Text,
+} from './files.mjs';
 
 const packageRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const error=(code,message)=>({level:'error',code,message});
@@ -186,6 +189,38 @@ export async function inspectProject(options={}) {
         if (route.permissions?.code_write===true&&!(contract.material_product_changes??[]).length) issues.push(error('NO_PRODUCT_CHANGE','Satisfied code-writing step has no material product change.'));
       }
       const finalEvidence = [...validatedEvidence].reverse().find((item) => item.successful && item.kind !== 'assertion');
+      const seal=route.completion_seal;
+      if (!seal) {
+        issues.push(error('COMPLETION_SEAL_MISSING','Satisfied step has no atomic completion seal.'));
+      } else {
+        const validDigest=(value)=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
+        const generationValid=Number.isInteger(route.generation)&&route.generation>=2
+          && Number.isInteger(seal.route_generation_before)&&Number.isInteger(seal.route_generation_after)
+          && seal.route_generation_before+1===seal.route_generation_after
+          && seal.route_generation_after===route.generation;
+        const identityValid=seal.schema_version===1
+          && typeof seal.lease_id==='string'&&seal.lease_id.length>0
+          && Number.isInteger(seal.lease_generation)&&seal.lease_generation>=1
+          && typeof seal.committed_at==='string'&&!Number.isNaN(Date.parse(seal.committed_at))
+          && seal.committed_at===route.updated_at
+          && validDigest(seal.authority_digest)
+          && seal.authority_digest===current?.authority_digest;
+        const evidenceValid=Boolean(finalEvidence)
+          && seal.final_evidence_id===finalEvidence.id
+          && (route.evidence_ids??[]).includes(seal.final_evidence_id)
+          && validDigest(seal.evidence_snapshot_digest)
+          && seal.evidence_snapshot_digest===sha256Text(canonicalJson(finalEvidence.execution_after));
+        const snapshotValid=Boolean(route.execution_end)
+          && validDigest(seal.final_snapshot_digest)
+          && seal.final_snapshot_digest===sha256Text(canonicalJson(route.execution_end));
+        const permitValid=route.task_mode!=='deep'
+          ? seal.permit_id===null&&seal.permit_generation===null
+          : seal.permit_id===route.implementation_permit_id
+            && Number.isInteger(seal.permit_generation)&&seal.permit_generation>=1;
+        if (!generationValid||!identityValid||!evidenceValid||!snapshotValid||!permitValid) {
+          issues.push(error('COMPLETION_SEAL_INVALID','Satisfied step completion seal does not match its route generation, authority, Permit, final evidence, or final byte snapshot.'));
+        }
+      }
       if (EVIDENCE_REQUIRED_PHASES.has(route.phase) && !finalEvidence) {
         issues.push(error('MISSING_FINAL_EVIDENCE','Satisfied step has no successful command or artifact evidence bound to final code bytes.'));
       } else if (finalEvidence?.execution_after && route.execution_end) {

@@ -10,16 +10,16 @@ import { validateExperienceIndex, addExperienceCounterevidence, captureSuccessCa
 import { attachWorktree } from './worktree.mjs';
 import {
   acquireLease, appendRuntimeEvent, loadProviderStats, readCurrent, readRoute, recordEvidence,
-  recordProviderOutcome, releaseLease, renewLease, writeCurrentProjection, writeStepState,
+  inspectLease, recordProviderOutcome, releaseLease, renewLease, withWorktreeStateLock, writeCurrentProjection, writeStepState,
 } from './runtime.mjs';
 import { loadProviderRegistry } from './provider-registry.mjs';
 import { validateRoutes } from './routes.mjs';
 import { brokerSkills } from './skill-broker.mjs';
 import { activateSkill, removeActivation } from './skills.mjs';
-import { executionSnapshot } from './git.mjs';
+import { executionSnapshot, snapshotsMatch } from './git.mjs';
 import { writeProjectJson } from './files.mjs';
 import { classifyTaskText } from './task-classifier.mjs';
-import { consumeDeepPermit, invalidateActiveDeepRoute, validateDeepPermit } from './deep.mjs';
+import { consumeDeepPermit, invalidateDeepPermitState, validateDeepPermit } from './deep.mjs';
 
 async function loaded(project) {
   const context=await discoverContract(project??process.cwd());
@@ -106,7 +106,7 @@ function commandLooksLikeNoop(command) {
     const scriptIndex=args.findIndex((item)=>item==='-e'||item==='--eval');
     if (scriptIndex>=0) {
       const script=String(args[scriptIndex+1]??'').replace(/[;\s]+/g,'').toLowerCase();
-      if (/^(?:process\.exit\(0\)|console\.log\([^)]*\)|void0)$/.test(script)) return true;
+      if (/^(?:0|1|true|false|null|undefined|nan|process\.exit\(0\)|process\.exitcode=0|console\.log\([^)]*\)|void0)$/.test(script)) return true;
     }
   }
   if (executable.startsWith('python') && args[0]==='-c' && /^(?:pass|exit\(0\)|sys\.exit\(0\))$/i.test(String(args[1]??'').trim())) return true;
@@ -293,9 +293,10 @@ export async function startStep(options={}) {
   const permitEnvelope={task_text:taskText,phase:routePhase,capability,provider_id:options.provider??null,scope_paths:approvedPaths,permissions,success_evidence:successEvidence,success_checks:successChecks};
   if (deepRequired) deepState=await validateDeepPermit(value.context,value.runtime,value.authority,{required:true,slice,envelope:permitEnvelope});
   const routeId=`route-${randomUUID()}`;
-  await acquireLease(value.runtime.paths,routeId);
-  let activation=null;
-  try {
+  return withWorktreeStateLock(value.runtime.paths,async()=>{
+    await acquireLease(value.runtime.paths,routeId);
+    let activation=null;
+    try {
     const registry=await loadProviderRegistry(); const routes=value.context.routes?validateRoutes(value.context.routes,registry.capabilities,registry.providers):null;
     const stats=await loadProviderStats(value.runtime.paths);
     const broker=brokerSkills(registry,{phase:routePhase,capability,signals,agent:options.agent??'codex',provider:options.provider??null,permissions},value.context.skills,routes,stats);
@@ -303,16 +304,57 @@ export async function startStep(options={}) {
       deepState=await validateDeepPermit(value.context,value.runtime,value.authority,{required:true,slice,envelope:{...permitEnvelope,provider_id:broker.selected.id}});
     }
     const skillsDigest=skillsLockDigest(value.context.skills); const executionStart=await executionSnapshot(value.context.executionRoot);
-    const route={schema_version:1,id:routeId,status:'active',phase:routePhase,capability,task_text:taskText,slice,approved_paths:approvedPaths,success_evidence:successEvidence,success_checks:successChecks,signals,permissions,classification,task_mode:deepRequired?'deep':'adaptive',start_card_id:deepState?.start_card?.id??null,implementation_permit_id:deepState?.permit?.id??null,user_decision_confirmed:options.confirmed_by_user===true||Boolean(deepState),user_decision_reason:userDecisionReason,required_outputs:broker.required_outputs,exit_evidence:broker.exit_evidence,output_contract:null,governance_writes:[],authority_start:value.authority.authority_digest,authority_snapshot:value.authority,skills_digest:skillsDigest,provider:broker.selected,shortlist:broker.shortlist,activation_id:null,execution_start:executionStart,execution_end:null,evidence_ids:[],truth_reconciliation:{status:'pending',candidate_path:null,reason:null},created_at:new Date().toISOString(),updated_at:new Date().toISOString(),abandonment_reason:null};
+    const route={schema_version:1,id:routeId,generation:1,status:'active',phase:routePhase,capability,task_text:taskText,slice,approved_paths:approvedPaths,success_evidence:successEvidence,success_checks:successChecks,signals,permissions,classification,task_mode:deepRequired?'deep':'adaptive',start_card_id:deepState?.start_card?.id??null,implementation_permit_id:deepState?.permit?.id??null,user_decision_confirmed:options.confirmed_by_user===true||Boolean(deepState),user_decision_reason:userDecisionReason,required_outputs:broker.required_outputs,exit_evidence:broker.exit_evidence,output_contract:null,governance_writes:[],authority_start:value.authority.authority_digest,authority_snapshot:value.authority,skills_digest:skillsDigest,provider:broker.selected,shortlist:broker.shortlist,activation_id:null,execution_start:executionStart,execution_end:null,evidence_ids:[],truth_reconciliation:{status:'pending',candidate_path:null,reason:null},created_at:new Date().toISOString(),updated_at:new Date().toISOString(),abandonment_reason:null};
     activation=await activateSkill(value.context,value.runtime.paths,{...route,selected:broker.selected}); route.activation_id=activation.activation_id;
     const next={...current,goal:value.intent.goal,phase:routePhase,slice,authority_digest:value.authority.authority_digest,control_generation:value.context.manifest.control_generation,route_instance_id:routeId,task_mode:route.task_mode,deep_start_card_id:route.start_card_id,implementation_permit_id:route.implementation_permit_id,next_action:`Execute only this slice: ${slice}`,open_risks:[],evidence_ids:[],updated_at:new Date().toISOString(),status:'active'};
     await writeStepState(value.runtime.paths,route,next); await appendRuntimeEvent(value.runtime.paths,{type:'step-started',route_id:routeId,phase:routePhase,capability,provider:broker.selected.id});
-    return {route,activation,readiness:'READY_FOR_IMPLEMENT_ONE'};
-  } catch (error) { if (activation) await removeActivation(value.runtime.paths,activation.activation_id).catch(()=>{}); await releaseLease(value.runtime.paths,routeId).catch(()=>{}); throw error; }
+      return {route,activation,readiness:'READY_FOR_IMPLEMENT_ONE'};
+    } catch (error) { if (activation) await removeActivation(value.runtime.paths,activation.activation_id).catch(()=>{}); await releaseLease(value.runtime.paths,routeId).catch(()=>{}); throw error; }
+  });
 }
 
 
-export async function finishStep(options={}) {
+async function invalidateCompletionAttempt(project, routeId, cause) {
+  const value=await loaded(project);
+  return withWorktreeStateLock(value.runtime.paths,async()=>{
+    const route=await readRoute(value.runtime.paths,{allowMissing:true});
+    if (!route||route.id!==routeId) return route;
+    if (route.status!=='active') {
+      await releaseLease(value.runtime.paths,route.id).catch(()=>{});
+      return route;
+    }
+    const reason=boundedText(`Completion precondition failed: ${cause.message}`,500,'Completion invalidation reason');
+    const activationId=route.activation_id;
+    route.status='broken';
+    route.generation=(route.generation??1)+1;
+    route.abandonment_reason=reason;
+    route.invalidated_activation_id=activationId??null;
+    route.activation_id=null;
+    route.execution_end=null;
+    route.updated_at=new Date().toISOString();
+    const current=await readCurrent(value.runtime.paths);
+    current.status='blocked';
+    current.route_instance_id=route.id;
+    current.implementation_permit_id=null;
+    current.open_risks=[reason];
+    current.next_action='Re-anchor, inspect the failed completion precondition, and start a fresh bounded route.';
+    current.updated_at=new Date().toISOString();
+    await writeStepState(value.runtime.paths,route,current);
+    if (route.implementation_permit_id) await invalidateDeepPermitState(value.runtime.paths,route.implementation_permit_id,reason);
+    if (activationId) await removeActivation(value.runtime.paths,activationId).catch(()=>{});
+    await releaseLease(value.runtime.paths,route.id).catch(()=>{});
+    await appendRuntimeEvent(value.runtime.paths,{type:'completion-invalidated',route_id:route.id,reason,code:cause.code??'COMPLETION_PRECONDITION_FAILED'});
+    return route;
+  });
+}
+
+function completionFailureInvalidatesRoute(error) {
+  return error?.code==='COMPLETION_PRECONDITION_CHANGED'
+    || error?.code==='CODE_CHANGED_AFTER_EVIDENCE'
+    || String(error?.code??'').startsWith('IMPLEMENTATION_PERMIT_');
+}
+
+export async function finishStep(options={},runtimeHooks={}) {
   const value=await loaded(options.project); const route=await readRoute(value.runtime.paths,{allowMissing:true});
   if (!route||route.status!=='active') throw conflictError('An active step is required.','ACTIVE_STEP_REQUIRED');
   if (route.task_mode === 'deep') {
@@ -335,23 +377,67 @@ export async function finishStep(options={}) {
         throw conflictError('The active route is not bound to the current Implementation Permit.', 'IMPLEMENTATION_PERMIT_STALE');
       }
     } catch (error) {
-      await invalidateActiveDeepRoute(value, route.implementation_permit_id, error.message, error.code ?? 'invalid');
+      await invalidateCompletionAttempt(options.project,route.id,error);
       throw error;
     }
   }
-  await renewLease(value.runtime.paths,route.id);
+  const routePreconditionDigest=sha256Text(canonicalJson(route));
+  const leasePrecondition=await withWorktreeStateLock(value.runtime.paths,async()=>{
+    const latestRoute=await readRoute(value.runtime.paths,{allowMissing:true});
+    if (!latestRoute||latestRoute.id!==route.id||latestRoute.status!=='active'
+        || sha256Text(canonicalJson(latestRoute))!==routePreconditionDigest) {
+      throw conflictError('Route changed before completion evidence could start.','COMPLETION_PRECONDITION_CHANGED');
+    }
+    return renewLease(value.runtime.paths,route.id);
+  });
   const planned=requestedChecks(route,options); const receipts=[];
   for (const check of planned) receipts.push(await evidenceForCheck(check,value,route));
   const failed=receipts.find((item)=>!item.successful);
   if (failed) {
-    route.evidence_ids=[...new Set([...route.evidence_ids,...receipts.map((item)=>item.id)])]; route.updated_at=new Date().toISOString();
-    const current=await readCurrent(value.runtime.paths); current.evidence_ids=[...new Set([...current.evidence_ids,...receipts.map((item)=>item.id)])].slice(-8); current.open_risks=['The latest predeclared success check failed; diagnose before retrying completion.']; current.updated_at=new Date().toISOString();
-    if (options.experience_ids?.length) { const next=addExperienceCounterevidence(value.context.experience,options.experience_ids,`Evidence ${failed.id} failed while applying the path.`); await writeProjectJson(value.context.root,value.context.manifest.experience_index,next); }
-    await writeStepState(value.runtime.paths,route,current); await recordProviderOutcome(value.runtime.paths,route.provider.id,false);
+    await withWorktreeStateLock(value.runtime.paths,async()=>{
+      const latestRoute=await readRoute(value.runtime.paths,{allowMissing:true});
+      if (!latestRoute||latestRoute.id!==route.id||latestRoute.status!=='active'
+          || sha256Text(canonicalJson(latestRoute))!==routePreconditionDigest) return;
+      route.generation=(route.generation??1)+1;
+      route.evidence_ids=[...new Set([...route.evidence_ids,...receipts.map((item)=>item.id)])]; route.updated_at=new Date().toISOString();
+      const current=await readCurrent(value.runtime.paths); current.evidence_ids=[...new Set([...current.evidence_ids,...receipts.map((item)=>item.id)])].slice(-8); current.open_risks=['The latest predeclared success check failed; diagnose before retrying completion.']; current.updated_at=new Date().toISOString();
+      if (options.experience_ids?.length) { const next=addExperienceCounterevidence(value.context.experience,options.experience_ids,`Evidence ${failed.id} failed while applying the path.`); await writeProjectJson(value.context.root,value.context.manifest.experience_index,next); }
+      await writeStepState(value.runtime.paths,route,current);
+    });
+    await recordProviderOutcome(value.runtime.paths,route.provider.id,false);
     throw conflictError(`Predeclared success check ${failed.check_id} failed with exit code ${failed.exit_code??'unknown'}; the step remains active.`,'EVIDENCE_FAILED');
   }
   const finalReceipt=receipts.at(-1);
-  const currentTruth=parseTruthMap(value.context.truthSource);
+  if (typeof runtimeHooks.beforeFinalize==='function') await runtimeHooks.beforeFinalize({route,finalReceipt,receipts});
+  try {
+    return await withWorktreeStateLock(value.runtime.paths,async()=>{
+      const finalValue=await loaded(options.project);
+      const latestRoute=await readRoute(finalValue.runtime.paths,{allowMissing:true});
+      if (!latestRoute||latestRoute.id!==route.id||latestRoute.status!=='active'
+          || sha256Text(canonicalJson(latestRoute))!==routePreconditionDigest) {
+        throw conflictError('Route changed or exited while completion evidence was running.','COMPLETION_PRECONDITION_CHANGED');
+      }
+      const latestLease=await inspectLease(finalValue.runtime.paths);
+      if (!latestLease||latestLease.owner!==route.id||latestLease.id!==leasePrecondition.id
+          || latestLease.generation<leasePrecondition.generation||Date.parse(latestLease.expires_at)<=Date.now()) {
+        throw conflictError('Writer lease changed, expired, or was broken while completion evidence was running.','COMPLETION_PRECONDITION_CHANGED');
+      }
+      let finalPermit=null;
+      if (route.task_mode==='deep') {
+        const deepState=await validateDeepPermit(finalValue.context,finalValue.runtime,finalValue.authority,{
+          required:true,slice:route.slice,envelope:{
+            task_text:route.task_text,phase:route.phase,capability:route.capability,provider_id:route.provider?.id,
+            scope_paths:route.approved_paths,permissions:route.permissions,success_evidence:route.success_evidence,success_checks:route.success_checks,
+          },
+        });
+        if (deepState.permit.id!==route.implementation_permit_id) throw conflictError('The active route no longer owns the reviewed Implementation Permit.','IMPLEMENTATION_PERMIT_STALE');
+        finalPermit=deepState.permit;
+      }
+      const bytesAtCommit=await executionSnapshot(finalValue.context.executionRoot);
+      if (!snapshotsMatch(finalReceipt.execution_after,bytesAtCommit)) {
+        throw conflictError('Product worktree bytes changed after evidence and before completion commit.','CODE_CHANGED_AFTER_EVIDENCE');
+      }
+      const currentTruth=parseTruthMap(finalValue.context.truthSource);
   const authorityPaths=[
     ...(route.authority_snapshot?.confirmed_sources??[]).map((item)=>item.path),
     ...[...currentTruth.confirmed,...currentTruth.candidates,...currentTruth.declined].map((item)=>item.path),
@@ -364,12 +450,12 @@ export async function finishStep(options={}) {
   const uncoveredMaterial=materialChanges.filter((item)=>!item.startsWith('@')&&!coveredPaths.has(item));
   if (route.permissions?.code_write===true&&uncoveredMaterial.length) throw conflictError(`All material product changes must be covered by predeclared success checks. Uncovered: ${uncoveredMaterial.join(', ')}`,'UNCOVERED_PRODUCT_CHANGE');
   if (route.permissions?.code_write===true&&!materialChanges.includes('@git-head')&&!materialChanges.includes('@tree')&&!materialChanges.some((item)=>coveredPaths.has(item))) throw conflictError('The final product changes are not covered by the predeclared success checks.','UNCOVERED_PRODUCT_CHANGE');
-  const outputContract=await validateRouteContract(value.context.executionRoot,route,options,receipts,materialChanges);
-  const currentAuthority=await authoritySnapshot(value.context.executionRoot,currentTruth,value.context.intentSource);
+  const outputContract=await validateRouteContract(finalValue.context.executionRoot,route,options,receipts,materialChanges);
+  const currentAuthority=await authoritySnapshot(finalValue.context.executionRoot,currentTruth,finalValue.context.intentSource);
   const reconciliation=reconcile(route,currentAuthority,currentTruth,options.truth_decision??'no-material-change',options.truth_path??null);
   route.output_contract=outputContract;
-  let capture=captureSuccessCandidate(value.context.experience,route,finalReceipt,options.capture_class??null);
-  if (capture.index!==value.context.experience) {
+  let capture=captureSuccessCandidate(finalValue.context.experience,route,finalReceipt,options.capture_class??null);
+  if (capture.index!==finalValue.context.experience) {
     const plans=[];
     if (capture.candidate_id) {
       const entry=capture.index.entries.find((item)=>item.id===capture.candidate_id);
@@ -378,32 +464,45 @@ export async function finishStep(options={}) {
       const nextEntry={...entry,artifacts:[{path:artifact.path,sha256:digest},...(entry.artifacts??[]).filter((item)=>item.path!==artifact.path)]};
       capture={...capture,index:{...capture.index,entries:capture.index.entries.map((item)=>item.id===entry.id?nextEntry:item)}};
       validateExperienceIndex(capture.index);
-      plans.push({target:resolveInside(value.context.root,artifact.path,'Success candidate artifact'),content:artifact.content});
+      plans.push({target:resolveInside(finalValue.context.root,artifact.path,'Success candidate artifact'),content:artifact.content});
       route.governance_writes.push(artifact.path);
     }
-    plans.push({target:resolveInside(value.context.root,value.context.manifest.experience_index,'Experience index'),content:canonicalJson(capture.index)});
-    route.governance_writes.push(value.context.manifest.experience_index);
+    plans.push({target:resolveInside(finalValue.context.root,finalValue.context.manifest.experience_index,'Experience index'),content:canonicalJson(capture.index)});
+    route.governance_writes.push(finalValue.context.manifest.experience_index);
     await transactionalWrites(plans);
   }
   route.success_capture={disposition:capture.disposition,candidate_id:capture.candidate_id};
   const activationId=route.activation_id;
-  route.status='satisfied'; route.activation_id=null; route.evidence_ids=[...new Set([...route.evidence_ids,...receipts.map((item)=>item.id)])]; route.truth_reconciliation=reconciliation; route.execution_end=await executionSnapshot(value.context.executionRoot); route.updated_at=new Date().toISOString();
-  const current=await readCurrent(value.runtime.paths); current.status='ready'; current.route_instance_id=route.id; current.authority_digest=currentAuthority.authority_digest; current.control_generation=value.context.manifest.control_generation; current.evidence_ids=route.evidence_ids.slice(-8); current.open_risks=[]; current.next_action='Review the evidence and choose the next bounded slice or stop.'; current.task_mode='adaptive'; current.deep_start_card_id=null; current.implementation_permit_id=null; current.updated_at=new Date().toISOString();
-  await writeStepState(value.runtime.paths,route,current); if (activationId) await removeActivation(value.runtime.paths,activationId).catch(()=>{}); if (route.implementation_permit_id) await consumeDeepPermit(value.runtime.paths,route.implementation_permit_id,'Deep controlled step completed.'); await appendRuntimeEvent(value.runtime.paths,{type:'step-finished',route_id:route.id,evidence_ids:route.evidence_ids,truth_status:reconciliation.status}); await recordProviderOutcome(value.runtime.paths,route.provider.id,true); await releaseLease(value.runtime.paths,route.id);
+  const routeGenerationBefore=route.generation??1;
+  route.status='satisfied'; route.generation=routeGenerationBefore+1; route.activation_id=null; route.evidence_ids=[...new Set([...route.evidence_ids,...receipts.map((item)=>item.id)])]; route.truth_reconciliation=reconciliation; route.execution_end=await executionSnapshot(finalValue.context.executionRoot); route.updated_at=new Date().toISOString();
+  route.completion_seal={schema_version:1,route_generation_before:routeGenerationBefore,route_generation_after:route.generation,lease_id:latestLease.id,lease_generation:latestLease.generation,permit_id:finalPermit?.id??null,permit_generation:finalPermit?.generation??null,authority_digest:currentAuthority.authority_digest,final_evidence_id:finalReceipt.id,evidence_snapshot_digest:sha256Text(canonicalJson(finalReceipt.execution_after)),final_snapshot_digest:sha256Text(canonicalJson(route.execution_end)),committed_at:route.updated_at};
+  const current=await readCurrent(finalValue.runtime.paths); current.status='ready'; current.route_instance_id=route.id; current.authority_digest=currentAuthority.authority_digest; current.control_generation=finalValue.context.manifest.control_generation; current.evidence_ids=route.evidence_ids.slice(-8); current.open_risks=[]; current.next_action='Review the evidence and choose the next bounded slice or stop.'; current.task_mode='adaptive'; current.deep_start_card_id=null; current.implementation_permit_id=null; current.updated_at=new Date().toISOString();
+  await writeStepState(finalValue.runtime.paths,route,current); if (activationId) await removeActivation(finalValue.runtime.paths,activationId).catch(()=>{}); if (route.implementation_permit_id) await consumeDeepPermit(finalValue.runtime.paths,route.implementation_permit_id,'Deep controlled step completed.'); await appendRuntimeEvent(finalValue.runtime.paths,{type:'step-finished',route_id:route.id,evidence_ids:route.evidence_ids,truth_status:reconciliation.status}); await recordProviderOutcome(finalValue.runtime.paths,route.provider.id,true); await releaseLease(finalValue.runtime.paths,route.id);
   return {route,evidence:finalReceipt,evidence_receipts:receipts,experience_capture:route.success_capture};
+    });
+  } catch (error) {
+    if (completionFailureInvalidatesRoute(error)) await invalidateCompletionAttempt(options.project,route.id,error);
+    throw error;
+  }
 }
 
 export async function abandonStep(options={}) {
-  const value=await loaded(options.project); const route=await readRoute(value.runtime.paths,{allowMissing:true});
-  if (!route||route.status!=='active') throw conflictError('An active step is required.','ACTIVE_STEP_REQUIRED');
-  await renewLease(value.runtime.paths,route.id); const reason=boundedText(options.reason,500,'Abandonment reason');
-  const currentTruth=parseTruthMap(value.context.truthSource); const currentAuthority=await authoritySnapshot(value.context.executionRoot,currentTruth,value.context.intentSource);
-  const reconciliation=reconcile(route,currentAuthority,currentTruth,options.truth_decision??'no-material-change',options.truth_path??null);
-  const activationId=route.activation_id; route.status='abandoned'; route.activation_id=null; route.abandonment_reason=reason; route.truth_reconciliation=reconciliation; route.execution_end=await executionSnapshot(value.context.executionRoot); route.updated_at=new Date().toISOString();
-  const current=await readCurrent(value.runtime.paths); current.status='ready'; current.route_instance_id=route.id; current.authority_digest=currentAuthority.authority_digest; current.open_risks=[reason]; current.next_action='Re-anchor and choose a better bounded path.'; current.task_mode='adaptive'; current.deep_start_card_id=null; current.implementation_permit_id=null; current.updated_at=new Date().toISOString();
-  await writeStepState(value.runtime.paths,route,current); if (activationId) await removeActivation(value.runtime.paths,activationId).catch(()=>{}); if (route.implementation_permit_id) await consumeDeepPermit(value.runtime.paths,route.implementation_permit_id,'Deep controlled step abandoned.'); await appendRuntimeEvent(value.runtime.paths,{type:'step-abandoned',route_id:route.id,reason}); await recordProviderOutcome(value.runtime.paths,route.provider.id,false); await releaseLease(value.runtime.paths,route.id); return route;
+  const initial=await loaded(options.project);
+  return withWorktreeStateLock(initial.runtime.paths,async()=>{
+    const value=await loaded(options.project); const route=await readRoute(value.runtime.paths,{allowMissing:true});
+    if (!route||route.status!=='active') throw conflictError('An active step is required.','ACTIVE_STEP_REQUIRED');
+    await renewLease(value.runtime.paths,route.id); const reason=boundedText(options.reason,500,'Abandonment reason');
+    const currentTruth=parseTruthMap(value.context.truthSource); const currentAuthority=await authoritySnapshot(value.context.executionRoot,currentTruth,value.context.intentSource);
+    const reconciliation=reconcile(route,currentAuthority,currentTruth,options.truth_decision??'no-material-change',options.truth_path??null);
+    const activationId=route.activation_id; route.status='abandoned'; route.generation=(route.generation??1)+1; route.activation_id=null; route.abandonment_reason=reason; route.truth_reconciliation=reconciliation; route.execution_end=await executionSnapshot(value.context.executionRoot); route.updated_at=new Date().toISOString();
+    const current=await readCurrent(value.runtime.paths); current.status='ready'; current.route_instance_id=route.id; current.authority_digest=currentAuthority.authority_digest; current.open_risks=[reason]; current.next_action='Re-anchor and choose a better bounded path.'; current.task_mode='adaptive'; current.deep_start_card_id=null; current.implementation_permit_id=null; current.updated_at=new Date().toISOString();
+    await writeStepState(value.runtime.paths,route,current); if (activationId) await removeActivation(value.runtime.paths,activationId).catch(()=>{}); if (route.implementation_permit_id) await consumeDeepPermit(value.runtime.paths,route.implementation_permit_id,'Deep controlled step abandoned.'); await appendRuntimeEvent(value.runtime.paths,{type:'step-abandoned',route_id:route.id,reason}); await recordProviderOutcome(value.runtime.paths,route.provider.id,false); await releaseLease(value.runtime.paths,route.id); return route;
+  });
 }
 
 export async function heartbeatStep({project=process.cwd()}={}) {
-  const value=await loaded(project); const route=await readRoute(value.runtime.paths,{allowMissing:true}); if (!route||route.status!=='active') throw conflictError('An active step is required.','ACTIVE_STEP_REQUIRED'); return renewLease(value.runtime.paths,route.id);
+  const initial=await loaded(project);
+  return withWorktreeStateLock(initial.runtime.paths,async()=>{
+    const value=await loaded(project); const route=await readRoute(value.runtime.paths,{allowMissing:true}); if (!route||route.status!=='active') throw conflictError('An active step is required.','ACTIVE_STEP_REQUIRED'); return renewLease(value.runtime.paths,route.id);
+  });
 }
