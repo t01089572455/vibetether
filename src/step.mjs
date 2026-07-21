@@ -20,13 +20,19 @@ import { executionSnapshot, snapshotsMatch } from './git.mjs';
 import { writeProjectJson } from './files.mjs';
 import { classifyTaskText } from './task-classifier.mjs';
 import { consumeDeepPermit, invalidateDeepPermitState, validateDeepPermit } from './deep.mjs';
+import { loadOutcomeRegistry, outcomeRegistryDigest } from './outcomes.mjs';
+import {
+  applyRouteOutcomeEvidence, bindRouteOutcomes, readOutcomeProgress,
+  renderProgressMarkdown, verifyProgressProjection,
+} from './outcome-progress.mjs';
 
 async function loaded(project) {
   const context=await discoverContract(project??process.cwd());
   const intent=parseIntent(context.intentSource); const truth=parseTruthMap(context.truthSource); validateExperienceIndex(context.experience);
   const authority=await authoritySnapshot(context.executionRoot,truth,context.intentSource);
   const runtime=await attachWorktree(context,authority.authority_digest);
-  return {context,intent,truth,authority,runtime};
+  const outcomes=await loadOutcomeRegistry(context);
+  return {context,intent,truth,authority,runtime,outcomes};
 }
 function phase(value) { const normalized=String(value??'').toUpperCase(); if (!PHASES.has(normalized)) throw conflictError(`Unknown phase: ${value}`,'UNKNOWN_PHASE'); return normalized; }
 function sourceDifference(start,current) {
@@ -134,6 +140,7 @@ function normalizeSuccessChecks(value,claims,{phase:routePhase,codeWrite=false,a
     const claim=boundedText(raw.claim,500,`Success check ${id} claim`);
     if (!claimSet.has(claim)) throw conflictError(`Success check ${id} does not match a declared success-evidence claim.`, 'INVALID_SUCCESS_CHECK');
     const kind=String(raw.kind??'');
+    const acceptanceIds=[...new Set((raw.acceptance_ids??[]).map((item)=>assertSafeId(item,`Success check ${id} acceptance id`)))];
     if (kind==='command') {
       const covers=[...new Set((raw.covers_paths??[]).map((item)=>productPath(item,`Success check ${id} covered path`)))];
       if (codeWrite&&covers.length===0) throw conflictError(`Code-writing success check ${id} must declare product paths it covers.`, 'INVALID_SUCCESS_CHECK');
@@ -145,11 +152,11 @@ function normalizeSuccessChecks(value,claims,{phase:routePhase,codeWrite=false,a
       if (approvedPaths.length && consumers.some((item)=>!pathWithinScope(item,approvedPaths))) {
         throw conflictError(`Success check ${id} consumer is outside the approved product scope.`, 'INVALID_SUCCESS_CHECK');
       }
-      normalized.push({id,claim,kind,command:commandArray(raw.command,`Success check ${id} command`),covers_paths:covers,consumer_paths:consumers});
+      normalized.push({id,claim,kind,command:commandArray(raw.command,`Success check ${id} command`),covers_paths:covers,consumer_paths:consumers,acceptance_ids:acceptanceIds});
     } else if (kind==='artifact') {
       const artifact=productPath(raw.path,`Success check ${id} artifact`);
       if (approvedPaths.length&&!pathWithinScope(artifact,approvedPaths)) throw conflictError(`Success check ${id} artifact is outside the approved product scope.`, 'INVALID_SUCCESS_CHECK');
-      normalized.push({id,claim,kind,path:artifact,covers_paths:[artifact],consumer_paths:[artifact]});
+      normalized.push({id,claim,kind,path:artifact,covers_paths:[artifact],consumer_paths:[artifact],acceptance_ids:acceptanceIds});
     } else throw conflictError(`Success check ${id} kind must be command or artifact.`, 'INVALID_SUCCESS_CHECK');
   }
   const uncovered=claims.filter((claim)=>!normalized.some((check)=>check.claim===claim));
@@ -290,6 +297,10 @@ export async function startStep(options={}) {
     userDecisionReason = boundedText(options.decision_reason, 1000, 'User decision reason');
   }
   const successChecks=normalizeSuccessChecks(options.success_checks,successEvidence,{phase:routePhase,codeWrite:permissions.code_write,approvedPaths});
+  const consequential=permissions.code_write||permissions.external_write||permissions.network||EVIDENCE_REQUIRED_PHASES.has(routePhase);
+  const outcomeBinding=bindRouteOutcomes(value.outcomes,options.outcome_ids??[],successChecks,{consequential});
+  const outcomeProgress=await readOutcomeProgress(value.runtime.paths,value.outcomes);
+  await verifyProgressProjection(value.context,value.outcomes,outcomeProgress);
   const permitEnvelope={task_text:taskText,phase:routePhase,capability,provider_id:options.provider??null,scope_paths:approvedPaths,permissions,success_evidence:successEvidence,success_checks:successChecks};
   if (deepRequired) deepState=await validateDeepPermit(value.context,value.runtime,value.authority,{required:true,slice,envelope:permitEnvelope});
   const routeId=`route-${randomUUID()}`;
@@ -304,9 +315,9 @@ export async function startStep(options={}) {
       deepState=await validateDeepPermit(value.context,value.runtime,value.authority,{required:true,slice,envelope:{...permitEnvelope,provider_id:broker.selected.id}});
     }
     const skillsDigest=skillsLockDigest(value.context.skills); const executionStart=await executionSnapshot(value.context.executionRoot);
-    const route={schema_version:1,id:routeId,generation:1,status:'active',phase:routePhase,capability,task_text:taskText,slice,approved_paths:approvedPaths,success_evidence:successEvidence,success_checks:successChecks,signals,permissions,classification,task_mode:deepRequired?'deep':'adaptive',start_card_id:deepState?.start_card?.id??null,implementation_permit_id:deepState?.permit?.id??null,user_decision_confirmed:options.confirmed_by_user===true||Boolean(deepState),user_decision_reason:userDecisionReason,required_outputs:broker.required_outputs,exit_evidence:broker.exit_evidence,output_contract:null,governance_writes:[],authority_start:value.authority.authority_digest,authority_snapshot:value.authority,skills_digest:skillsDigest,provider:broker.selected,shortlist:broker.shortlist,activation_id:null,execution_start:executionStart,execution_end:null,evidence_ids:[],truth_reconciliation:{status:'pending',candidate_path:null,reason:null},created_at:new Date().toISOString(),updated_at:new Date().toISOString(),abandonment_reason:null};
+    const route={schema_version:1,id:routeId,generation:1,status:'active',phase:routePhase,capability,task_text:taskText,slice,approved_paths:approvedPaths,success_evidence:successEvidence,success_checks:successChecks,signals,permissions,classification,task_mode:deepRequired?'deep':'adaptive',start_card_id:deepState?.start_card?.id??null,implementation_permit_id:deepState?.permit?.id??null,user_decision_confirmed:options.confirmed_by_user===true||Boolean(deepState),user_decision_reason:userDecisionReason,required_outputs:broker.required_outputs,exit_evidence:broker.exit_evidence,output_contract:null,governance_writes:[],authority_start:value.authority.authority_digest,authority_snapshot:value.authority,skills_digest:skillsDigest,provider:broker.selected,shortlist:broker.shortlist,activation_id:null,execution_start:executionStart,execution_end:null,evidence_ids:[],truth_reconciliation:{status:'pending',candidate_path:null,reason:null},...outcomeBinding,created_at:new Date().toISOString(),updated_at:new Date().toISOString(),abandonment_reason:null};
     activation=await activateSkill(value.context,value.runtime.paths,{...route,selected:broker.selected}); route.activation_id=activation.activation_id;
-    const next={...current,goal:value.intent.goal,phase:routePhase,slice,authority_digest:value.authority.authority_digest,control_generation:value.context.manifest.control_generation,route_instance_id:routeId,task_mode:route.task_mode,deep_start_card_id:route.start_card_id,implementation_permit_id:route.implementation_permit_id,next_action:`Execute only this slice: ${slice}`,open_risks:[],evidence_ids:[],updated_at:new Date().toISOString(),status:'active'};
+    const next={...current,goal:value.intent.goal,phase:routePhase,slice,authority_digest:value.authority.authority_digest,control_generation:value.context.manifest.control_generation,route_instance_id:routeId,task_mode:route.task_mode,deep_start_card_id:route.start_card_id,implementation_permit_id:route.implementation_permit_id,outcome_ids:route.outcome_ids,outcome_registry_digest:route.registry_digest,next_action:`Execute only this slice: ${slice}`,open_risks:[],evidence_ids:[],updated_at:new Date().toISOString(),status:'active'};
     await writeStepState(value.runtime.paths,route,next); await appendRuntimeEvent(value.runtime.paths,{type:'step-started',route_id:routeId,phase:routePhase,capability,provider:broker.selected.id});
       return {route,activation,readiness:'READY_FOR_IMPLEMENT_ONE'};
     } catch (error) { if (activation) await removeActivation(value.runtime.paths,activation.activation_id).catch(()=>{}); await releaseLease(value.runtime.paths,routeId).catch(()=>{}); throw error; }
@@ -357,6 +368,9 @@ function completionFailureInvalidatesRoute(error) {
 export async function finishStep(options={},runtimeHooks={}) {
   const value=await loaded(options.project); const route=await readRoute(value.runtime.paths,{allowMissing:true});
   if (!route||route.status!=='active') throw conflictError('An active step is required.','ACTIVE_STEP_REQUIRED');
+  if (route.registry_digest!==outcomeRegistryDigest(value.outcomes)) throw conflictError('Outcome Contract changed during the active step.','OUTCOME_REGISTRY_CHANGED');
+  const progressAtStart=await readOutcomeProgress(value.runtime.paths,value.outcomes);
+  await verifyProgressProjection(value.context,value.outcomes,progressAtStart);
   if (route.task_mode === 'deep') {
     try {
       const deepState = await validateDeepPermit(value.context, value.runtime, value.authority, {
@@ -417,6 +431,9 @@ export async function finishStep(options={},runtimeHooks={}) {
           || sha256Text(canonicalJson(latestRoute))!==routePreconditionDigest) {
         throw conflictError('Route changed or exited while completion evidence was running.','COMPLETION_PRECONDITION_CHANGED');
       }
+      if (latestRoute.registry_digest!==outcomeRegistryDigest(finalValue.outcomes)) throw conflictError('Outcome Contract changed while completion evidence was running.','OUTCOME_REGISTRY_CHANGED');
+      const latestProgress=await readOutcomeProgress(finalValue.runtime.paths,finalValue.outcomes);
+      await verifyProgressProjection(finalValue.context,finalValue.outcomes,latestProgress);
       const latestLease=await inspectLease(finalValue.runtime.paths);
       if (!latestLease||latestLease.owner!==route.id||latestLease.id!==leasePrecondition.id
           || latestLease.generation<leasePrecondition.generation||Date.parse(latestLease.expires_at)<=Date.now()) {
@@ -455,8 +472,8 @@ export async function finishStep(options={},runtimeHooks={}) {
   const reconciliation=reconcile(route,currentAuthority,currentTruth,options.truth_decision??'no-material-change',options.truth_path??null);
   route.output_contract=outputContract;
   let capture=captureSuccessCandidate(finalValue.context.experience,route,finalReceipt,options.capture_class??null);
+  const controlPlans=[];
   if (capture.index!==finalValue.context.experience) {
-    const plans=[];
     if (capture.candidate_id) {
       const entry=capture.index.entries.find((item)=>item.id===capture.candidate_id);
       const artifact=successCandidateArtifact(entry);
@@ -464,21 +481,31 @@ export async function finishStep(options={},runtimeHooks={}) {
       const nextEntry={...entry,artifacts:[{path:artifact.path,sha256:digest},...(entry.artifacts??[]).filter((item)=>item.path!==artifact.path)]};
       capture={...capture,index:{...capture.index,entries:capture.index.entries.map((item)=>item.id===entry.id?nextEntry:item)}};
       validateExperienceIndex(capture.index);
-      plans.push({target:resolveInside(finalValue.context.root,artifact.path,'Success candidate artifact'),content:artifact.content});
+      controlPlans.push({target:resolveInside(finalValue.context.root,artifact.path,'Success candidate artifact'),content:artifact.content});
       route.governance_writes.push(artifact.path);
     }
-    plans.push({target:resolveInside(finalValue.context.root,finalValue.context.manifest.experience_index,'Experience index'),content:canonicalJson(capture.index)});
+    controlPlans.push({target:resolveInside(finalValue.context.root,finalValue.context.manifest.experience_index,'Experience index'),content:canonicalJson(capture.index)});
     route.governance_writes.push(finalValue.context.manifest.experience_index);
-    await transactionalWrites(plans);
   }
+  route.governance_writes.push(finalValue.context.manifest.progress_projection);
   route.success_capture={disposition:capture.disposition,candidate_id:capture.candidate_id};
   const activationId=route.activation_id;
   const routeGenerationBefore=route.generation??1;
-  route.status='satisfied'; route.generation=routeGenerationBefore+1; route.activation_id=null; route.evidence_ids=[...new Set([...route.evidence_ids,...receipts.map((item)=>item.id)])]; route.truth_reconciliation=reconciliation; route.execution_end=await executionSnapshot(finalValue.context.executionRoot); route.updated_at=new Date().toISOString();
+  route.status='satisfied'; route.generation=routeGenerationBefore+1; route.activation_id=null; route.evidence_ids=[...new Set([...route.evidence_ids,...receipts.map((item)=>item.id)])]; route.truth_reconciliation=reconciliation; route.execution_end=finalReceipt.execution_after; route.updated_at=new Date().toISOString();
   route.completion_seal={schema_version:1,route_generation_before:routeGenerationBefore,route_generation_after:route.generation,lease_id:latestLease.id,lease_generation:latestLease.generation,permit_id:finalPermit?.id??null,permit_generation:finalPermit?.generation??null,authority_digest:currentAuthority.authority_digest,final_evidence_id:finalReceipt.id,evidence_snapshot_digest:sha256Text(canonicalJson(finalReceipt.execution_after)),final_snapshot_digest:sha256Text(canonicalJson(route.execution_end)),committed_at:route.updated_at};
-  const current=await readCurrent(finalValue.runtime.paths); current.status='ready'; current.route_instance_id=route.id; current.authority_digest=currentAuthority.authority_digest; current.control_generation=finalValue.context.manifest.control_generation; current.evidence_ids=route.evidence_ids.slice(-8); current.open_risks=[]; current.next_action='Review the evidence and choose the next bounded slice or stop.'; current.task_mode='adaptive'; current.deep_start_card_id=null; current.implementation_permit_id=null; current.updated_at=new Date().toISOString();
-  await writeStepState(finalValue.runtime.paths,route,current); if (activationId) await removeActivation(finalValue.runtime.paths,activationId).catch(()=>{}); if (route.implementation_permit_id) await consumeDeepPermit(finalValue.runtime.paths,route.implementation_permit_id,'Deep controlled step completed.'); await appendRuntimeEvent(finalValue.runtime.paths,{type:'step-finished',route_id:route.id,evidence_ids:route.evidence_ids,truth_status:reconciliation.status}); await recordProviderOutcome(finalValue.runtime.paths,route.provider.id,true); await releaseLease(finalValue.runtime.paths,route.id);
-  return {route,evidence:finalReceipt,evidence_receipts:receipts,experience_capture:route.success_capture};
+  const nextProgress=applyRouteOutcomeEvidence(latestProgress,finalValue.outcomes,route,receipts,finalReceipt.execution_after);
+  const progressProjection=renderProgressMarkdown(finalValue.outcomes,nextProgress);
+  const current=await readCurrent(finalValue.runtime.paths); current.status='ready'; current.route_instance_id=route.id; current.authority_digest=currentAuthority.authority_digest; current.control_generation=finalValue.context.manifest.control_generation; current.evidence_ids=route.evidence_ids.slice(-8); current.open_risks=[]; current.next_action='Review the evidence and choose the next bounded slice or stop.'; current.task_mode='adaptive'; current.deep_start_card_id=null; current.implementation_permit_id=null; current.outcome_ids=route.outcome_ids; current.outcome_registry_digest=route.registry_digest; current.updated_at=new Date().toISOString();
+  controlPlans.push(
+    {target:finalValue.runtime.paths.outcome_progress,content:canonicalJson(nextProgress),mode:0o600},
+    {target:resolveInside(finalValue.context.root,finalValue.context.manifest.progress_projection,'Progress projection path'),content:progressProjection,mode:0o644},
+    {target:finalValue.runtime.paths.route,content:canonicalJson(route),mode:0o600},
+    {target:finalValue.runtime.paths.current,content:canonicalJson(current),mode:0o600},
+  );
+  if (typeof runtimeHooks.beforeControlCommit==='function') await runtimeHooks.beforeControlCommit({route,current,progress:nextProgress,plans:controlPlans});
+  await transactionalWrites(controlPlans);
+  if (activationId) await removeActivation(finalValue.runtime.paths,activationId).catch(()=>{}); if (route.implementation_permit_id) await consumeDeepPermit(finalValue.runtime.paths,route.implementation_permit_id,'Deep controlled step completed.'); await appendRuntimeEvent(finalValue.runtime.paths,{type:'step-finished',route_id:route.id,evidence_ids:route.evidence_ids,truth_status:reconciliation.status,outcome_ids:route.outcome_ids}); await recordProviderOutcome(finalValue.runtime.paths,route.provider.id,true); await releaseLease(finalValue.runtime.paths,route.id);
+  return {route,evidence:finalReceipt,evidence_receipts:receipts,experience_capture:route.success_capture,outcome_progress:nextProgress};
     });
   } catch (error) {
     if (completionFailureInvalidatesRoute(error)) await invalidateCompletionAttempt(options.project,route.id,error);

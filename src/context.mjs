@@ -13,6 +13,8 @@ import { loadProviderStats, readRoute } from './runtime.mjs';
 import { readSkillResource } from './skills.mjs';
 import { classifyTaskText } from './task-classifier.mjs';
 import { readDeepState, validateDeepPermit } from './deep.mjs';
+import { loadOutcomeRegistry, outcomeStatus } from './outcomes.mjs';
+import { outcomeProgressSummary, readOutcomeProgress } from './outcome-progress.mjs';
 
 const DEFAULT_CAPABILITY={
   DISCOVER:'requirements-clarification',ALIGN:'document-alignment',DESIGN:'product-design',PLAN:'planning',
@@ -44,10 +46,12 @@ function compactCapsule(value) {
   candidate.skill.shortlist=candidate.skill.shortlist.slice(0,2).map((item)=>({id:item.id,channel:item.channel,reasons:item.reasons}));
   shrinkTruth(3);
   candidate.experience=candidate.experience.slice(0,2);
+  if (candidate.outcomes) candidate.outcomes.handles=candidate.outcomes.handles.slice(0,2);
   if (bytes()<=CONTEXT_BUDGET_BYTES) return candidate;
   candidate.skill.shortlist=candidate.skill.shortlist.slice(0,1);
   shrinkTruth(2);
   candidate.experience=candidate.experience.slice(0,1);
+  if (candidate.outcomes) candidate.outcomes.handles=candidate.outcomes.handles.slice(0,1);
   if (bytes()>CONTEXT_BUDGET_BYTES) throw conflictError(`Context Capsule exceeds ${CONTEXT_BUDGET_BYTES} bytes even after bounded projection.`,'CONTEXT_TOO_LARGE');
   return candidate;
 }
@@ -109,6 +113,24 @@ export async function buildContext(options={}) {
   const route=await readRoute(runtime.paths,{allowMissing:true});
   const current=runtime.current;
   const blockers=[];
+  const outcomeRegistry=await loadOutcomeRegistry(context,{allowLegacy:true});
+  let outcomes=null;
+  if (!outcomeRegistry) blockers.push({code:'UPGRADE_REQUIRED',message:'Contract schema 1 is inspectable, but consequential work requires an explicit schema-2 upgrade.'});
+  else {
+    const outcomeProgress=await readOutcomeProgress(runtime.paths,outcomeRegistry);
+    const summary=outcomeProgressSummary(outcomeRegistry,outcomeProgress);
+    const status=outcomeStatus(outcomeRegistry);
+    const handles=summary.remaining_outcome_ids.slice(0,3).map((id)=>`outcome:${id}`);
+    outcomes={
+      goal_id:outcomeRegistry.goal_id,goal_revision_digest:outcomeRegistry.goal_revision_digest,
+      coverage_status:status.coverage_status,registry_digest:status.registry_digest,
+      counts:{required:summary.required,...summary.counts},handles,
+      omitted:Math.max(0,summary.remaining_outcome_ids.length-handles.length),
+      continuation:summary.remaining_outcome_ids.length>handles.length?'Use a stable outcome:<id> handle or `vibetether outcomes list`.':null,
+      next_missing_acceptance:summary.missing_acceptance_ids[0]??null,
+      precise_completion_label:summary.precise_completion_label,
+    };
+  }
   if (intent.status!=='confirmed') blockers.push({code:'INTENT_UNCONFIRMED',message:'Goal and success evidence require user confirmation.'});
   if (current.control_generation!==context.manifest.control_generation) blockers.push({code:'CONTROL_GENERATION_CHANGED',message:'Project control generation changed; re-anchor the worktree.'});
   if (current.authority_digest!==authority.authority_digest) blockers.push({code:'AUTHORITY_CHANGED',message:'Confirmed project authority changed after the current checkpoint.'});
@@ -145,6 +167,7 @@ export async function buildContext(options={}) {
     truth_summary:{total:applicable.length,returned:truthHandles.length,omitted:Math.max(0,applicable.length-truthHandles.length),continuation:applicable.length>truthHandles.length?'Use stable Truth handles or pass narrower --path filters.':null},
     skill:{selected:skill.selected.id,confidence:skill.confidence,shortlist:skill.shortlist,overlays:skill.overlays,required_outputs:skill.required_outputs,exit_evidence:skill.exit_evidence},
     experience:experience.map((item)=>({...item,handles:item.artifacts.map((_,position)=>`experience:${item.id}:${position}`)})),
+    outcomes,
     raw_state_policy:'Do not read raw runtime, provider catalogs, unselected Skills, or unselected experience.',
   });
 }
@@ -166,6 +189,19 @@ export async function readContextHandle(options={}) {
     const [,id,position='0']=handle.split(':');
     validateExperienceIndex(context.experience);
     return readExperienceArtifact(context,context.experience,id,Number(position),{offset:options.offset??0,limit:options.limit??8192});
+  }
+  if (handle.startsWith('outcome:')) {
+    const id=handle.slice('outcome:'.length);
+    const registry=await loadOutcomeRegistry(context);
+    const outcome=registry.outcomes.find((item)=>item.id===id);
+    if (!outcome) throw conflictError(`Unknown Outcome handle: ${handle}`,'UNKNOWN_HANDLE');
+    const source=canonicalJson(outcome);
+    const offset=Number(options.offset??0);
+    const limit=Number(options.limit??8192);
+    if (!Number.isInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>8192) throw conflictError('Outcome handle offset or limit is invalid.','INVALID_READ');
+    const bytes=Buffer.from(source,'utf8');
+    const chunk=bytes.subarray(offset,Math.min(bytes.length,offset+limit));
+    return {handle,id,offset,bytes:chunk.length,total_bytes:bytes.length,content:chunk.toString('utf8'),next_offset:offset+chunk.length<bytes.length?offset+chunk.length:null};
   }
   if (handle.startsWith('skill:')) {
     const [,activationId,kind,...rest]=handle.split(':');

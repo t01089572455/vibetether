@@ -110,7 +110,10 @@ function normalizedSuccessChecks(values) {
   if (!Array.isArray(values) || values.length === 0) {
     throw conflictError('Deep Start Card requires at least one predeclared success check.', 'INVALID_DEEP_CARD');
   }
-  return JSON.parse(canonicalJson(values));
+  return JSON.parse(canonicalJson(values.map((value) => ({
+    ...value,
+    acceptance_ids: [...new Set(value?.acceptance_ids ?? [])],
+  }))));
 }
 
 function prepareExecutionEnvelope(options, successEvidence) {
@@ -135,7 +138,7 @@ function validateExecutionEnvelope(card, options = null) {
     throw conflictError('Deep Start Card execution envelope was modified after preparation.', 'IMPLEMENTATION_PERMIT_STALE');
   }
   if (!options) return expected;
-  const actualChecks = JSON.parse(canonicalJson(options.success_checks ?? []));
+  const actualChecks = normalizedSuccessChecks(options.success_checks);
   const actual = {
     task_digest: sha256Text(boundedText(options.task_text, 2000, 'Deep route task')),
     phase: boundedText(options.phase, 64, 'Deep route phase').toUpperCase(),

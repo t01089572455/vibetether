@@ -434,6 +434,9 @@ export function renderInitialProgress(registryValue) {
   const registryDigest = outcomeRegistryDigest(registry);
   const required = registry.outcomes.filter((item) => item.disposition === 'required');
   const remaining = required.map((item) => item.id).sort();
+  const nextAcceptance = remaining.length
+    ? registry.outcomes.find((item) => item.id === remaining[0])?.acceptance?.[0]?.id ?? null
+    : null;
   return [
     '# VibeTether Progress',
     '',
@@ -446,6 +449,7 @@ export function renderInitialProgress(registryValue) {
     `Required: ${required.length} | Open: ${required.length} | In progress: 0 | Satisfied: 0 | Stale: 0 | Blocked: 0`,
     `Current Outcome: ${remaining[0] ?? 'none'}`,
     `Remaining Outcome IDs: ${remaining.length ? remaining.join(', ') : 'none'}`,
+    `Next missing acceptance: ${nextAcceptance ?? 'none'}`,
     'Precise completion label: NOT_STARTED',
     `Generation digest: ${registryDigest}`,
     'Regenerate: vibetether outcomes status --write-progress --project .',

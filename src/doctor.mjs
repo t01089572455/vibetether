@@ -39,7 +39,7 @@ function pathWithinScope(relative,scopePaths=[]) {
   });
 }
 function areaSummary(issues,warnings) {
-  const areas={contract:['CONTRACT','MANIFEST','INTENT'],truth:['TRUTH','AUTHORITY'],runtime:['RUNTIME','ROUTE','LEASE','EVIDENCE','ACTIVATION'],experience:['EXPERIENCE'],skills:['PROVIDER','SKILL','ROUTES'],worktree:['WORKTREE','GIT'],budget:['BUDGET','LARGE']};
+  const areas={contract:['CONTRACT','MANIFEST','INTENT'],truth:['TRUTH','AUTHORITY'],outcomes:['OUTCOME','PROGRESS','COVERAGE'],runtime:['RUNTIME','ROUTE','LEASE','EVIDENCE','ACTIVATION'],experience:['EXPERIENCE'],skills:['PROVIDER','SKILL','ROUTES'],worktree:['WORKTREE','GIT'],budget:['BUDGET','LARGE']};
   return Object.fromEntries(Object.entries(areas).map(([name,tokens])=>{
     const has=(items)=>items.some((item)=>tokens.some((token)=>item.code.includes(token)));
     return [name,has(issues)?'error':has(warnings)?'attention':'healthy'];
@@ -48,7 +48,7 @@ function areaSummary(issues,warnings) {
 
 async function trackedBudget(context,issues) {
   if (!context.tracked) return;
-  const files=['.vibetether/project.json',context.manifest.intent,context.manifest.truth_index,context.manifest.experience_index,context.manifest.skills_lock,context.manifest.routes,context.manifest.launcher];
+  const files=['.vibetether/project.json',context.manifest.intent,context.manifest.truth_index,context.manifest.outcome_index,context.manifest.progress_projection,context.manifest.experience_index,context.manifest.skills_lock,context.manifest.routes,context.manifest.launcher];
   let bytes=0;
   for (const relative of files) {
     try { bytes+=(await lstat(path.join(context.root,...relative.split('/')))).size; }
@@ -79,7 +79,7 @@ async function hostAssets(context,issues,warnings) {
 }
 
 function governanceIgnoredPaths(context, route, issues) {
-  const allowed = new Set([context.manifest.experience_index]);
+  const allowed = new Set([context.manifest.experience_index,context.manifest.progress_projection].filter(Boolean));
   if (route?.success_capture?.candidate_id) allowed.add(`docs/operations/vibetether-candidates/${route.success_capture.candidate_id}.md`);
   const declared = Array.isArray(route?.governance_writes) ? route.governance_writes : [];
   const unsupported = declared.filter((item) => !allowed.has(item));
@@ -242,7 +242,8 @@ export async function inspectProject(options={}) {
           issues.push(error('CODE_CHANGED_AFTER_EVIDENCE','Product worktree bytes changed after the final successful evidence was captured.'));
         }
       }
-      if (!now||!finalSnapshotMatches(route,now)) (atCompletion?issues:warnings).push((atCompletion?error:warning)('STALE_EXECUTION_SNAPSHOT','Worktree bytes, branch, or HEAD changed after step evidence.'));
+      const finalIgnored=governanceIgnoredPaths(context,route,issues);
+      if (!now||!finalSnapshotMatches(route,now,finalIgnored)) (atCompletion?issues:warnings).push((atCompletion?error:warning)('STALE_EXECUTION_SNAPSHOT','Worktree bytes, branch, or HEAD changed after step evidence.'));
       if (!(route.evidence_ids??[]).length&&EVIDENCE_REQUIRED_PHASES.has(route.phase)) issues.push(error('MISSING_EVIDENCE','Satisfied step has no evidence receipts.'));
     }
     if (authority) {

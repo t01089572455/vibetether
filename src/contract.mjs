@@ -148,7 +148,7 @@ export async function loadContract(root) {
     ? validateOutcomeRegistry(await readProjectJson(resolvedRoot, manifest.outcome_index, 'Outcome registry'))
     : null;
   const progressSource = manifest.schema_version === 2
-    ? await readProjectText(resolvedRoot, manifest.progress_projection, 'Progress projection')
+    ? await readProjectText(resolvedRoot, manifest.progress_projection, 'Progress projection', { allowMissing: true })
     : null;
   return { root: resolvedRoot, manifest, intentSource, truthSource, experience, skills, routes, outcomes, progressSource };
 }

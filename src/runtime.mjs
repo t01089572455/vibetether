@@ -10,13 +10,14 @@ import {
   appendBounded, atomicJson, boundedText, breakFileLock, canonicalJson, containsSecret, readJsonFile,
   rejectAbsoluteSymlinkChain, sha256File, sha256Text, transactionalWrites, withFileLock,
 } from './files.mjs';
-import { executionSnapshot, snapshotsMatch } from './git.mjs';
+import { executionSnapshot, snapshotsMatch, snapshotsMatchIgnoringPaths } from './git.mjs';
 import { stateHome } from './paths.mjs';
 
 const CURRENT_KEYS = new Set([
   'schema_version','project_id','clone_id','worktree_id','goal','phase','slice','authority_digest',
   'control_generation','route_instance_id','next_action','open_risks','evidence_ids','updated_at','status',
   'task_mode','deep_start_card_id','implementation_permit_id',
+  'outcome_ids','outcome_registry_digest',
 ]);
 const ROUTE_STATUSES = new Set(['active','satisfied','abandoned','broken']);
 
@@ -46,6 +47,7 @@ export function runtimePaths(context, identity = null) {
     handoffs: path.join(repository, 'handoffs'),
     provider_stats: path.join(repository, 'provider-stats.json'),
     deep: path.join(worktree, 'deep.json'),
+    outcome_progress: path.join(worktree, 'outcome-progress.json'),
     registry: path.join(repository, 'repository.json'),
   };
 }
@@ -70,6 +72,8 @@ export function initialCurrent(context, paths, authorityDigest) {
     task_mode: 'adaptive',
     deep_start_card_id: null,
     implementation_permit_id: null,
+    outcome_ids: [],
+    outcome_registry_digest: null,
     next_action: 'Run `vibetether context --boundary task-entry --json`.',
     open_risks: [],
     evidence_ids: [],
@@ -85,6 +89,8 @@ export function validateCurrent(current) {
   for (const field of ['project_id','clone_id','worktree_id','goal','phase','slice','authority_digest','control_generation','next_action','updated_at','status']) if (typeof current[field] !== 'string' || !current[field]) throw conflictError(`Runtime checkpoint ${field} is invalid.`, 'INVALID_RUNTIME');
   if (!['adaptive','deep'].includes(current.task_mode)) throw conflictError('Runtime checkpoint task_mode is invalid.', 'INVALID_RUNTIME');
   for (const field of ['deep_start_card_id','implementation_permit_id']) if (current[field] !== null && typeof current[field] !== 'string') throw conflictError(`Runtime checkpoint ${field} is invalid.`, 'INVALID_RUNTIME');
+  if (!Array.isArray(current.outcome_ids) || current.outcome_ids.some((item) => typeof item !== 'string')) throw conflictError('Runtime checkpoint outcome_ids is invalid.', 'INVALID_RUNTIME');
+  if (current.outcome_registry_digest !== null && !/^sha256:[a-f0-9]{64}$/.test(current.outcome_registry_digest ?? '')) throw conflictError('Runtime checkpoint outcome_registry_digest is invalid.', 'INVALID_RUNTIME');
   if (!/^[a-f0-9]{64}$/.test(current.authority_digest)) throw conflictError('Runtime checkpoint authority_digest is invalid.', 'INVALID_RUNTIME');
   if (!Array.isArray(current.open_risks) || current.open_risks.length > 3 || current.open_risks.some((item) => typeof item !== 'string' || Buffer.byteLength(item,'utf8') > 500 || containsSecret(item))) throw conflictError('Runtime checkpoint open_risks is invalid.', 'INVALID_RUNTIME');
   if (!Array.isArray(current.evidence_ids) || current.evidence_ids.length > 8 || current.evidence_ids.some((item) => typeof item !== 'string')) throw conflictError('Runtime checkpoint evidence_ids is invalid.', 'INVALID_RUNTIME');
@@ -339,6 +345,6 @@ export async function recordProviderOutcome(paths,providerId,successful) {
   });
 }
 
-export function finalSnapshotMatches(route,currentSnapshot) {
-  return route?.execution_end ? snapshotsMatch(route.execution_end,currentSnapshot) : false;
+export function finalSnapshotMatches(route,currentSnapshot,ignoredPaths=[]) {
+  return route?.execution_end ? snapshotsMatchIgnoringPaths(route.execution_end,currentSnapshot,ignoredPaths) : false;
 }

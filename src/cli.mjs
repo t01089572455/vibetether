@@ -28,8 +28,9 @@ import { classifyTaskText } from './task-classifier.mjs';
 import { answerDeepQuestion, grantDeepPermit, prepareDeep, readDeepState, revokeDeepPermit } from './deep.mjs';
 import {
   confirmOutcomeCoverage, decideOutcome, loadOutcomeRegistry, outcomeStatus,
-  proposeOutcome, writeOutcomeRegistry,
+  proposeOutcome,
 } from './outcomes.mjs';
+import { writeOutcomeGovernance, writeProgressProjection } from './outcome-progress.mjs';
 
 const HELP=`VibeTether ${VERSION} — long-task control kernel and cold Skill broker
 
@@ -39,7 +40,7 @@ Usage:
   vibetether context [--task TEXT] [--boundary NAME] [--json]
   vibetether context read HANDLE [--offset N] [--limit N]
   vibetether deep prepare|answer|permit|revoke|status
-  vibetether step start [--task TEXT | --phase PHASE --capability ID] --slice TEXT --success-evidence TEXT --success-check-json JSON [--signal ID] [--confirmed-by-user --decision-reason TEXT]
+  vibetether step start [--task TEXT | --phase PHASE --capability ID] --slice TEXT [--outcome ID] --success-evidence TEXT --success-check-json JSON [--signal ID] [--confirmed-by-user --decision-reason TEXT]
   vibetether step finish [--evidence-command-json JSON] --output-proof-json JSON --exit-proof-json JSON
   vibetether step abandon --reason TEXT
   vibetether step heartbeat | reanchor | break-lease | break-state-lock --reason TEXT --yes
@@ -61,8 +62,8 @@ Usage:
 Exit codes: 2 invalid input, 3 conflict or safety refusal, 4 health check failed.
 `;
 
-const MULTI=new Set(['bundle','signal','success_evidence','success_check_json','evidence_command_json','evidence_artifact','output_proof_json','exit_proof_json','scope_boundary','constraint','trigger','negative_trigger','capability','phase','host','os','protected_capability','evidence_id','experience_id','artifact','arg','output','exit_evidence','fact','assumption','decision','operation','path','replacement']);
-const BOOLEAN=new Set(['json','yes','dry_run','confirmed','network','external_write','code_write','force','remove_contract','deep','confirmed_by_user','interactive']);
+const MULTI=new Set(['bundle','signal','success_evidence','success_check_json','evidence_command_json','evidence_artifact','output_proof_json','exit_proof_json','scope_boundary','constraint','trigger','negative_trigger','capability','phase','host','os','protected_capability','evidence_id','experience_id','artifact','arg','output','exit_evidence','fact','assumption','decision','operation','path','replacement','outcome']);
+const BOOLEAN=new Set(['json','yes','dry_run','confirmed','network','external_write','code_write','force','remove_contract','deep','confirmed_by_user','interactive','write_progress']);
 
 function key(flag) { return flag.replace(/^--/,'').replaceAll('-','_'); }
 function parse(tokens) {
@@ -141,7 +142,7 @@ export async function main(args=[],runtime={}) {
         const context=await discoverContract(options.project??process.cwd());
         classified=classifyTaskText(options.task,{intentStatus:parseIntent(context.intentSource).status,currentPhase:'DISCOVER'});
       }
-      return response(await startStep({project:options.project,phase:options.phase?.[0]??classified?.phase,capability:options.capability?.[0]??classified?.capability,slice:options.slice??options.task,task_text:options.task,classification:classified,deep:options.deep===true,confirmed_by_user:options.confirmed_by_user===true,decision_reason:options.decision_reason,scope_paths:options.path??[],success_evidence:options.success_evidence,success_checks:(options.success_check_json??[]).map((item)=>json(item,'success-check-json')),signals:[...new Set([...(options.signal??[]),...(classified?.signals??[])])],agent:options.agent,provider:options.provider,network:options.network,external_write:options.external_write,code_write:options.code_write}),options.json);
+      return response(await startStep({project:options.project,phase:options.phase?.[0]??classified?.phase,capability:options.capability?.[0]??classified?.capability,slice:options.slice??options.task,task_text:options.task,classification:classified,deep:options.deep===true,confirmed_by_user:options.confirmed_by_user===true,decision_reason:options.decision_reason,outcome_ids:options.outcome??[],scope_paths:options.path??[],success_evidence:options.success_evidence,success_checks:(options.success_check_json??[]).map((item)=>json(item,'success-check-json')),signals:[...new Set([...(options.signal??[]),...(classified?.signals??[])])],agent:options.agent,provider:options.provider,network:options.network,external_write:options.external_write,code_write:options.code_write}),options.json);
     }
     if (action==='finish') return response(await finishStep({project:options.project,evidence_commands:(options.evidence_command_json??[]).map((item)=>json(item,'evidence-command-json')),evidence_artifacts:options.evidence_artifact??[],evidence:options.evidence,truth_decision:options.truth_decision,truth_path:options.truth_path,experience_ids:options.experience_id,capture_class:options.capture,outputs:options.output??[],exit_evidence:options.exit_evidence??[],output_proofs:(options.output_proof_json??[]).map((item)=>json(item,'output-proof-json')),exit_proofs:(options.exit_proof_json??[]).map((item)=>json(item,'exit-proof-json'))}),options.json);
     if (action==='abandon') return response(await abandonStep({project:options.project,reason:options.reason,truth_decision:options.truth_decision,truth_path:options.truth_path}),options.json);
@@ -165,27 +166,30 @@ export async function main(args=[],runtime={}) {
   if (command==='outcomes') {
     const {context,runtime:rt}=await contextRuntime(options.project);
     const registry=await loadOutcomeRegistry(context);
-    if (!action||action==='status') return response(outcomeStatus(registry),options.json);
+    if (!action||action==='status') {
+      if (options.write_progress) await writeProgressProjection(context,rt.paths,registry);
+      return response(outcomeStatus(registry),options.json);
+    }
     if (action==='list') return response({coverage_status:outcomeStatus(registry).coverage_status,outcomes:outcomeStatus(registry).outcomes},options.json);
     if (action==='propose') {
       const candidate=json(options.outcome_json,'outcome-json');
       const next=proposeOutcome(registry,candidate);
       if (!options.yes) return response({applied:false,action:'propose',outcome:candidate,registry_digest:outcomeStatus(next).registry_digest},options.json);
-      await writeOutcomeRegistry(context,next);
+      await writeOutcomeGovernance(context,rt.paths,registry,next);
       return response({applied:true,action:'propose',outcome:candidate,registry_digest:outcomeStatus(next).registry_digest},options.json);
     }
     if (['confirm','defer','reject','supersede'].includes(action)) {
       if (!options.id) throw usageError(`outcomes ${action} requires --id.`);
       if (!options.yes) return response({applied:false,action,id:options.id,replacements:options.replacement??[]},options.json);
       const next=decideOutcome(registry,{action,id:options.id,replacements:options.replacement??[],user_message_locator:options.user_message_locator,reason:options.reason});
-      await writeOutcomeRegistry(context,next);
+      await writeOutcomeGovernance(context,rt.paths,registry,next);
       const item=next.outcomes.find((candidate)=>candidate.id===options.id);
       return response({applied:true,action,id:item.id,disposition:item.disposition,superseded_by:item.superseded_by,decision_receipt:item.decision_receipt},options.json);
     }
     if (action==='coverage'&&options._[1]==='confirm') {
       if (!options.yes) return response({applied:false,action:'confirm-coverage',coverage_status:registry.coverage_status,integration_worktree_id:rt.paths.worktree_id},options.json);
       const result=await confirmOutcomeCoverage(context,registry,rt.paths.worktree_id,{user_message_locator:options.user_message_locator,reason:options.reason});
-      await writeOutcomeRegistry(context,result.registry);
+      await writeOutcomeGovernance(context,rt.paths,registry,result.registry);
       return response({applied:true,coverage_status:result.registry.coverage_status,integration_worktree_id:result.registry.integration_worktree_id,registry_digest:outcomeStatus(result.registry).registry_digest,audit:result.audit},options.json);
     }
     throw usageError('Unknown outcomes action.');
