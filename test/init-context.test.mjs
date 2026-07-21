@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { lstat, mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { main } from '../src/cli.mjs';
@@ -54,7 +54,8 @@ test('local Contract is discoverable from a sibling linked worktree',async()=>{
   await main(['init','--project',root,'--agent','codex','--control-mode','local','--goal','Local goal','--success-evidence','Local evidence','--confirmed','--yes']);
   const sibling=path.join(base,'sibling'); git(root,['worktree','add','-q','-b','sibling',sibling]);
   const contract=await discoverContract(sibling);
-  assert.equal(contract.manifest.control_mode,'local'); assert.equal(contract.shared,true); assert.equal(contract.executionRoot,sibling);
+  assert.equal(contract.manifest.control_mode,'local'); assert.equal(contract.shared,true);
+  assert.equal(await realpath(contract.executionRoot),await realpath(sibling));
 });
 
 test('non-interactive init without direction creates a safe draft instead of inventing a goal',async()=>{

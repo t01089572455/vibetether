@@ -89,7 +89,7 @@ test('Windows long and 8.3 short locators resolve to the same stable worktree UU
   const {root}=await committedProject('worktree-windows-short-path');
   const longIdentity=await gitIdentity(root);
   const {spawnSync}=await import('node:child_process');
-  const query=spawnSync('cmd.exe',['/d','/s','/c',`for %I in ("${root}") do @echo %~sI`],{encoding:'utf8'});
+  const query=spawnSync(`for %I in ("${root}") do @echo %~sI`,{encoding:'utf8',shell:true,windowsHide:true});
   assert.equal(query.status,0,query.stderr||query.stdout);
   const shortPath=query.stdout.trim();
   assert.ok(shortPath);

@@ -4,8 +4,12 @@ import { mkdir, realpath } from 'node:fs/promises';
 import { exists } from './files.mjs';
 import { PROJECT_MANIFEST } from './constants.mjs';
 
+export function userHome() {
+  return path.resolve(process.env.VIBETETHER_USER_HOME || os.homedir());
+}
+
 function platformBase(kind) {
-  const home = os.homedir();
+  const home = userHome();
   if (process.platform === 'win32') {
     const base = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
     return path.join(base, 'VibeTether', kind);

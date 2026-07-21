@@ -19,7 +19,13 @@ function unborn(error) {
 
 export async function runGit(cwd, args, { allowUnavailable = false, allowExit = [], allowFailure = null, binary = false } = {}) {
   try {
-    const result = await exec('git', ['-C', cwd, ...args], {
+    const rawDirectory = String(cwd ?? '').trim();
+    const unquotedDirectory = rawDirectory.length >= 2
+      && ((rawDirectory.startsWith('"') && rawDirectory.endsWith('"')) || (rawDirectory.startsWith("'") && rawDirectory.endsWith("'")))
+      ? rawDirectory.slice(1, -1)
+      : rawDirectory;
+    const directory = await realpath(path.resolve(unquotedDirectory));
+    const result = await exec('git', ['-C', directory, ...args], {
       encoding: binary ? 'buffer' : 'utf8',
       maxBuffer: 16 * 1024 * 1024,
       windowsHide: true,

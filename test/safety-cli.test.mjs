@@ -65,17 +65,16 @@ test('project writes reject symlink targets even when the link resolves inside t
 
 test('global entry installation is previewable, transactional, and refuses modified bytes on uninstall',async()=>{
   const f=await fixture('global-entry',{gitRepo:false});
-  const priorHome=process.env.HOME; process.env.HOME=path.join(f.base,'home');
   const binDir=path.join(f.base,'bin');
-  try {
-    const preview=await installGlobalEntry({agent:'codex',bin_dir:binDir,dry_run:true});
-    assert.equal(preview.status,'preview');
-    const installed=await installGlobalEntry({agent:'codex',bin_dir:binDir,yes:true});
-    assert.equal(installed.status,'installed');
-    const dispatcher=installed.files.find((file)=>file.startsWith(binDir));
-    await writeFile(dispatcher,'user modification\n');
-    await assert.rejects(uninstallGlobalEntry({agent:'codex',bin_dir:binDir,yes:true}),/modified global dispatcher/i);
-  } finally { process.env.HOME=priorHome; }
+  const preview=await installGlobalEntry({agent:'codex',bin_dir:binDir,dry_run:true});
+  assert.equal(preview.status,'preview');
+  assert.ok(preview.files.every((file)=>file.startsWith(f.userHome)||file.startsWith(binDir)));
+  const installed=await installGlobalEntry({agent:'codex',bin_dir:binDir,yes:true});
+  assert.equal(installed.status,'installed');
+  assert.ok(installed.files.every((file)=>file.startsWith(f.userHome)||file.startsWith(binDir)));
+  const dispatcher=installed.files.find((file)=>file.startsWith(binDir));
+  await writeFile(dispatcher,'user modification\n');
+  await assert.rejects(uninstallGlobalEntry({agent:'codex',bin_dir:binDir,yes:true}),/modified global dispatcher/i);
 });
 
 test('project uninstall preserves the user Contract by default and refuses modified entry Skill bytes',async()=>{

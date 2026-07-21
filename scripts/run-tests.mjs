@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseTapSummary } from './tap-summary.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const files = (await readdir(path.join(root, 'test')))
@@ -45,10 +46,15 @@ await Promise.all(Array.from({ length: concurrency }, () => worker()));
 let passed = 0;
 let failed = 0;
 for (const result of results) {
-  const pass = Number(result.stdout.match(/# pass (\d+)/)?.[1] ?? 0);
-  const fail = Number(result.stdout.match(/# fail (\d+)/)?.[1] ?? (result.code === 0 ? 0 : 1));
-  passed += pass;
-  failed += fail;
+  try {
+    const summary = parseTapSummary(result.stdout);
+    passed += summary.pass;
+    failed += summary.fail;
+  } catch (error) {
+    failed += 1;
+    result.code = 1;
+    result.stderr += `${error.message}\n`;
+  }
   if (result.code !== 0) {
     process.stderr.write(`\n--- ${result.file} ---\n${result.stdout}${result.stderr}`);
   }

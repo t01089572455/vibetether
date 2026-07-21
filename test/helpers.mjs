@@ -16,14 +16,16 @@ export function git(cwd,args,{allowFailure=false}={}) {
 export async function fixture(name='project',{gitRepo=true}={}) {
   const base=await mkdtemp(path.join(os.tmpdir(),`vibetether-${name}-`));
   const root=path.join(base,'project'); await mkdir(root,{recursive:true});
+  const userHome=path.join(base,'home'); await mkdir(userHome,{recursive:true});
   process.env.VIBETETHER_STATE_HOME=path.join(base,'state');
   process.env.VIBETETHER_CACHE_HOME=path.join(base,'cache');
   process.env.VIBETETHER_CONFIG_HOME=path.join(base,'config');
+  process.env.VIBETETHER_USER_HOME=userHome;
   if (gitRepo) {
     git(root,['init','-q']); git(root,['config','user.email','test@example.com']); git(root,['config','user.name','VibeTether Tests']);
     await writeFile(path.join(root,'app.txt'),'initial\n'); git(root,['add','app.txt']); git(root,['commit','-qm','initial']);
   }
-  return {base,root,state:process.env.VIBETETHER_STATE_HOME,cache:process.env.VIBETETHER_CACHE_HOME,config:process.env.VIBETETHER_CONFIG_HOME};
+  return {base,root,userHome,state:process.env.VIBETETHER_STATE_HOME,cache:process.env.VIBETETHER_CACHE_HOME,config:process.env.VIBETETHER_CONFIG_HOME};
 }
 export async function initProject(name='project',options={}) {
   const f=await fixture(name,options);

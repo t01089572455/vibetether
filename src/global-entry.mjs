@@ -1,19 +1,18 @@
 import { fileURLToPath } from 'node:url';
 import { mkdir, readFile } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { ADAPTERS, selectedAdapters } from './adapters.mjs';
 import { VERSION } from './constants.mjs';
 import { conflictError } from './errors.mjs';
 import { portableTextEqual, readTextIfPresent, transactionalWrites } from './files.mjs';
-import { configHome } from './paths.mjs';
+import { configHome, userHome } from './paths.mjs';
 import { renderGlobalDispatcher } from './launcher.mjs';
 import { cacheRuntimePackage } from './release-cache.mjs';
 
 const packageRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-function skillRoot(agent) { return path.join(os.homedir(),ADAPTERS[agent].userSkillRoot); }
+function skillRoot(agent) { return path.join(userHome(),ADAPTERS[agent].userSkillRoot); }
 export function globalBinPath(binDir=null) {
-  const directory=binDir?path.resolve(binDir):process.platform==='win32'?path.join(configHome(),'bin'):path.join(os.homedir(),'.local','bin');
+  const directory=binDir?path.resolve(binDir):process.platform==='win32'?path.join(configHome(),'bin'):path.join(userHome(),'.local','bin');
   return path.join(directory,process.platform==='win32'?'vibetether.mjs':'vibetether');
 }
 
