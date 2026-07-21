@@ -28,9 +28,9 @@ import { classifyTaskText } from './task-classifier.mjs';
 import { answerDeepQuestion, grantDeepPermit, prepareDeep, readDeepState, revokeDeepPermit } from './deep.mjs';
 import {
   confirmOutcomeCoverage, decideOutcome, loadOutcomeRegistry, outcomeStatus,
-  proposeOutcome,
+  proposeOutcome, recordValidatorMigration,
 } from './outcomes.mjs';
-import { writeOutcomeGovernance, writeProgressProjection } from './outcome-progress.mjs';
+import { recordAcceptanceDecision, writeOutcomeGovernance, writeProgressProjection } from './outcome-progress.mjs';
 
 const HELP=`VibeTether ${VERSION} — long-task control kernel and cold Skill broker
 
@@ -45,7 +45,7 @@ Usage:
   vibetether step abandon --reason TEXT
   vibetether step heartbeat | reanchor | break-lease | break-state-lock --reason TEXT --yes
   vibetether truth add|confirm|decline|list
-  vibetether outcomes status|list|propose|confirm|defer|reject|supersede|coverage confirm
+  vibetether outcomes status|list|propose|confirm|defer|reject|supersede|coverage confirm|acceptance record|validator-migration record
   vibetether experience add|confirm|status|audit
   vibetether worktree attach|list|create|remove|prune
   vibetether worktree handoff create|accept|finish
@@ -164,7 +164,7 @@ export async function main(args=[],runtime={}) {
     await writeProjectText(context.root,context.manifest.truth_index,renderTruthMap(next)); return response({status:action,path:options.path?.[0]??options.path},options.json);
   }
   if (command==='outcomes') {
-    const {context,runtime:rt}=await contextRuntime(options.project);
+    const {context,authority,runtime:rt}=await contextRuntime(options.project);
     const registry=await loadOutcomeRegistry(context);
     if (!action||action==='status') {
       if (options.write_progress) await writeProgressProjection(context,rt.paths,registry);
@@ -191,6 +191,18 @@ export async function main(args=[],runtime={}) {
       const result=await confirmOutcomeCoverage(context,registry,rt.paths.worktree_id,{user_message_locator:options.user_message_locator,reason:options.reason});
       await writeOutcomeGovernance(context,rt.paths,registry,result.registry);
       return response({applied:true,coverage_status:result.registry.coverage_status,integration_worktree_id:result.registry.integration_worktree_id,registry_digest:outcomeStatus(result.registry).registry_digest,audit:result.audit},options.json);
+    }
+    if (action==='acceptance'&&options._[1]==='record') {
+      if (!options.id) throw usageError('outcomes acceptance record requires --id.');
+      if (!options.yes) return response({applied:false,action:'record-acceptance-decision',acceptance_id:options.id,decision_type:options.decision_type??null},options.json);
+      return response(await recordAcceptanceDecision(context,rt.paths,registry,options.id,{user_message_locator:options.user_message_locator,reason:options.reason,independence_level:options.independence_level,authority_digest:authority.authority_digest}),options.json);
+    }
+    if (action==='validator-migration'&&options._[1]==='record') {
+      if (!options.outcome_id||!options.acceptance_id) throw usageError('outcomes validator-migration record requires --outcome-id and --acceptance-id.');
+      if (!options.yes) return response({applied:false,action:'record-validator-migration',outcome_id:options.outcome_id,acceptance_id:options.acceptance_id,old_node:options.old_node,positive_replacement:options.positive_replacement,negative_replacement:options.negative_replacement},options.json);
+      const next=recordValidatorMigration(registry,{outcome_id:options.outcome_id,acceptance_id:options.acceptance_id,old_node:options.old_node,positive_replacement:options.positive_replacement,negative_replacement:options.negative_replacement,user_message_locator:options.user_message_locator,reason:options.reason});
+      await writeOutcomeGovernance(context,rt.paths,registry,next);
+      return response({applied:true,action:'record-validator-migration',outcome_id:options.outcome_id,acceptance_id:options.acceptance_id,registry_digest:outcomeStatus(next).registry_digest},options.json);
     }
     throw usageError('Unknown outcomes action.');
   }

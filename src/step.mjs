@@ -300,6 +300,8 @@ export async function startStep(options={}) {
   const consequential=permissions.code_write||permissions.external_write||permissions.network||EVIDENCE_REQUIRED_PHASES.has(routePhase);
   const outcomeBinding=bindRouteOutcomes(value.outcomes,options.outcome_ids??[],successChecks,{consequential});
   const outcomeProgress=await readOutcomeProgress(value.runtime.paths,value.outcomes);
+  const blockedOutcomes=outcomeBinding.outcome_ids.filter((id)=>outcomeProgress.outcomes[id]?.state==='blocked');
+  if (blockedOutcomes.length) throw conflictError(`Outcome validators changed without an approved positive/negative migration mapping: ${blockedOutcomes.join(', ')}`,'VALIDATOR_MIGRATION_REQUIRED');
   await verifyProgressProjection(value.context,value.outcomes,outcomeProgress);
   const permitEnvelope={task_text:taskText,phase:routePhase,capability,provider_id:options.provider??null,scope_paths:approvedPaths,permissions,success_evidence:successEvidence,success_checks:successChecks};
   if (deepRequired) deepState=await validateDeepPermit(value.context,value.runtime,value.authority,{required:true,slice,envelope:permitEnvelope});

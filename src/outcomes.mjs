@@ -11,7 +11,7 @@ import {
 
 const REGISTRY_KEYS = new Set([
   'schema_version', 'goal_id', 'goal_revision_digest', 'coverage_status',
-  'coverage_decision', 'integration_worktree_id', 'coverage_sources', 'outcomes',
+  'coverage_decision', 'integration_worktree_id', 'coverage_sources', 'validator_migrations', 'outcomes',
 ]);
 const SOURCE_KEYS = new Set([
   'id', 'truth_id', 'source_revision_digest', 'expected_id_count',
@@ -33,6 +33,10 @@ const MAPPING_KEYS = new Set(['schema_version', 'source_id', 'source_revision_di
 const MAPPING_ENTRY_KEYS = new Set([
   'source_item_id', 'disposition', 'outcome_ids', 'equivalence_group',
   'target_source_item_ids', 'reason',
+]);
+const VALIDATOR_MIGRATION_KEYS = new Set([
+  'id', 'outcome_id', 'acceptance_id', 'old_node', 'positive_replacement', 'negative_replacement',
+  'authority_reason', 'outcome_revision_digest', 'decision_receipt',
 ]);
 const COVERAGE_STATUSES = new Set(['draft', 'confirmed', 'changed']);
 const OUTCOME_DISPOSITIONS = new Set(['candidate', 'required', 'deferred', 'rejected', 'superseded']);
@@ -116,6 +120,14 @@ function validateAcceptance(value, label) {
   if (!EVIDENCE_KINDS.has(value.evidence_kind)) throw conflictError(`${label} evidence_kind is unsupported.`, 'INVALID_OUTCOMES');
   if (!MATURITIES.has(value.required_maturity)) throw conflictError(`${label} required_maturity is unsupported.`, 'INVALID_OUTCOMES');
   validateValidator(value.validator, `${label} validator`);
+  const kindCompatibility={
+    command:new Set(['command','command-or-artifact']),artifact:new Set(['artifact','command-or-artifact']),
+    'authority-adapter':new Set(['authority','external']),'user-decision':new Set(['user-decision']),'review-decision':new Set(['review-decision']),
+  };
+  if (!kindCompatibility[value.validator.kind].has(value.evidence_kind)) throw conflictError(`${label} evidence_kind does not match its validator.`, 'INVALID_OUTCOMES');
+  if (value.required_maturity==='external'&&value.validator.kind!=='authority-adapter') throw conflictError(`${label} external maturity requires an authority adapter.`, 'INVALID_OUTCOMES');
+  if (value.required_maturity==='reviewed'&&value.validator.kind!=='review-decision') throw conflictError(`${label} reviewed maturity requires a review decision.`, 'INVALID_OUTCOMES');
+  if (value.required_maturity==='owner-accepted'&&value.validator.kind!=='user-decision') throw conflictError(`${label} owner acceptance requires a user decision.`, 'INVALID_OUTCOMES');
   return value;
 }
 
@@ -160,6 +172,7 @@ export function emptyOutcomeRegistry(goalId = 'goal_project_delivery', goalRevis
     coverage_decision: null,
     integration_worktree_id: null,
     coverage_sources: [],
+    validator_migrations: [],
     outcomes: [],
   };
 }
@@ -168,6 +181,7 @@ function registryDigestMaterial(value) {
   const copy = structuredClone(value);
   if (copy.coverage_decision) copy.coverage_decision.result_registry_digest = `sha256:${'0'.repeat(64)}`;
   for (const outcome of copy.outcomes ?? []) if (outcome.decision_receipt) outcome.decision_receipt.result_registry_digest = `sha256:${'0'.repeat(64)}`;
+  for (const migration of copy.validator_migrations ?? []) if (migration.decision_receipt) migration.decision_receipt.result_registry_digest = `sha256:${'0'.repeat(64)}`;
   return copy;
 }
 
@@ -185,6 +199,7 @@ export function validateOutcomeRegistry(value) {
   validateDecisionReceipt(value.coverage_decision, 'Outcome registry coverage_decision', { allowNull: value.coverage_status !== 'confirmed' });
   if (value.integration_worktree_id !== null && (typeof value.integration_worktree_id !== 'string' || !/^[a-zA-Z0-9._:-]{8,160}$/.test(value.integration_worktree_id))) throw conflictError('Outcome registry integration_worktree_id is invalid.', 'INVALID_OUTCOMES');
   if (!Array.isArray(value.coverage_sources) || value.coverage_sources.length > 256) throw conflictError('Outcome registry coverage_sources is invalid.', 'INVALID_OUTCOMES');
+  if (!Array.isArray(value.validator_migrations) || value.validator_migrations.length > 2048) throw conflictError('Outcome registry validator_migrations is invalid.', 'INVALID_OUTCOMES');
   if (!Array.isArray(value.outcomes) || value.outcomes.length > OUTCOME_COUNT_MAX) throw conflictError('Outcome registry outcomes is invalid.', 'INVALID_OUTCOMES');
   value.coverage_sources.forEach((item, index) => validateCoverageSource(item, `Coverage source[${index}]`));
   value.outcomes.forEach((item, index) => validateOutcome(item, `Outcome[${index}]`));
@@ -202,6 +217,19 @@ export function validateOutcomeRegistry(value) {
       if (acceptanceIds.has(acceptance.id)) throw conflictError(`Duplicate acceptance id: ${acceptance.id}`, 'INVALID_OUTCOMES');
       acceptanceIds.add(acceptance.id);
     }
+  }
+  const migrationIds=new Set();
+  for (const [index,migration] of value.validator_migrations.entries()) {
+    const label=`Validator migration[${index}]`; only(migration,VALIDATOR_MIGRATION_KEYS,label);
+    logicalId(migration.id,`${label} id`); logicalId(migration.outcome_id,`${label} outcome_id`); logicalId(migration.acceptance_id,`${label} acceptance_id`);
+    digest(migration.old_node,`${label} old_node`); digest(migration.positive_replacement,`${label} positive_replacement`);
+    boundedText(migration.negative_replacement,OUTCOME_TEXT_LIMIT,`${label} negative_replacement`); boundedText(migration.authority_reason,OUTCOME_TEXT_LIMIT,`${label} authority_reason`);
+    digest(migration.outcome_revision_digest,`${label} outcome_revision_digest`); validateDecisionReceipt(migration.decision_receipt,`${label} decision_receipt`);
+    if (migrationIds.has(migration.id)||migration.old_node===migration.positive_replacement) throw conflictError(`${label} is duplicated or does not replace a prior validator.`, 'INVALID_OUTCOMES');
+    migrationIds.add(migration.id);
+    const outcome=value.outcomes.find((item)=>item.id===migration.outcome_id);
+    const acceptance=outcome?.acceptance.find((item)=>item.id===migration.acceptance_id);
+    if (!outcome||!acceptance||outcome.revision_digest!==migration.outcome_revision_digest||acceptance.validator.validator_revision!==migration.positive_replacement) throw conflictError(`${label} does not match the current Outcome and acceptance revisions.`, 'INVALID_OUTCOMES');
   }
   for (const item of value.outcomes) {
     if (item.parent_id !== null && !outcomeIds.has(item.parent_id)) throw conflictError(`Outcome ${item.id} has an unknown parent.`, 'INVALID_OUTCOMES');
@@ -333,9 +361,30 @@ function finalizeReceiptDigest(registry, receipt) {
   const resultDigest = outcomeRegistryDigest(registry);
   receipt.result_registry_digest = resultDigest;
   for (const item of registry.outcomes) if (item.decision_receipt?.id === receipt.id) item.decision_receipt.result_registry_digest = resultDigest;
+  for (const item of registry.validator_migrations) if (item.decision_receipt?.id === receipt.id) item.decision_receipt.result_registry_digest = resultDigest;
   if (registry.coverage_decision?.id === receipt.id) registry.coverage_decision.result_registry_digest = resultDigest;
   validateOutcomeRegistry(registry);
   return registry;
+}
+
+export function recordValidatorMigration(registryValue,{outcome_id,acceptance_id,old_node,positive_replacement,negative_replacement,user_message_locator,reason}={}) {
+  requireUserDecision({user_message_locator,reason});
+  const registry=validateOutcomeRegistry(structuredClone(registryValue));
+  const outcome=registry.outcomes.find((item)=>item.id===outcome_id);
+  const acceptance=outcome?.acceptance.find((item)=>item.id===acceptance_id);
+  if (!outcome||!acceptance) throw conflictError('Validator migration must name a current Outcome acceptance.', 'ACCEPTANCE_NOT_FOUND');
+  digest(old_node,'Validator migration old_node'); digest(positive_replacement,'Validator migration positive_replacement');
+  if (positive_replacement!==acceptance.validator.validator_revision) throw conflictError('Validator migration positive replacement must be the current acceptance validator revision.', 'VALIDATOR_MIGRATION_MISMATCH');
+  boundedText(negative_replacement,OUTCOME_TEXT_LIMIT,'Validator migration negative replacement');
+  const receipt=decisionReceipt({action:'record-validator-migration',targetIds:[outcome.id,acceptance.id],priorDigest:outcomeRegistryDigest(registry),userMessageLocator:user_message_locator,reason});
+  registry.validator_migrations.push({
+    id:`validator_migration_${sha256Text(`${outcome.id}:${acceptance.id}:${old_node}:${positive_replacement}`).slice(0,24)}`,
+    outcome_id:outcome.id,acceptance_id:acceptance.id,old_node,positive_replacement,
+    negative_replacement:boundedText(negative_replacement,OUTCOME_TEXT_LIMIT,'Validator migration negative replacement'),
+    authority_reason:boundedText(reason,OUTCOME_TEXT_LIMIT,'Validator migration authority reason'),
+    outcome_revision_digest:outcome.revision_digest,decision_receipt:receipt,
+  });
+  return finalizeReceiptDigest(registry,receipt);
 }
 
 export function proposeOutcome(registryValue, outcomeValue) {

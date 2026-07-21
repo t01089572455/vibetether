@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { lstat, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import {
-  COMPLETION_BOUNDARIES, EVIDENCE_REQUIRED_PHASES, ENTRY_SKILL_BUDGET_BYTES,
+  EVIDENCE_REQUIRED_PHASES, ENTRY_SKILL_BUDGET_BYTES,
   MANAGED_BLOCK_BUDGET_BYTES, TRACKED_CONTRACT_BUDGET_BYTES, VERSION,
 } from './constants.mjs';
 import { healthError } from './errors.mjs';
@@ -12,13 +12,15 @@ import { authoritySnapshot, parseTruthMap } from './truth.mjs';
 import { auditExperience, validateExperienceIndex } from './experience.mjs';
 import { attachWorktree } from './worktree.mjs';
 import {
-  finalSnapshotMatches, inspectLease, loadEvidence, readCurrent, readRoute,
+  finalSnapshotMatches, inspectLease, loadEvidence, readCurrent, readReceipt, readRoute,
 } from './runtime.mjs';
 import { executionSnapshot, snapshotsMatchIgnoringPaths } from './git.mjs';
 import { loadActivation } from './skills.mjs';
 import { loadProviderRegistry } from './provider-registry.mjs';
 import { validateRoutes } from './routes.mjs';
 import { buildContext } from './context.mjs';
+import { auditCoverageSources, loadOutcomeRegistry, outcomeStatus } from './outcomes.mjs';
+import { outcomeProgressSummary, readOutcomeProgress, verifyProgressProjection } from './outcome-progress.mjs';
 import { ADAPTERS, hasCanonicalManagedBlock, managedBlock } from './adapters.mjs';
 import {
   canonicalJson, exists, hashTree, portableTextEqual, readProjectText, rejectSymlinkChain,
@@ -29,7 +31,13 @@ const packageRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'
 const error=(code,message)=>({level:'error',code,message});
 const warning=(code,message)=>({level:'warning',code,message});
 
-function completion(boundary,phase) { return COMPLETION_BOUNDARIES.has(boundary)||['REVIEW','SHIP'].includes(phase); }
+const BOUNDARY_LEVELS = { ordinary: 0, slice: 1, goal: 2, release: 3 };
+const BOUNDARY_ALIASES = new Map([
+  ['ordinary', 'ordinary'], ['slice', 'slice'], ['completion', 'slice'], ['handoff', 'slice'],
+  ['goal', 'goal'], ['merge', 'goal'], ['release', 'release'], ['deployment', 'release'], ['publication', 'release'],
+]);
+function normalizedBoundary(value) { return BOUNDARY_ALIASES.get(String(value ?? 'ordinary').toLowerCase()) ?? null; }
+function atLeast(boundary,level) { return BOUNDARY_LEVELS[boundary] >= BOUNDARY_LEVELS[level]; }
 function portablePath(value) { return String(value??'').replaceAll('\\','/').replace(/^\.\//,'').replace(/\/+$/,''); }
 function pathWithinScope(relative,scopePaths=[]) {
   const value=portablePath(relative);
@@ -37,6 +45,43 @@ function pathWithinScope(relative,scopePaths=[]) {
     const normalized=portablePath(scope);
     return value===normalized||value.startsWith(`${normalized}/`);
   });
+}
+
+async function currentAcceptanceProof(context,runtime,entry,acceptance,authorityDigest,skillsDigest) {
+  const validator=acceptance.validator;
+  const proof=entry.acceptance_proofs?.[acceptance.id];
+  if (['user-decision','review-decision'].includes(validator.kind)) {
+    const receipt=proof?.decision_receipt;
+    if (proof?.kind!==validator.kind||receipt?.decision_type!==validator.decision_type||receipt.authority_digest!==authorityDigest) return {ok:false,reason:`${validator.kind}-receipt-missing-or-stale`};
+    try {
+      const sealed=await readReceipt(path.join(runtime.paths.decisions,`${receipt.id}.json`),'Acceptance decision receipt');
+      if (canonicalJson(sealed)!==canonicalJson(receipt)) return {ok:false,reason:`${validator.kind}-receipt-mismatch`};
+    } catch { return {ok:false,reason:`${validator.kind}-receipt-missing-or-tampered`}; }
+    const now=await executionSnapshot(context.executionRoot).catch(()=>null);
+    if (!now||!snapshotsMatchIgnoringPaths(receipt.execution_snapshot,now,[context.manifest.progress_projection])) return {ok:false,reason:`${validator.kind}-final-bytes-changed`};
+    return {ok:true,decision_receipt_id:proof.decision_receipt.id};
+  }
+  if (!['command','artifact'].includes(validator.kind)) return {ok:false,reason:`${validator.kind}-receipt-missing`};
+  if (proof?.kind!=='route-evidence') return {ok:false,reason:'acceptance-route-proof-missing'};
+  for (const evidenceId of proof.evidence_ids) {
+    try {
+      const receipt=await loadEvidence(runtime.paths,evidenceId);
+      if (!receipt.successful||receipt.authority_digest!==authorityDigest||receipt.skills_digest!==skillsDigest) continue;
+      if (validator.kind==='command'&&(receipt.kind!=='command'||canonicalJson(receipt.command)!==canonicalJson(validator.command))) continue;
+      if (validator.kind==='artifact'&&(receipt.kind!=='artifact'||receipt.artifact_path!==validator.path)) continue;
+      const expectedPaths=validator.kind==='artifact'?[validator.path]:validator.covers_paths??[];
+      let current=true;
+      for (const relative of expectedPaths) {
+        const recorded=(receipt.coverage_artifacts??[]).find((item)=>item.path===relative&&item.present===true)
+          ??(receipt.artifact_path===relative?{sha256:receipt.artifact_sha256,present:true}:null);
+        if (!recorded?.sha256) { current=false; break; }
+        await rejectSymlinkChain(context.executionRoot,relative,{allowMissing:false});
+        if (await sha256File(resolveInside(context.executionRoot,relative,'Acceptance evidence artifact'))!==recorded.sha256) { current=false; break; }
+      }
+      if (current) return {ok:true,evidence_id:evidenceId};
+    } catch { /* A different valid receipt may still prove this acceptance. */ }
+  }
+  return {ok:false,reason:'fresh-matching-evidence-missing'};
 }
 function areaSummary(issues,warnings) {
   const areas={contract:['CONTRACT','MANIFEST','INTENT'],truth:['TRUTH','AUTHORITY'],outcomes:['OUTCOME','PROGRESS','COVERAGE'],runtime:['RUNTIME','ROUTE','LEASE','EVIDENCE','ACTIVATION'],experience:['EXPERIENCE'],skills:['PROVIDER','SKILL','ROUTES'],worktree:['WORKTREE','GIT'],budget:['BUDGET','LARGE']};
@@ -88,14 +133,17 @@ function governanceIgnoredPaths(context, route, issues) {
 }
 
 export async function inspectProject(options={}) {
-  const boundary=options.boundary??'ordinary'; const issues=[]; const warnings=[];
+  const requestedBoundary=String(options.boundary??'ordinary').toLowerCase();
+  let effectiveBoundary=normalizedBoundary(requestedBoundary);
+  const issues=[]; const warnings=[];
   let context;
   try { context=await discoverContract(options.project??process.cwd()); }
   catch (cause) {
-    const report={ok:false,schema_version:1,boundary,project:null,issues:[error(cause.code??'CONTRACT_NOT_FOUND',cause.message)],warnings:[],control_plane:{contract:'error'}};
+    const report={ok:false,schema_version:1,boundary:requestedBoundary,requested_boundary:requestedBoundary,effective_boundary:effectiveBoundary,project:null,issues:[error(cause.code??'CONTRACT_NOT_FOUND',cause.message)],warnings:[],completion:{label:'NOT_STARTED',remaining_outcome_ids:[],remaining_acceptance_ids:[],unproven_maturity:[]},control_plane:{contract:'error'}};
     if (options.throw_on_error!==false) throw healthError(report,options.json===true); return report;
   }
-  let intent,truth,authority,runtime,current,route;
+  if (!effectiveBoundary) { issues.push(error('INVALID_BOUNDARY',`Doctor boundary is unsupported: ${requestedBoundary}`)); effectiveBoundary='ordinary'; }
+  let intent,truth,authority,runtime,current,route,outcomeRegistry,outcomeProgress;
   try { intent=parseIntent(context.intentSource); } catch (cause) { issues.push(error(cause.code??'INVALID_INTENT',cause.message)); }
   try { truth=parseTruthMap(context.truthSource); } catch (cause) { issues.push(error(cause.code??'INVALID_TRUTH',cause.message)); }
   try { validateExperienceIndex(context.experience); } catch (cause) { issues.push(error(cause.code??'INVALID_EXPERIENCE',cause.message)); }
@@ -104,7 +152,19 @@ export async function inspectProject(options={}) {
     try { runtime=await attachWorktree(context,authority.authority_digest); current=await readCurrent(runtime.paths); route=await readRoute(runtime.paths,{allowMissing:true}); }
     catch (cause) { issues.push(error(cause.code??'INVALID_RUNTIME',cause.message)); }
   }
-  const atCompletion=completion(boundary,current?.phase);
+  if (effectiveBoundary==='ordinary'&&['REVIEW','SHIP'].includes(current?.phase)) effectiveBoundary='slice';
+  const atCompletion=atLeast(effectiveBoundary,'slice');
+  if (context.manifest.schema_version>=2) {
+    try { outcomeRegistry=await loadOutcomeRegistry(context); }
+    catch (cause) { issues.push(error(cause.code??'INVALID_OUTCOMES',cause.message)); }
+    if (outcomeRegistry&&runtime) {
+      try {
+        outcomeProgress=await readOutcomeProgress(runtime.paths,outcomeRegistry,{create:false,persist:false});
+        if (atCompletion&&!outcomeProgress) issues.push(error('OUTCOME_PROGRESS_MISSING','Completion-like boundary requires the per-worktree Outcome progress ledger.'));
+        if (atCompletion&&outcomeProgress) await verifyProgressProjection(context,outcomeRegistry,outcomeProgress);
+      } catch (cause) { issues.push(error(cause.code??'INVALID_OUTCOME_PROGRESS',cause.message)); }
+    }
+  }
   if (context.manifest.vibetether_version!==VERSION) (atCompletion?issues:warnings).push((atCompletion?error:warning)('VERSION_MISMATCH',`Project expects ${context.manifest.vibetether_version}; running CLI is ${VERSION}.`));
   if (intent?.status!=='confirmed') (atCompletion?issues:warnings).push((atCompletion?error:warning)('INTENT_UNCONFIRMED','Intent Contract is not confirmed.'));
   if (current&&authority&&current.authority_digest!==authority.authority_digest) (atCompletion?issues:warnings).push((atCompletion?error:warning)('AUTHORITY_CHANGED','Runtime checkpoint is anchored to older confirmed authority.'));
@@ -263,9 +323,98 @@ export async function inspectProject(options={}) {
     }
   } catch (cause) { issues.push(error(cause.code??'INVALID_PROVIDER',cause.message)); }
   try { await trackedBudget(context,issues); await hostAssets(context,issues,warnings); } catch (cause) { issues.push(error(cause.code??'BUDGET_CHECK_FAILED',cause.message)); }
-  try { const capsule=await buildContext({project:context.executionRoot,boundary,agent:options.agent??'codex'}); if (Buffer.byteLength(JSON.stringify(capsule),'utf8')>4096) issues.push(error('CONTEXT_BUDGET_EXCEEDED','Context Capsule exceeds 4096 bytes.')); }
+  try { const capsule=await buildContext({project:context.executionRoot,boundary:requestedBoundary,agent:options.agent??'codex'}); if (Buffer.byteLength(JSON.stringify(capsule),'utf8')>4096) issues.push(error('CONTEXT_BUDGET_EXCEEDED','Context Capsule exceeds 4096 bytes.')); }
   catch (cause) { if (!issues.some((item)=>item.code===cause.code)) issues.push(error(cause.code??'CONTEXT_INVALID',cause.message)); }
-  const report={ok:issues.length===0,schema_version:1,boundary,project:context.root,execution_root:context.executionRoot,project_id:context.manifest.project_id,worktree_id:runtime?.paths.worktree_id??null,issues,warnings,control_plane:areaSummary(issues,warnings)};
+
+  const sliceOk=issues.length===0;
+  let label=sliceOk&&atLeast(effectiveBoundary,'slice')?'SLICE_GREEN':'NOT_STARTED';
+  let remainingOutcomeIds=[];
+  let remainingAcceptanceIds=[];
+  const unprovenMaturity=[];
+  const addUnproven=(item)=>{ if (!unprovenMaturity.some((existing)=>existing.outcome_id===item.outcome_id&&existing.acceptance_id===item.acceptance_id&&existing.reason===item.reason)) unprovenMaturity.push(item); };
+  let goalOk=false;
+  const skillsDigest=skillsLockDigest(context.skills);
+
+  const evaluateOutcomes=async(requiredBoundary)=>{
+    const required=(outcomeRegistry?.outcomes??[]).filter((item)=>item.disposition==='required'&&item.required_at.includes(requiredBoundary));
+    const remainingOutcomes=new Set();
+    const remainingAcceptance=new Set();
+    if (!required.length) issues.push(error(requiredBoundary==='release'?'RELEASE_OUTCOMES_MISSING':'GOAL_OUTCOMES_MISSING',`No required Outcomes are declared for the ${requiredBoundary} boundary.`));
+    for (const outcome of required) {
+      const entry=outcomeProgress?.outcomes?.[outcome.id];
+      if (!entry||entry.state!=='satisfied') {
+        remainingOutcomes.add(outcome.id);
+        for (const id of entry?.missing_acceptance_ids??outcome.acceptance.map((item)=>item.id)) {
+          remainingAcceptance.add(id);
+          const acceptance=outcome.acceptance.find((item)=>item.id===id);
+          if (acceptance) addUnproven({outcome_id:outcome.id,acceptance_id:id,required_maturity:acceptance.required_maturity,reason:entry?.state==='blocked'?'validator-migration-required':'acceptance-not-satisfied'});
+        }
+      }
+      for (const dependencyId of outcome.dependencies) {
+        const dependency=outcomeRegistry.outcomes.find((item)=>item.id===dependencyId);
+        if (!dependency||dependency.disposition!=='required'||outcomeProgress?.outcomes?.[dependencyId]?.state!=='satisfied') {
+          remainingOutcomes.add(outcome.id);
+          issues.push(error('OUTCOME_DEPENDENCY_UNSATISFIED',`Outcome ${outcome.id} depends on unsatisfied Outcome ${dependencyId}.`));
+        }
+      }
+      if (entry?.state==='satisfied') for (const acceptance of outcome.acceptance) {
+        const proof=await currentAcceptanceProof(context,runtime,entry,acceptance,authority?.authority_digest,skillsDigest);
+        if (!proof.ok) {
+          remainingOutcomes.add(outcome.id); remainingAcceptance.add(acceptance.id);
+          addUnproven({outcome_id:outcome.id,acceptance_id:acceptance.id,required_maturity:acceptance.required_maturity,reason:proof.reason});
+          issues.push(error('ACCEPTANCE_EVIDENCE_STALE',`Acceptance ${acceptance.id} lacks current ${acceptance.required_maturity} evidence on the final project bytes.`));
+        }
+      }
+    }
+    return {required,remainingOutcomes,remainingAcceptance};
+  };
+
+  if (atLeast(effectiveBoundary,'goal')) {
+    const goalIssueStart=issues.length;
+    if (!outcomeRegistry) issues.push(error('GOAL_OUTCOME_CONTRACT_REQUIRED','Goal completion requires a schema-2 Outcome Contract. Run the explicit project upgrade or initialize Outcomes first.'));
+    else {
+      const coverage=outcomeStatus(outcomeRegistry);
+      if (coverage.coverage_status!=='confirmed') issues.push(error('GOAL_COVERAGE_NOT_CONFIRMED',`Goal coverage is ${coverage.coverage_status}; the user must confirm the complete current Outcome set.`));
+      if (runtime?.paths.worktree_id!==outcomeRegistry.integration_worktree_id) issues.push(error('INTEGRATION_WORKTREE_REQUIRED',`Goal closure is restricted to integration worktree ${outcomeRegistry.integration_worktree_id??'not-designated'}.`));
+      try {
+        const audit=await auditCoverageSources(context,outcomeRegistry);
+        for (const item of audit.issues) issues.push(error(item.code,`Coverage source ${item.source_id} failed exact source-ID audit.`));
+      } catch (cause) { issues.push(error(cause.code??'COVERAGE_AUDIT_FAILED',cause.message)); }
+      if (!outcomeProgress) issues.push(error('OUTCOME_PROGRESS_MISSING','Goal completion requires the verified per-worktree Outcome progress ledger.'));
+      else {
+        const evaluated=await evaluateOutcomes('goal');
+        remainingOutcomeIds=[...evaluated.remainingOutcomes].sort();
+        remainingAcceptanceIds=[...evaluated.remainingAcceptance].sort();
+        if (remainingOutcomeIds.length) issues.push(error('GOAL_OUTCOMES_INCOMPLETE',`Goal still has required Outcomes: ${remainingOutcomeIds.join(', ')}`));
+      }
+    }
+    goalOk=sliceOk&&issues.length===goalIssueStart;
+    if (goalOk) label='GOAL_ENGINEERING_CLOSED';
+  } else if (outcomeRegistry&&outcomeProgress) {
+    const summary=outcomeProgressSummary(outcomeRegistry,outcomeProgress);
+    remainingOutcomeIds=summary.remaining_outcome_ids;
+    remainingAcceptanceIds=[...new Set(summary.missing_acceptance_ids)].sort();
+  }
+
+  if (atLeast(effectiveBoundary,'release')) {
+    const releaseIssueStart=issues.length;
+    if (outcomeRegistry&&outcomeProgress) {
+      const evaluated=await evaluateOutcomes('release');
+      remainingOutcomeIds=[...evaluated.remainingOutcomes].sort();
+      remainingAcceptanceIds=[...evaluated.remainingAcceptance].sort();
+      const releaseAcceptances=evaluated.required.flatMap((outcome)=>outcome.acceptance.map((acceptance)=>({outcome,acceptance,entry:outcomeProgress.outcomes[outcome.id]})));
+      const unprovenIds=new Set(unprovenMaturity.map((item)=>item.acceptance_id));
+      const authorization=releaseAcceptances.find(({acceptance,entry})=>acceptance.validator.kind==='user-decision'&&acceptance.validator.decision_type==='release-authorization'&&entry?.satisfied_acceptance_ids?.includes(acceptance.id)&&!unprovenIds.has(acceptance.id));
+      if (!authorization) issues.push(error('RELEASE_AUTHORIZATION_REQUIRED','Release completion requires an explicit user-grounded release-authorization acceptance receipt.'));
+      const packageEvidence=releaseAcceptances.find(({acceptance,entry})=>acceptance.required_maturity==='release'&&['command','artifact','authority-adapter'].includes(acceptance.validator.kind)&&entry?.satisfied_acceptance_ids?.includes(acceptance.id)&&!unprovenIds.has(acceptance.id));
+      if (!packageEvidence) issues.push(error('RELEASE_EVIDENCE_REQUIRED','Release completion requires current package, deployment, or equivalent release evidence.'));
+      if (remainingOutcomeIds.length) issues.push(error('RELEASE_OUTCOMES_INCOMPLETE',`Release still has required Outcomes: ${remainingOutcomeIds.join(', ')}`));
+    }
+    if (!goalOk) issues.push(error('RELEASE_GOAL_NOT_CLOSED','Release completion requires the goal boundary to pass first.'));
+    if (goalOk&&issues.length===releaseIssueStart) label='RELEASE_READY';
+  }
+
+  const report={ok:issues.length===0,schema_version:1,boundary:requestedBoundary,requested_boundary:requestedBoundary,effective_boundary:effectiveBoundary,project:context.root,execution_root:context.executionRoot,project_id:context.manifest.project_id,worktree_id:runtime?.paths.worktree_id??null,issues,warnings,completion:{label,remaining_outcome_ids:remainingOutcomeIds,remaining_acceptance_ids:remainingAcceptanceIds,unproven_maturity:unprovenMaturity},control_plane:areaSummary(issues,warnings)};
   if (!report.ok&&options.throw_on_error!==false) throw healthError(report,options.json===true);
   return report;
 }

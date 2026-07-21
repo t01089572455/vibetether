@@ -35,6 +35,6 @@ export const LEASE_TTL_MS = 30 * 60 * 1000;
 export const PROVIDER_CHANNELS = new Set(['stable', 'beta', 'experimental', 'suspect', 'quarantined', 'retired']);
 export const EXPERIENCE_STATES = new Set(['candidate', 'provisional', 'proven', 'suspect', 'quarantined', 'obsolete']);
 export const PHASES = new Set(['DISCOVER', 'ALIGN', 'DESIGN', 'PLAN', 'EXECUTE_ONE', 'VERIFY', 'REVIEW', 'SHIP', 'DIAGNOSE', 'BLOCKED']);
-export const COMPLETION_BOUNDARIES = new Set(['completion', 'handoff', 'merge', 'deployment', 'release', 'publication']);
+export const COMPLETION_BOUNDARIES = new Set(['slice', 'goal', 'release', 'completion', 'handoff', 'merge', 'deployment', 'publication']);
 export const WRITE_PHASES = new Set(['EXECUTE_ONE']);
 export const EVIDENCE_REQUIRED_PHASES = new Set(['EXECUTE_ONE', 'VERIFY', 'REVIEW', 'SHIP', 'DIAGNOSE']);

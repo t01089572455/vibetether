@@ -40,6 +40,7 @@ export function runtimePaths(context, identity = null) {
     lease: path.join(worktree, 'lease.json'),
     journal: path.join(worktree, 'journal.ndjson'),
     evidence: path.join(worktree, 'evidence'),
+    decisions: path.join(worktree, 'decisions'),
     repository_evidence: path.join(repository, 'evidence'),
     activations: path.join(worktree, 'activations'),
     experience_health: path.join(worktree, 'experience-health.json'),
@@ -247,9 +248,10 @@ export async function inspectLease(paths) { return leaseRecord(paths); }
 function receiptDigest(record) {
   const copy={...record}; delete copy.digest; return sha256Text(canonicalJson(copy));
 }
+export function sealReceipt(record) { return {...record,digest:receiptDigest(record)}; }
 export async function writeReceipt(target,record) {
   if (containsSecret(record)) throw conflictError('Receipt appears to contain a secret.','SECRET_VALUE');
-  const value={...record,digest:receiptDigest(record)};
+  const value=sealReceipt(record);
   await atomicJson(target,value); return value;
 }
 export async function readReceipt(target,label) {
