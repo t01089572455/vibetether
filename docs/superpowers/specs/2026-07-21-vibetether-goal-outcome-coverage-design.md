@@ -1,9 +1,10 @@
 # VibeTether Goal and Outcome Coverage Design
 
-Status: proposed for user review
+Status: approved
 Decision owner: project user
 Target: `1.0.0-rc.4` review candidate after `1.0.0-rc.3` hardening
 Scope: goal completeness, outcome coverage, and layered completion verdicts
+Approval basis: user-approved current-session review with the source-coverage and generated-progress amendments below
 
 ## Problem
 
@@ -67,6 +68,15 @@ The canonical shape is:
   "coverage_status": "draft",
   "coverage_decision": null,
   "integration_worktree_id": null,
+  "coverage_sources": [
+    {
+      "id": "source_product_requirements",
+      "truth_id": "truth_product_requirements",
+      "source_revision_digest": "sha256:...",
+      "expected_id_count": 42,
+      "expected_id_set_digest": "sha256:..."
+    }
+  ],
   "outcomes": [
     {
       "id": "outcome_export_contract",
@@ -149,6 +159,24 @@ The receipt records the observable authorization basis without storing the full 
 
 Coverage confirmation also records the designated integration worktree ID. Rebinding goal-level closure to another worktree is a directional mutation with its own receipt. A non-Git project uses its stable attached execution-root identity.
 
+### Exact source-ID coverage
+
+Coverage confirmation is not valid merely because the Outcome list looks plausible. Every declared requirements source with stable IDs records its confirmed source revision, expected ID count, and order-independent ID-set digest.
+
+Each source ID has exactly one current disposition:
+
+```text
+mapped to one Outcome or equivalence group
+duplicate of named source ID
+historical
+rejected
+superseded by named source IDs
+```
+
+The coverage audit fails on missing IDs, unknown IDs, duplicate active ownership, unresolved dispositions, count mismatch, source revision drift, or ID-set digest mismatch. Multiple raw IDs may map to one real Outcome equivalence group, but template evidence copied across IDs is not accepted as per-ID proof.
+
+Sources without stable IDs require a project adapter or an explicitly user-reviewed manifest before coverage can be confirmed. VibeTether can prove completeness against the declared and confirmed source universe; it cannot prove that an unregistered document or an ambiguous sentence contains no additional requirement.
+
 ## Authority and beginner behavior
 
 The exact current user request is an authority source. A clear, bounded request can ground an outcome without asking a ceremonial duplicate question, provided its meaning, scope, and acceptance are unambiguous and the decision receipt points to that request.
@@ -189,6 +217,35 @@ Rules:
 - one worktree cannot silently satisfy another worktree's outcome with unmerged bytes.
 
 The primary integration worktree is the only place that may produce the final goal-level projection. A subagent, Provider, GPT Pro task, or sibling worktree may contribute routes and evidence but cannot independently declare the parent goal complete.
+
+## Managed files and generated progress
+
+VibeTether assigns every managed artifact one ownership class:
+
+- `user-authority` — Intent, confirmed Truth, required Outcome definitions, directional routes, and user Provider policy;
+- `system-generated` — manifest metadata, the human progress projection, generated checksums, and managed host blocks;
+- `runtime-evidence` — route, lease, activation, checkpoint, evidence, handoff, and Outcome progress receipts;
+- `candidate` — discovered Truth, proposed Outcomes, and reusable Experience awaiting confirmation.
+
+Automatic maintenance never rewrites `user-authority` semantics. It may propose a candidate, refresh a verified revision, regenerate a derived view, record runtime evidence, or lower trust after drift.
+
+The tracked `.vibetether/PROGRESS.md` is a generated, human-readable projection. It contains:
+
+```text
+goal and coverage revision
+current integration target
+required / open / in-progress / satisfied / stale / blocked counts
+current Outcome and next missing acceptance
+remaining Outcome IDs with stable handles
+latest precise completion label
+generation digest and regeneration command
+```
+
+`PROGRESS.md` is not authority and must not be edited manually. The canonical Outcome Contract plus verified runtime receipts regenerate it deterministically. At a successful step boundary, Outcome progress, route satisfaction, checkpoint, Success Capture, and the new progress projection are committed as one recoverable control transaction. If the projection cannot be regenerated or its digest does not match canonical state, the step cannot finish and Doctor blocks completion.
+
+Detailed receipts stay outside Git. The compact projection is committed with the corresponding product slice so another session, machine, or integration worktree can see exact remaining work without loading the full runtime journal.
+
+Manual changes to any managed file are classified before action: user-authority changes require reconciliation; generated-file changes are reported and safely regenerated only after ownership checks; runtime corruption is quarantined and rebuilt from receipts when possible; candidate changes remain non-authoritative.
 
 ## Acceptance maturity
 
@@ -257,6 +314,7 @@ VibeTether separates three boundaries.
 `doctor --boundary goal` additionally requires:
 
 - confirmed coverage for the current goal revision;
+- an exact source-ID audit for every declared coverage source;
 - no undispositioned coverage conflict;
 - every outcome required at `goal` is satisfied or explicitly deferred for this goal revision;
 - dependencies are satisfied;
@@ -353,6 +411,8 @@ The implementation is not accepted until black-box tests prove at least:
 12. upgrade/rollback preserves post-upgrade user changes;
 13. English and Chinese beginner journeys explain the next action without requiring lifecycle vocabulary;
 14. exact packed TGZ installation exercises outcome proposal, confirmation, route mapping, slice success, goal blocking, final goal closure, and release blocking.
+15. verified slice completion atomically regenerates `PROGRESS.md`, and a missing, modified, stale, or unwritable projection blocks the completion claim;
+16. source-ID count, digest, mapping, duplicate, and disposition errors prevent coverage confirmation and goal completion;
 
 Natural-language longitudinal evaluations additionally cover compaction, stale plans, modified tests, missing external evidence, subagent completion reports, and a green slice with open parent outcomes. Fixed examples are regression evidence, not proof of universal routing accuracy.
 
@@ -369,9 +429,24 @@ This design does not add:
 - LoveBuddy-specific IDs or acceptance vocabulary in the generic package;
 - permission for a Provider, subagent, or reviewer to close the parent goal.
 
+## Frozen RC4 delivery scope
+
+The RC4 review candidate is limited to:
+
+1. the versioned Outcome Contract;
+2. deterministic `.vibetether/PROGRESS.md` generation and ownership checks;
+3. slice, goal, and release Doctor boundaries;
+4. integration-worktree and final-byte binding;
+5. acceptance/test migration mapping;
+6. exact source-ID coverage audit;
+7. a working project-local command entry;
+8. the existing exact-package, v0.6.x migration, CI-matrix, and review-branch Task 6.
+
+UI, databases, daemons, remote project management, additional Provider ecosystems, and project-specific LoveBuddy adapters are outside RC4. The first post-RC4 integration uses anonymized LoveBuddy and gyws failure histories as longitudinal evaluation before a fixed candidate is installed into either live project.
+
 ## Design exit contract
 
-The design is ready for implementation planning when the user confirms:
+The user-approved design authorizes implementation planning for:
 
 - the hybrid Contract/runtime split;
 - user-controlled coverage and directional dispositions;
@@ -379,3 +454,5 @@ The design is ready for implementation planning when the user confirms:
 - slice, goal, and release Doctor separation;
 - generic maturity levels with project-specific acceptance;
 - no expansion into a database, daemon, or project-management platform.
+
+The implementation must remain inside the frozen RC4 delivery scope and may not claim product or release completion from the design approval itself.

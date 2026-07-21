@@ -38,6 +38,8 @@ Harden the exact RC.3 artifact on an isolated integration branch until its adapt
 - Rich community capability catalog remains cold; one primary Provider controls a step.
 - Completion is tied to required outputs, exit evidence, final bytes, current authority, and success-capture disposition.
 - Slice, goal, and release completion remain distinct; user-governed required outcomes and their acceptance definitions cannot be omitted by selecting a smaller route.
+- Every managed artifact has an ownership class. Verified slice completion atomically refreshes the compact tracked progress projection; user-authority semantics are never rewritten automatically.
+- Confirmed goal coverage includes an exact source-ID universe audit where sources provide stable IDs; missing or undispositioned IDs block goal completion.
 - First reusable success becomes a sanitized candidate, never automatically authoritative experience.
 - v0.6.3 assets, user modifications, managed host files, and rollback bytes are protected from silent overwrite or deletion.
 - Windows, linked worktree, short-path, file-lock, and interrupted-transaction behavior must fail safely and offer a recovery action.
@@ -73,7 +75,7 @@ Harden the exact RC.3 artifact on an isolated integration branch until its adapt
 - Slice 4: migration, upgrade, rollback, uninstall, file-lock, worktree-prune, and interrupted-transaction recovery.
 - Slice 5: Provider immutable verification, complete resource activation, permission environment, archive limits, and cache recovery.
 - Slice 6: exact-package install journeys, live v0.6.3 migration/rollback, route held-out evaluation, fault injection, Windows/Ubuntu Node matrices, documentation, and review.
-- Slice 7: Goal/Outcome Coverage Contract, runtime projection, route-to-outcome binding, layered Doctor boundaries, migration/rollback coverage, longitudinal false-completion evaluation, and exact-package proof.
+- Slice 7: Goal/Outcome Coverage Contract, exact source-ID audit, deterministic tracked progress projection, runtime progress, route-to-outcome binding, layered Doctor boundaries, migration/rollback coverage, longitudinal false-completion evaluation, and exact-package proof.
 - Checkpoint: after every slice, run its focused tests, `npm run check`, inspect the diff against this packet, and commit only the bounded slice.
 
 ## Acceptance Criteria
