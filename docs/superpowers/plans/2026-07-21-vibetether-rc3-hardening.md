@@ -327,17 +327,17 @@ git commit -m "fix: make completion evidence atomic and monotonic"
 - Modify: `src/init.mjs`
 - Test: `test/rc4-lifecycle-recovery.test.mjs`
 
-- [ ] **Step 1: Add fault-injected lifecycle regressions**
+- [x] **Step 1: Add fault-injected lifecycle regressions**
 
 Use injectable filesystem operations to fail backup, replace, restore, and rollback independently. Cover modified launcher, modified managed block, legacy Provider directory, unsafe legacy Truth path, migration-output/user-current conflict, stale-looking lock held by a live owner, transient Git inspection failure during prune, and init attach failure.
 
-- [ ] **Step 2: Verify the current implementation misreports or removes data**
+- [x] **Step 2: Verify the current implementation misreports or removes data**
 
 Run: `node --test test/rc4-lifecycle-recovery.test.mjs`
 
 Expected: FAIL with at least one swallowed restore failure, modified-file removal, or destructive prune/rollback result.
 
-- [ ] **Step 3: Represent lifecycle records as explicit recoverable states**
+- [x] **Step 3: Represent lifecycle records as explicit recoverable states**
 
 ```js
 const transaction = {
@@ -351,21 +351,21 @@ const transaction = {
 
 Allowed terminal states are `applied`, `rolled-back`, `conflict-preserved`, and `recovery-required`. Never write `rolled-back` when any restore failed. Preserve before, migration output, and current bytes for every conflict.
 
-- [ ] **Step 4: Make removal ownership-based**
+- [x] **Step 4: Make removal ownership-based**
 
 Uninstall only removes bytes that equal the recorded installed digest. Modified launchers, Skills, managed blocks, shared dispatchers, and legacy Provider directories produce a conflict report and remain untouched.
 
-- [ ] **Step 5: Replace mtime-only lock stealing and destructive prune assumptions**
+- [x] **Step 5: Replace mtime-only lock stealing and destructive prune assumptions**
 
 Locks contain owner UUID, PID, process-start token, acquired time, heartbeat, and generation. A lock can be reclaimed only after the owner is proven dead or an explicit recovery command records the break. `prune` quarantines unverifiable records and deletes only identities Git positively reports absent.
 
-- [ ] **Step 6: Run lifecycle, migration, upgrade, safety, and worktree suites**
+- [x] **Step 6: Run lifecycle, migration, upgrade, safety, and worktree suites**
 
 Run: `node --test test/rc4-lifecycle-recovery.test.mjs test/migration.test.mjs test/upgrade.test.mjs test/safety-cli.test.mjs test/worktree.test.mjs`
 
 Expected: PASS; injected restore failure yields `recovery-required`, and post-migration user bytes remain available and unchanged.
 
-- [ ] **Step 7: Commit the lifecycle slice**
+- [x] **Step 7: Commit the lifecycle slice**
 
 ```bash
 git add src/files.mjs src/migrate.mjs src/upgrade.mjs src/uninstall.mjs src/global-entry.mjs src/worktree.mjs src/init.mjs test/rc4-lifecycle-recovery.test.mjs

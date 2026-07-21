@@ -82,7 +82,7 @@ function preview(plans,root,mode) {
   return {status:'preview',control_mode:mode,root,files:plans.map((plan)=>path.relative(root,plan.target).replaceAll('\\','/'))};
 }
 
-export async function initialize(options={}) {
+export async function initialize(options={},runtimeHooks={}) {
   const root=await projectRoot(options.project??process.cwd());
   const legacyManifest=path.join(root,'.vibetether','project.yaml');
   const currentManifest=path.join(root,'.vibetether','project.json');
@@ -123,15 +123,17 @@ export async function initialize(options={}) {
   if (options.dry_run) return preview(plans,mode==='local'?contractRoot:root,mode);
   if (!options.yes) throw conflictError('Initialization requires --yes or --dry-run.','CONFIRMATION_REQUIRED');
   await cacheRuntimePackage();
-  await transactionalWrites(plans);
-  const context={...(await loadContract(contractRoot)),executionRoot:root,tracked:mode!=='local',shared:false};
-  const truth=parseTruthMap(context.truthSource);
-  const authority=await authoritySnapshot(root,truth,context.intentSource);
-  const runtime=await attachWorktree(context,authority.authority_digest);
-  if (mode!=='local') {
-    const contractFiles=[manifest.intent,manifest.truth_index,manifest.experience_index,manifest.skills_lock,manifest.routes,manifest.launcher,'.vibetether/project.json'];
-    let bytes=0; for (const relative of contractFiles) bytes+=Buffer.byteLength(await readFile(path.join(root,...relative.split('/'))));
-    if (bytes>TRACKED_CONTRACT_BUDGET_BYTES) throw conflictError(`Tracked Contract exceeds ${TRACKED_CONTRACT_BUDGET_BYTES} bytes.`,'CONTRACT_TOO_LARGE');
-  }
-  return {status:existing?'updated':'initialized',control_mode:mode,project_id:manifest.project_id,contract_root:contractRoot,execution_root:root,worktree_id:runtime.paths.worktree_id,warning:mode==='local'?'Local mode requires the global VibeTether entry Skill or an explicit CLI invocation; it is not team-portable.':null};
+  return transactionalWrites(plans,async()=>{
+    const context={...(await loadContract(contractRoot)),executionRoot:root,tracked:mode!=='local',shared:false};
+    if (mode!=='local') {
+      const contractFiles=[manifest.intent,manifest.truth_index,manifest.experience_index,manifest.skills_lock,manifest.routes,manifest.launcher,'.vibetether/project.json'];
+      let bytes=0; for (const relative of contractFiles) bytes+=Buffer.byteLength(await readFile(path.join(root,...relative.split('/'))));
+      if (bytes>TRACKED_CONTRACT_BUDGET_BYTES) throw conflictError(`Tracked Contract exceeds ${TRACKED_CONTRACT_BUDGET_BYTES} bytes.`,'CONTRACT_TOO_LARGE');
+    }
+    const truth=parseTruthMap(context.truthSource);
+    const authority=await authoritySnapshot(root,truth,context.intentSource);
+    const attach=runtimeHooks.attachWorktree??attachWorktree;
+    const runtime=await attach(context,authority.authority_digest);
+    return {status:existing?'updated':'initialized',control_mode:mode,project_id:manifest.project_id,contract_root:contractRoot,execution_root:root,worktree_id:runtime.paths.worktree_id,warning:mode==='local'?'Local mode requires the global VibeTether entry Skill or an explicit CLI invocation; it is not team-portable.':null};
+  });
 }

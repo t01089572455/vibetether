@@ -7,7 +7,7 @@ import {
 } from './constants.mjs';
 import { conflictError } from './errors.mjs';
 import {
-  appendBounded, atomicJson, boundedText, canonicalJson, containsSecret, readJsonFile,
+  appendBounded, atomicJson, boundedText, breakFileLock, canonicalJson, containsSecret, readJsonFile,
   rejectAbsoluteSymlinkChain, sha256File, sha256Text, transactionalWrites, withFileLock,
 } from './files.mjs';
 import { executionSnapshot, snapshotsMatch } from './git.mjs';
@@ -209,6 +209,24 @@ async function breakLeaseUnlocked(paths, reason='Writer lease was explicitly bro
 }
 export async function breakLease(paths, reason='Writer lease was explicitly broken for recovery.') {
   return withWorktreeStateLock(paths,()=>breakLeaseUnlocked(paths,reason));
+}
+export async function breakWorktreeStateLock(paths, reason, { confirmed = false } = {}) {
+  const boundedReason = boundedText(reason, 500, 'State-lock break reason');
+  const broken = await breakFileLock(path.join(paths.worktree, '.state-lock'), {
+    reason: boundedReason,
+    confirmed,
+    quarantineRoot: path.join(paths.quarantine, 'state-locks'),
+  });
+  if (broken.status === 'not-locked') return { ...broken, route_status: null, route_id: null };
+  const route = await breakLease(paths, `State lock was explicitly broken for recovery: ${boundedReason}`);
+  await appendRuntimeEvent(paths, {
+    type: 'state-lock-broken',
+    route_id: route?.id ?? null,
+    lock_break_id: broken.id,
+    quarantine: broken.quarantine,
+    reason: boundedReason,
+  });
+  return { ...broken, route_status: route?.status ?? null, route_id: route?.id ?? null };
 }
 export async function inspectLease(paths) { return leaseRecord(paths); }
 

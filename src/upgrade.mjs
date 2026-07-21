@@ -162,6 +162,20 @@ async function backupItems(record, items) {
   return { backup, manifest };
 }
 
+async function snapshotItems(record, items, destination) {
+  await mkdir(destination,{recursive:true});
+  const inventory=await inventoryItems(record,items);
+  const manifest={schema_version:1,items:{},inventory};
+  for (const item of items) {
+    const state=inventory[item.key];
+    manifest.items[item.key]={...item,...state};
+    if (!state.existed) continue;
+    await copyItem(itemTarget(record,item),path.join(destination,item.base,...item.relative.split('/')),state.kind);
+  }
+  await atomicJson(path.join(destination,'snapshot-manifest.json'),manifest);
+  return {destination,inventory};
+}
+
 async function restoreItems(record, backup, { expectedCurrent = null } = {}) {
   const manifest = await readJsonFile(path.join(backup, 'backup-manifest.json'), 'Upgrade backup manifest');
   const items = Object.values(manifest.items);
@@ -170,13 +184,28 @@ async function restoreItems(record, backup, { expectedCurrent = null } = {}) {
     if (!sameInventory(current, expectedCurrent)) {
       if (sameInventory(current, manifest.before_inventory)) return { status: 'already-restored' };
       const conflict = path.join(recordRoot(record.id), `rollback-conflict-${Date.now()}`);
-      await mkdir(conflict, { recursive: true });
+      const currentRoot=path.join(conflict,'current');
+      await mkdir(currentRoot, { recursive: true });
       for (const item of items) {
         const source = itemTarget(record, item);
         if (!await exists(source)) continue;
-        await copyItem(source, path.join(conflict, item.base, ...item.relative.split('/')), (await itemState(source)).kind);
+        await copyItem(source, path.join(currentRoot, item.base, ...item.relative.split('/')), (await itemState(source)).kind);
       }
-      throw conflictError(`Upgrade rollback stopped because managed assets changed after upgrade. Current bytes were preserved at ${conflict}.`, 'ROLLBACK_CONFLICT');
+      if (record.backup&&await exists(record.backup)) {
+        const digest=await hashTree(record.backup);
+        await copyVerifiedDirectory(record.backup,path.join(conflict,'before'),digest);
+      }
+      if (record.output_snapshot&&await exists(record.output_snapshot)) {
+        const digest=await hashTree(record.output_snapshot);
+        await copyVerifiedDirectory(record.output_snapshot,path.join(conflict,'upgrade-output'),digest);
+      }
+      await atomicJson(path.join(conflict,'conflict-manifest.json'),{
+        schema_version:1,upgrade_id:record.id,created_at:new Date().toISOString(),before:'before',
+        upgrade_output:record.output_snapshot?'upgrade-output':null,current:'current',
+      });
+      const failure=conflictError(`Upgrade rollback stopped because managed assets changed after upgrade. Before, upgrade-output, and current bytes were preserved at ${conflict}.`, 'ROLLBACK_CONFLICT');
+      failure.conflict_path=conflict;
+      throw failure;
     }
   }
   const transactions = new Map();
@@ -219,8 +248,8 @@ async function restoreItems(record, backup, { expectedCurrent = null } = {}) {
       await mkdir(path.dirname(item.target), { recursive: true });
       await rename(item.held, item.target).catch((error) => errors.push(error.message));
     }
+    if (errors.length) throw conflictError(`Upgrade rollback failed and recovery was incomplete. Preserved recovery roots: ${[...transactions.values()].join(', ')}. Errors: ${errors.join('; ')}`, 'ROLLBACK_FAILED');
     for (const transaction of transactions.values()) await rm(transaction, { recursive: true, force: true }).catch(() => {});
-    if (errors.length) throw conflictError(`Upgrade rollback failed and recovery was incomplete: ${errors.join('; ')}`, 'ROLLBACK_FAILED');
     throw cause;
   }
 }
@@ -306,7 +335,7 @@ export async function planUpgrade(options = {}) {
   };
 }
 
-export async function upgradeProject(options = {}) {
+export async function upgradeProject(options = {}, runtimeHooks = {}) {
   const prepared = await upgradeContext(options);
   if (prepared.relation === 0) return { status: 'current', project: prepared.context.executionRoot, version: VERSION };
   if (!options.yes) throw conflictError('Upgrade requires --yes or --dry-run.', 'CONFIRMATION_REQUIRED');
@@ -321,10 +350,12 @@ export async function upgradeProject(options = {}) {
     from_version: context.manifest.vibetether_version,
     to_version: VERSION,
     created_at: new Date().toISOString(),
-    status: 'started',
+    status: 'applying',
+    recovery: { attempted: false, completed: false, errors: [] },
   };
   const items = upgradeItems(context, prepared.adapters);
-  const { backup, manifest: backupManifest } = await backupItems(record, items);
+  const createBackup = runtimeHooks.backupItems ?? backupItems;
+  const { backup, manifest: backupManifest } = await createBackup(record, items);
   record.backup = backup;
   record.before_inventory = backupManifest.before_inventory;
   const recordPath = path.join(recordRoot(id), 'upgrade.json');
@@ -348,16 +379,38 @@ export async function upgradeProject(options = {}) {
     await transactionalWrites(plans);
     const verified = await discoverContract(context.executionRoot);
     if (verified.manifest.vibetether_version !== VERSION || verified.manifest.control_generation !== nextManifest.control_generation) throw conflictError('Upgraded Project Contract did not validate.', 'UPGRADE_FAILED');
+    if (typeof runtimeHooks.afterApply === 'function') await runtimeHooks.afterApply({ context, id, record });
     record.output_inventory = await inventoryItems(record, items);
+    record.output_snapshot=path.join(recordRoot(id),'output');
+    await snapshotItems(record,items,record.output_snapshot);
     record.status = 'applied';
     record.completed_at = new Date().toISOString();
     await atomicJson(recordPath, record);
     return { status: 'upgraded', upgrade_id: id, from_version: record.from_version, to_version: VERSION, project: context.executionRoot, rollback: `vibetether upgrade rollback --id ${id} --yes` };
   } catch (cause) {
-    await restoreItems(record, backup).catch(() => {});
-    record.status = 'rolled-back-after-failure';
     record.failure = String(cause.message);
-    await atomicJson(recordPath, record).catch(() => {});
+    record.recovery = { attempted: true, completed: false, errors: [] };
+    try { record.failure_inventory = await inventoryItems(record, items); }
+    catch (inventoryCause) { record.recovery.errors.push(`Failure inventory: ${inventoryCause.message}`); }
+    const restore = runtimeHooks.restoreItems ?? restoreItems;
+    if (record.failure_inventory) {
+      try {
+        await restore(record, backup, { expectedCurrent: record.failure_inventory });
+        record.status = 'rolled-back';
+        record.recovery.completed = true;
+        record.rolled_back_at = new Date().toISOString();
+      } catch (restoreCause) {
+        record.recovery.errors.push(String(restoreCause.message ?? restoreCause));
+      }
+    }
+    if (!record.recovery.completed) {
+      record.status = 'recovery-required';
+      record.recovery_required_at = new Date().toISOString();
+    }
+    await atomicJson(recordPath, record);
+    if (!record.recovery.completed) {
+      throw conflictError(`Upgrade failed and automatic restore also failed; recovery is required. Original error: ${cause.message}. Restore error: ${record.recovery.errors.join('; ')}`, 'ROLLBACK_FAILED');
+    }
     throw cause;
   }
 }
@@ -366,11 +419,22 @@ export async function rollbackUpgrade({ id, yes = false } = {}) {
   if (!yes) throw conflictError('Upgrade rollback requires --yes.', 'CONFIRMATION_REQUIRED');
   const recordPath = path.join(recordRoot(id), 'upgrade.json');
   const record = await readJsonFile(recordPath, 'Upgrade record');
-  if (!['applied', 'rollback-conflict'].includes(record.status)) {
+  if (!['applied', 'rollback-conflict', 'conflict-preserved', 'recovery-required'].includes(record.status)) {
     if (record.status === 'rolled-back') return { status: 'already-restored', upgrade_id: id, project: record.project };
     throw conflictError(`Upgrade ${id} cannot be rolled back from status ${record.status}.`, 'UPGRADE_NOT_APPLICABLE');
   }
-  const result = await restoreItems(record, record.backup, { expectedCurrent: record.output_inventory });
+  let result;
+  try {
+    result=await restoreItems(record, record.backup, { expectedCurrent: record.output_inventory ?? record.failure_inventory ?? null });
+  } catch (cause) {
+    if (cause.code==='ROLLBACK_CONFLICT') {
+      record.status='conflict-preserved';
+      record.rollback_conflict_path=cause.conflict_path??null;
+      record.rollback_conflict_at=new Date().toISOString();
+      await atomicJson(recordPath,record);
+    }
+    throw cause;
+  }
   record.status = 'rolled-back';
   record.rolled_back_at = new Date().toISOString();
   await atomicJson(recordPath, record);

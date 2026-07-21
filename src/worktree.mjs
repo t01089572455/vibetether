@@ -121,23 +121,36 @@ export async function removeWorktree({project=process.cwd(),target,force=false}=
   return {status:'removed',path:targetIdentity.worktree_root,worktree_id:targetPaths.worktree_id};
 }
 
-export async function pruneWorktrees(project=process.cwd()) {
+export async function pruneWorktrees(project=process.cwd(),runtimeHooks={}) {
   const context=await discoverContract(project);
   const identity=await gitIdentity(context.executionRoot);
-  if (!identity) return {pruned:[]};
+  if (!identity) return {pruned:[],quarantined:[]};
   await runGit(identity.worktree_root,['worktree','prune']);
   const registry=await readJsonFile(repositoryRegistryPath(identity.common_id),'Repository registry',{allowMissing:true});
-  if (!registry) return {pruned:[]};
+  if (!registry) return {pruned:[],quarantined:[]};
+  const listWorktrees=runtimeHooks.gitListWorktrees??gitListWorktrees;
+  const identify=runtimeHooks.gitIdentity??gitIdentity;
   const live=new Set();
-  for (const item of await gitListWorktrees(identity.worktree_root)) {
+  const inspectionFailures=[];
+  for (const item of await listWorktrees(identity.worktree_root)) {
     try {
-      const candidate=await gitIdentity(item.path);
+      const candidate=await identify(item.path);
       if (candidate?.common_id===identity.common_id) live.add(candidate.worktree_id);
-    } catch {
-      // Git may report a prunable entry that cannot be inspected.
+    } catch (cause) {
+      inspectionFailures.push({path:item.path,reason:String(cause.message??cause)});
     }
   }
   const stale=(registry.worktrees??[]).filter((item)=>!live.has(item.id));
+  if (inspectionFailures.length) {
+    const quarantinedAt=new Date().toISOString();
+    const staleIds=new Set(stale.map((item)=>item.id));
+    registry.worktrees=(registry.worktrees??[]).map((item)=>staleIds.has(item.id)?{
+      ...item,quarantined_at:quarantinedAt,quarantine_reason:'Git reported a worktree that could not be inspected; runtime bytes were preserved.',
+    }:item);
+    registry.updated_at=quarantinedAt;
+    await atomicJson(repositoryRegistryPath(identity.common_id),registry);
+    return {pruned:[],quarantined:[...staleIds],inspection_failures:inspectionFailures};
+  }
   for (const item of stale) {
     const p=path.join(stateHome(),'projects',context.manifest.project_id,identity.common_id,'worktrees',item.id);
     await rm(p,{recursive:true,force:true});
@@ -145,7 +158,7 @@ export async function pruneWorktrees(project=process.cwd()) {
   registry.worktrees=(registry.worktrees??[]).filter((item)=>live.has(item.id));
   registry.updated_at=new Date().toISOString();
   await atomicJson(repositoryRegistryPath(identity.common_id),registry);
-  return {pruned:stale.map((item)=>item.id)};
+  return {pruned:stale.map((item)=>item.id),quarantined:[]};
 }
 
 function handoffPath(paths,id) { return path.join(paths.handoffs,`${id}.json`); }

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { conflictError } from './errors.mjs';
 import {
   atomicJson, boundedText, canonicalJson, copyVerifiedDirectory, exists, hashTree, sha256File,
-  readJsonFile, readTextIfPresent, transactionalWrites,
+  readJsonFile, readTextIfPresent, safeRelative, transactionalWrites,
 } from './files.mjs';
 import { cacheHome, stateHome } from './paths.mjs';
 import { createManifest, createSkillsLock, discoverContract } from './contract.mjs';
@@ -408,7 +408,7 @@ export async function planMigration({ project = process.cwd(), control_mode = 't
   if (await exists(path.join(root, '.vibetether', 'project.json'))) throw conflictError('Project already has a 1.0 Contract.', 'MIGRATION_NOT_APPLICABLE');
   if (control_mode === 'local') throw conflictError('Migration of a shared 0.x control plane to local-only mode is refused. Migrate to team or hybrid first.', 'MIGRATION_LOCAL_REFUSED');
   const source = await readFile(legacyManifest, 'utf8');
-  const truthPath = yamlScalar(source, 'truth_index') ?? '.vibetether/TRUTH.md';
+  const truthPath = safeRelative(yamlScalar(source, 'truth_index') ?? '.vibetether/TRUTH.md', 'Legacy Truth index');
   const truthSource = await readTextIfPresent(path.join(root, ...truthPath.split('/')));
   return {
     schema_version: 1,
@@ -445,16 +445,38 @@ function inventoryEqual(left, right) {
   return canonicalJson(left) === canonicalJson(right);
 }
 
-async function preserveRollbackConflict(root, id) {
-  const destination = path.join(migrationRoot(id), `rollback-conflict-${Date.now()}`);
+async function copyManagedSnapshot(root, destination) {
   await mkdir(destination, { recursive: true });
+  const inventory=await inventoryManagedPaths(root);
   for (const relative of MIGRATION_MANAGED_PATHS) {
-    const source = path.join(root, ...relative.split('/'));
-    if (!await exists(source)) continue;
-    const target = path.join(destination, ...relative.split('/'));
-    await mkdir(path.dirname(target), { recursive: true });
-    await cp(source, target, { recursive: true, force: false, errorOnExist: true });
+    const entry=inventory[relative];
+    if (!entry.existed) continue;
+    await copyBackupPath(
+      path.join(root,...relative.split('/')),
+      path.join(destination,...relative.split('/')),
+      entry.kind,
+    );
   }
+  await atomicJson(path.join(destination,'snapshot-manifest.json'),{schema_version:1,inventory});
+  return {destination,inventory};
+}
+
+async function preserveRollbackConflict(root, record) {
+  const id=record.id;
+  const destination = path.join(migrationRoot(id), `rollback-conflict-${Date.now()}`);
+  const current=await copyManagedSnapshot(root,path.join(destination,'current'));
+  if (record.backup&&await exists(record.backup)) {
+    const digest=await hashTree(record.backup);
+    await copyVerifiedDirectory(record.backup,path.join(destination,'before'),digest);
+  }
+  if (record.output_snapshot&&await exists(record.output_snapshot)) {
+    const digest=await hashTree(record.output_snapshot);
+    await copyVerifiedDirectory(record.output_snapshot,path.join(destination,'migration-output'),digest);
+  }
+  await atomicJson(path.join(destination,'conflict-manifest.json'),{
+    schema_version:1,migration_id:id,created_at:new Date().toISOString(),
+    before:'before',migration_output:record.output_snapshot?'migration-output':null,current:'current',current_inventory:current.inventory,
+  });
   return destination;
 }
 
@@ -486,8 +508,15 @@ async function backupProject(root, id) {
   return backup;
 }
 
-async function restoreBackup(root, backup) {
+async function restoreBackup(root, backup, { expectedCurrent = null } = {}) {
   const manifest = await readJsonFile(path.join(backup, 'backup-manifest.json'), 'Migration backup manifest');
+  if (expectedCurrent) {
+    const current = await inventoryManagedPaths(root);
+    if (!inventoryEqual(current, expectedCurrent)) {
+      if (inventoryEqual(current, manifest.before_inventory)) return { status: 'already-restored' };
+      throw conflictError('Migration recovery stopped because managed assets changed after the failed write.', 'ROLLBACK_CONFLICT');
+    }
+  }
   const transaction = path.join(root, `.vibetether-rollback-${randomUUID()}`);
   const moved = [];
   const restored = [];
@@ -513,6 +542,7 @@ async function restoreBackup(root, backup) {
     const actual = await inventoryManagedPaths(root);
     if (!inventoryEqual(actual, manifest.before_inventory)) throw conflictError('Restored migration bytes do not match the pre-migration inventory.', 'ROLLBACK_FAILED');
     await rm(transaction, { recursive: true, force: true });
+    return { status: 'restored' };
   } catch (cause) {
     const recoveryErrors = [];
     for (const target of restored.reverse()) await rm(target, { recursive: true, force: true }).catch((error) => recoveryErrors.push(error.message));
@@ -521,25 +551,29 @@ async function restoreBackup(root, backup) {
       await mkdir(path.dirname(item.target), { recursive: true });
       await import('node:fs/promises').then(({ rename }) => rename(item.held, item.target)).catch((error) => recoveryErrors.push(error.message));
     }
+    if (recoveryErrors.length) throw conflictError(`Rollback failed and recovery was incomplete. Preserved recovery bytes: ${transaction}. Errors: ${recoveryErrors.join('; ')}`, 'ROLLBACK_FAILED');
     await rm(transaction, { recursive: true, force: true }).catch(() => {});
-    if (recoveryErrors.length) throw conflictError(`Rollback failed and recovery was incomplete: ${recoveryErrors.join('; ')}`, 'ROLLBACK_FAILED');
     throw cause;
   }
 }
 
-export async function migrate(options = {}) {
+export async function migrate(options = {}, runtimeHooks = {}) {
   const plan = await planMigration(options);
   if (options.dry_run) return plan;
   if (!options.yes) throw conflictError('Migration requires --yes or --dry-run.', 'CONFIRMATION_REQUIRED');
   const root = plan.project;
   const id = `migration-${randomUUID()}`;
-  const backup = await backupProject(root, id);
-  const record = { schema_version: 1, id, project: root, backup, created_at: new Date().toISOString(), status: 'started', plan };
+  const createBackup = runtimeHooks.backupProject ?? backupProject;
+  const backup = await createBackup(root, id);
+  const record = {
+    schema_version: 1, id, project: root, backup, created_at: new Date().toISOString(), status: 'applying', plan,
+    recovery: { attempted: false, completed: false, errors: [] },
+  };
   const recordPath = path.join(migrationRoot(id), 'migration.json');
   await atomicJson(recordPath, record);
   try {
     const legacyManifestSource = await readFile(path.join(root, '.vibetether', 'project.yaml'), 'utf8');
-    const legacyTruthPath = yamlScalar(legacyManifestSource, 'truth_index') ?? '.vibetether/TRUTH.md';
+    const legacyTruthPath = safeRelative(yamlScalar(legacyManifestSource, 'truth_index') ?? '.vibetether/TRUTH.md', 'Legacy Truth index');
     const legacyTruthSource = await readTextIfPresent(path.join(root, ...legacyTruthPath.split('/')));
     let truthMap = emptyTruthMap();
     let truthIndex = '.vibetether/TRUTH.md';
@@ -612,16 +646,38 @@ export async function migrate(options = {}) {
       current.updated_at = new Date().toISOString();
       await writeCurrentProjection(runtime.paths, current);
     }
+    if (typeof runtimeHooks.afterApply === 'function') await runtimeHooks.afterApply({ root, id, record });
     record.output_inventory = await inventoryManagedPaths(root);
+    record.output_snapshot=path.join(migrationRoot(id),'output');
+    await copyManagedSnapshot(root,record.output_snapshot);
     record.status = 'applied';
     record.completed_at = new Date().toISOString();
     await atomicJson(recordPath, record);
     return { status: 'migrated', migration_id: id, project_id: manifest.project_id, truth_index: truthIndex, legacy_sources: plan.legacy_sources, imported_project_skills: migratedRouting.imported, migrated_routes: migratedRouting.routes.routes.length, rollback: `vibetether migrate rollback --id ${id} --yes` };
   } catch (cause) {
-    await restoreBackup(root, backup).catch(() => {});
-    record.status = 'rolled-back-after-failure';
     record.failure = String(cause.message);
-    await atomicJson(recordPath, record).catch(() => {});
+    record.recovery = { attempted: true, completed: false, errors: [] };
+    try { record.failure_inventory = await inventoryManagedPaths(root); }
+    catch (inventoryCause) { record.recovery.errors.push(`Failure inventory: ${inventoryCause.message}`); }
+    const restore = runtimeHooks.restoreBackup ?? restoreBackup;
+    if (record.failure_inventory) {
+      try {
+        await restore(root, backup, { expectedCurrent: record.failure_inventory });
+        record.status = 'rolled-back';
+        record.recovery.completed = true;
+        record.rolled_back_at = new Date().toISOString();
+      } catch (restoreCause) {
+        record.recovery.errors.push(String(restoreCause.message ?? restoreCause));
+      }
+    }
+    if (!record.recovery.completed) {
+      record.status = 'recovery-required';
+      record.recovery_required_at = new Date().toISOString();
+    }
+    await atomicJson(recordPath, record);
+    if (!record.recovery.completed) {
+      throw conflictError(`Migration failed and automatic restore also failed; recovery is required. Original error: ${cause.message}. Restore error: ${record.recovery.errors.join('; ')}`, 'ROLLBACK_FAILED');
+    }
     throw cause;
   }
 }
@@ -630,23 +686,28 @@ export async function rollbackMigration({ id, yes = false } = {}) {
   if (!yes) throw conflictError('Migration rollback requires --yes.', 'CONFIRMATION_REQUIRED');
   const recordPath = path.join(migrationRoot(id), 'migration.json');
   const record = await readJsonFile(recordPath, 'Migration record');
+  if (record.status === 'rolled-back') return { status: 'already-restored', migration_id: id, project: record.project };
+  if (!['applied', 'rollback-conflict', 'conflict-preserved', 'recovery-required'].includes(record.status)) {
+    throw conflictError(`Migration ${id} cannot be rolled back from status ${record.status}.`, 'MIGRATION_NOT_APPLICABLE');
+  }
   const backupManifest = await readJsonFile(path.join(record.backup, 'backup-manifest.json'), 'Migration backup manifest');
   const currentInventory = await inventoryManagedPaths(record.project);
-  if (record.output_inventory && !inventoryEqual(currentInventory, record.output_inventory)) {
+  const expectedCurrent=record.output_inventory??record.failure_inventory??null;
+  if (expectedCurrent && !inventoryEqual(currentInventory, expectedCurrent)) {
     if (backupManifest.before_inventory && inventoryEqual(currentInventory, backupManifest.before_inventory)) {
       record.status = 'rolled-back';
       record.rolled_back_at = new Date().toISOString();
       await atomicJson(recordPath, record);
       return { status: 'already-restored', migration_id: id, project: record.project };
     }
-    const conflictPath = await preserveRollbackConflict(record.project, id);
-    record.status = 'rollback-conflict';
+    const conflictPath = await preserveRollbackConflict(record.project, record);
+    record.status = 'conflict-preserved';
     record.rollback_conflict_path = conflictPath;
     record.rollback_conflict_at = new Date().toISOString();
     await atomicJson(recordPath, record);
     throw conflictError(`Rollback stopped because managed assets changed after migration. Current bytes were preserved at ${conflictPath}.`, 'ROLLBACK_CONFLICT');
   }
-  await restoreBackup(record.project, record.backup);
+  await restoreBackup(record.project, record.backup,{expectedCurrent});
   record.status = 'rolled-back';
   record.rolled_back_at = new Date().toISOString();
   await atomicJson(recordPath, record);

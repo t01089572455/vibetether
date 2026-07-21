@@ -45,8 +45,7 @@ export async function uninstallGlobalEntry({agent='both',bin_dir=null,dry_run=fa
   const dispatcher=renderGlobalDispatcher(VERSION); const plans=[];
   for (const name of selectedAdapters(agent)) {
     const target=path.join(skillRoot(name),'vibe-tether','SKILL.md'); const prior=await readTextIfPresent(target);
-    if (prior===null) continue; if (!portableTextEqual(prior,skill)) throw conflictError(`Refusing to remove modified global entry Skill: ${target}`,'FILE_COLLISION');
-    plans.push({target,remove:true});
+    if (prior!==null) { if (!portableTextEqual(prior,skill)) throw conflictError(`Refusing to remove modified global entry Skill: ${target}`,'FILE_COLLISION'); plans.push({target,remove:true}); }
     const deepTarget=path.join(skillRoot(name),'vibe-tether-deep','SKILL.md'); const priorDeep=await readTextIfPresent(deepTarget);
     if (priorDeep!==null) { if (!portableTextEqual(priorDeep,deepSkill)) throw conflictError(`Refusing to remove modified global deep Skill: ${deepTarget}`,'FILE_COLLISION'); plans.push({target:deepTarget,remove:true}); }
   }

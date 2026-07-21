@@ -8,7 +8,7 @@ import { startStep, finishStep, abandonStep, heartbeatStep, reanchorStep } from 
 import { discoverContract, skillsLockDigest } from './contract.mjs';
 import { parseTruthMap, renderTruthMap, addTruthCandidate, confirmTruthCandidate, declineTruthCandidate, authoritySnapshot } from './truth.mjs';
 import { writeProjectJson, writeProjectText, normalizeSignal, readJsonFile } from './files.mjs';
-import { breakLease, loadProviderStats, readRoute } from './runtime.mjs';
+import { breakLease, breakWorktreeStateLock, loadProviderStats, readRoute } from './runtime.mjs';
 import { validateExperienceIndex, createExperienceCandidate, confirmExperience, updateExperienceStatus, auditExperience } from './experience.mjs';
 import { attachFromDirectory, attachWorktree, listAttachedWorktrees, createWorktree, removeWorktree, pruneWorktrees, createHandoff, acceptHandoff, finishHandoff } from './worktree.mjs';
 import { loadProviderRegistry } from './provider-registry.mjs';
@@ -38,7 +38,7 @@ Usage:
   vibetether step start [--task TEXT | --phase PHASE --capability ID] --slice TEXT --success-evidence TEXT --success-check-json JSON [--signal ID] [--confirmed-by-user --decision-reason TEXT]
   vibetether step finish [--evidence-command-json JSON] --output-proof-json JSON --exit-proof-json JSON
   vibetether step abandon --reason TEXT
-  vibetether step heartbeat | reanchor | break-lease
+  vibetether step heartbeat | reanchor | break-lease | break-state-lock --reason TEXT --yes
   vibetether truth add|confirm|decline|list
   vibetether experience add|confirm|status|audit
   vibetether worktree attach|list|create|remove|prune
@@ -143,6 +143,7 @@ export async function main(args=[],runtime={}) {
     if (action==='heartbeat') return response(await heartbeatStep({project:options.project}),options.json);
     if (action==='reanchor') return response(await reanchorStep({project:options.project,reason:options.reason}),options.json);
     if (action==='break-lease') { const {runtime}=await contextRuntime(options.project); const route=await breakLease(runtime.paths,options.reason); return response({status:'lease-broken',route_status:route?.status??null,route_id:route?.id??null},options.json); }
+    if (action==='break-state-lock') { const {runtime}=await contextRuntime(options.project); return response(await breakWorktreeStateLock(runtime.paths,options.reason,{confirmed:options.yes===true}),options.json); }
     throw usageError('Unknown step action.');
   }
   if (command==='truth') {
