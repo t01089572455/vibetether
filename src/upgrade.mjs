@@ -1,25 +1,34 @@
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { cp, lstat, mkdir, readFile, rename, rm } from 'node:fs/promises';
+import { cp, lstat, mkdir, readFile, readdir, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { ADAPTERS, managedBlock, selectedAdapters } from './adapters.mjs';
-import { MANAGED_END, MANAGED_START, VERSION } from './constants.mjs';
+import {
+  DEFAULT_OUTCOMES, DEFAULT_PROGRESS, MANAGED_END, MANAGED_START, SCHEMA_VERSION, VERSION,
+} from './constants.mjs';
 import { discoverContract } from './contract.mjs';
 import { conflictError } from './errors.mjs';
 import {
   atomicJson, canonicalJson, copyVerifiedDirectory, exists, hashTree, portableTextEqual,
-  readJsonFile, readTextIfPresent, rejectAbsoluteSymlinkChain, sha256File, transactionalWrites,
+  readJsonFile, readTextIfPresent, rejectAbsoluteSymlinkChain, sha256File, sha256PortableFile, sha256Text, transactionalWrites,
 } from './files.mjs';
 import { gitIdentity } from './git.mjs';
 import { renderProjectLauncher } from './launcher.mjs';
 import { cacheRuntimePackage } from './release-cache.mjs';
 import { inspectLease, readRoute, runtimePaths } from './runtime.mjs';
 import { stateHome } from './paths.mjs';
+import { emptyOutcomeRegistry, renderInitialProgress } from './outcomes.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const RC1_BODY = `Use the \`vibe-tether\` Skill at task entry, after compaction or resume, before a consequential decision, and before completion or handoff.\n\nRun \`vibetether context --boundary <boundary> --json\` before reading VibeTether state. Follow only its confirmed truth handles, current slice, blockers, selected provider, and fresh applicable experience.\n\nDo not read raw VibeTether runtime state, provider catalogs, unselected Skills, or unselected experience. Do not alter project direction or activate project truth without the required user confirmation.`;
 const RC1_BLOCK = `${MANAGED_START}\n${RC1_BODY}\n${MANAGED_END}`;
+const HISTORICAL_ENTRY_DIGESTS = {
+  '1.0.0-rc.3': {
+    entry: 'b3d45043548cef069d53a264745fdcd932808743860f43a836a40b8ab6ad44c5',
+    deep: '55e42431ab31eb8f401c44de69b4921e916c606545c98f9cdedcf1b93ea969f4',
+  },
+};
 
 function legacyProjectLauncher(version) {
   return `#!/usr/bin/env node
@@ -133,6 +142,19 @@ async function inventoryItems(record, items) {
 
 function sameInventory(left, right) { return canonicalJson(left) === canonicalJson(right); }
 
+function digestLabel(state) { return state?.existed ? state.digest : 'absent'; }
+
+function lifecycleAssets(items, before, output = before, current = output) {
+  return Object.fromEntries(items.map((item) => [item.key, {
+    path: item.relative,
+    base: item.base,
+    action: item.action,
+    before_digest: digestLabel(before[item.key]),
+    migration_output_digest: digestLabel(output[item.key]),
+    current_digest: digestLabel(current[item.key]),
+  }]));
+}
+
 function recordRoot(id) { return path.join(stateHome(), 'upgrades', id); }
 
 async function copyItem(source, destination, kind) {
@@ -205,6 +227,7 @@ async function restoreItems(record, backup, { expectedCurrent = null } = {}) {
       });
       const failure=conflictError(`Upgrade rollback stopped because managed assets changed after upgrade. Before, upgrade-output, and current bytes were preserved at ${conflict}.`, 'ROLLBACK_CONFLICT');
       failure.conflict_path=conflict;
+      failure.current_inventory=current;
       throw failure;
     }
   }
@@ -256,18 +279,40 @@ async function restoreItems(record, backup, { expectedCurrent = null } = {}) {
 
 function upgradeItems(context, adapters) {
   const items = [
-    { key: 'contract:manifest', base: 'contract', relative: '.vibetether/project.json' },
-    { key: 'contract:launcher', base: 'contract', relative: context.manifest.launcher },
+    { key: 'contract:manifest', base: 'contract', relative: '.vibetether/project.json', action: 'replace' },
+    { key: 'contract:intent', base: 'contract', relative: context.manifest.intent, action: 'preserve' },
+    { key: 'contract:truth', base: 'contract', relative: context.manifest.truth_index, action: 'preserve' },
+    { key: 'contract:experience', base: 'contract', relative: context.manifest.experience_index, action: 'preserve' },
+    { key: 'contract:skills-lock', base: 'contract', relative: context.manifest.skills_lock, action: 'preserve' },
+    { key: 'contract:routes', base: 'contract', relative: context.manifest.routes, action: 'preserve' },
+    { key: 'contract:launcher', base: 'contract', relative: context.manifest.launcher, action: 'replace' },
   ];
+  if (context.manifest.schema_version < SCHEMA_VERSION) {
+    items.push(
+      { key: 'contract:outcomes', base: 'contract', relative: DEFAULT_OUTCOMES, action: 'create' },
+      { key: 'contract:progress', base: 'contract', relative: DEFAULT_PROGRESS, action: 'create' },
+    );
+  } else {
+    items.push(
+      { key: 'contract:outcomes', base: 'contract', relative: context.manifest.outcome_index, action: 'preserve' },
+      { key: 'contract:progress', base: 'contract', relative: context.manifest.progress_projection, action: 'preserve' },
+    );
+    for (const source of context.outcomes?.coverage_sources ?? []) items.push({
+      key: `contract:mapping:${source.id}`,
+      base: 'contract',
+      relative: source.mapping_path,
+      action: 'preserve',
+    });
+  }
   for (const adapter of adapters) {
     const config = ADAPTERS[adapter];
     items.push(
-      { key: `host:${adapter}:instructions`, base: 'host', relative: config.instruction },
-      { key: `host:${adapter}:skill`, base: 'host', relative: path.posix.dirname(config.skill) },
-      { key: `host:${adapter}:deep-skill`, base: 'host', relative: path.posix.dirname(config.deepSkill) },
+      { key: `host:${adapter}:instructions`, base: 'host', relative: config.instruction, action: 'replace-managed-block' },
+      { key: `host:${adapter}:skill`, base: 'host', relative: path.posix.dirname(config.skill), action: 'replace' },
+      { key: `host:${adapter}:deep-skill`, base: 'host', relative: path.posix.dirname(config.deepSkill), action: 'replace' },
     );
   }
-  return items;
+  return items.filter((item, index, all) => all.findIndex((candidate) => candidate.base === item.base && candidate.relative === item.relative) === index);
 }
 
 async function assertNoActiveWork(context) {
@@ -286,6 +331,16 @@ async function assertNoActiveWork(context) {
   }
 }
 
+async function isRecognizedEntrySkill(root, currentTreeDigest, version, kind) {
+  if (!await exists(root)) return false;
+  if (await hashTree(root)===currentTreeDigest) return true;
+  const expected=HISTORICAL_ENTRY_DIGESTS[version]?.[kind];
+  if (!expected) return false;
+  const entries=await readdir(root,{withFileTypes:true});
+  if (entries.length!==1||entries[0].name!=='SKILL.md'||!entries[0].isFile()||entries[0].isSymbolicLink()) return false;
+  return await sha256PortableFile(path.join(root,'SKILL.md'))===expected;
+}
+
 async function validateUpgradeSurface(context, adapters) {
   const entryRoot = path.join(packageRoot, 'skills', 'vibe-tether');
   const deepRoot = path.join(packageRoot, 'skills', 'vibe-tether-deep');
@@ -298,9 +353,9 @@ async function validateUpgradeSurface(context, adapters) {
     extractManagedBlock(instructions, config.instruction);
     replaceKnownManagedBlock(instructions, config.instruction);
     const skillRoot = path.join(context.executionRoot, path.dirname(config.skill));
-    if (!await exists(skillRoot) || await hashTree(skillRoot) !== entryDigest) throw conflictError(`Refusing to upgrade a different or modified entry Skill: ${path.posix.dirname(config.skill)}`, 'FILE_COLLISION');
+    if (!await isRecognizedEntrySkill(skillRoot,entryDigest,context.manifest.vibetether_version,'entry')) throw conflictError(`Refusing to upgrade a different or modified entry Skill: ${path.posix.dirname(config.skill)}`, 'FILE_COLLISION');
     const deepSkillRoot = path.join(context.executionRoot, path.dirname(config.deepSkill));
-    if (await exists(deepSkillRoot) && await hashTree(deepSkillRoot) !== deepDigest) throw conflictError(`Refusing to upgrade a different or modified deep entry Skill: ${path.posix.dirname(config.deepSkill)}`, 'FILE_COLLISION');
+    if (await exists(deepSkillRoot)&&!await isRecognizedEntrySkill(deepSkillRoot,deepDigest,context.manifest.vibetether_version,'deep')) throw conflictError(`Refusing to upgrade a different or modified deep entry Skill: ${path.posix.dirname(config.deepSkill)}`, 'FILE_COLLISION');
   }
   const launcherPath = path.join(context.root, ...context.manifest.launcher.split('/'));
   const launcher = await readTextIfPresent(launcherPath);
@@ -317,27 +372,29 @@ async function upgradeContext(options = {}) {
   const adapters = selectedAdapters(options.agent ?? 'both');
   await assertNoActiveWork(context);
   await validateUpgradeSurface(context, adapters);
-  return { context, adapters, relation };
+  const schema_upgrade = context.manifest.schema_version < SCHEMA_VERSION;
+  return { context, adapters, relation, schema_upgrade };
 }
 
 export async function planUpgrade(options = {}) {
-  const { context, adapters, relation } = await upgradeContext(options);
+  const { context, adapters, relation, schema_upgrade } = await upgradeContext(options);
   const items = upgradeItems(context, adapters);
   return {
     schema_version: 1,
-    status: relation === 0 ? 'current' : 'preview',
+    status: relation === 0 && !schema_upgrade ? 'current' : 'preview',
     project: context.executionRoot,
     contract_root: context.root,
     from_version: context.manifest.vibetether_version,
     to_version: VERSION,
-    files: items.flatMap((item) => item.kind === 'directory' ? [] : [item.relative]).concat(adapters.flatMap((adapter) => [ADAPTERS[adapter].skill, ADAPTERS[adapter].deepSkill])).filter((value, index, values) => values.indexOf(value) === index),
-    rollback: relation === 0 ? null : 'external verified backup with post-upgrade modification protection',
+    operations: items.map((item) => ({ action: item.action, path: item.relative, root: item.base })),
+    files: items.map((item) => item.relative).concat(adapters.flatMap((adapter) => [ADAPTERS[adapter].skill, ADAPTERS[adapter].deepSkill])).filter((value, index, values) => values.indexOf(value) === index),
+    rollback: relation === 0 && !schema_upgrade ? null : 'external verified backup with post-upgrade modification protection',
   };
 }
 
 export async function upgradeProject(options = {}, runtimeHooks = {}) {
   const prepared = await upgradeContext(options);
-  if (prepared.relation === 0) return { status: 'current', project: prepared.context.executionRoot, version: VERSION };
+  if (prepared.relation === 0 && !prepared.schema_upgrade) return { status: 'current', project: prepared.context.executionRoot, version: VERSION };
   if (!options.yes) throw conflictError('Upgrade requires --yes or --dry-run.', 'CONFIRMATION_REQUIRED');
   const context = prepared.context;
   const id = `upgrade-${randomUUID()}`;
@@ -358,15 +415,30 @@ export async function upgradeProject(options = {}, runtimeHooks = {}) {
   const { backup, manifest: backupManifest } = await createBackup(record, items);
   record.backup = backup;
   record.before_inventory = backupManifest.before_inventory;
+  record.lifecycle_assets = lifecycleAssets(items, record.before_inventory);
   const recordPath = path.join(recordRoot(id), 'upgrade.json');
   await atomicJson(recordPath, record);
   try {
     await cacheRuntimePackage({ version: VERSION });
-    const nextManifest = { ...context.manifest, vibetether_version: VERSION, control_generation: randomUUID() };
+    const nextManifest = {
+      ...context.manifest,
+      schema_version: SCHEMA_VERSION,
+      vibetether_version: VERSION,
+      control_generation: randomUUID(),
+      outcome_index: context.manifest.outcome_index ?? DEFAULT_OUTCOMES,
+      progress_projection: context.manifest.progress_projection ?? DEFAULT_PROGRESS,
+    };
     const plans = [
       { target: path.join(context.root, '.vibetether', 'project.json'), content: canonicalJson(nextManifest), mode: 0o644 },
       { target: path.join(context.root, ...context.manifest.launcher.split('/')), content: renderProjectLauncher(VERSION), mode: 0o755 },
     ];
+    if (prepared.schema_upgrade) {
+      const outcomes = emptyOutcomeRegistry('goal_project_delivery', `sha256:${sha256Text(context.intentSource)}`);
+      plans.push(
+        { target: path.join(context.root, ...nextManifest.outcome_index.split('/')), content: canonicalJson(outcomes), mode: 0o644 },
+        { target: path.join(context.root, ...nextManifest.progress_projection.split('/')), content: renderInitialProgress(outcomes), mode: 0o644 },
+      );
+    }
     const entry = await readFile(path.join(packageRoot, 'skills', 'vibe-tether', 'SKILL.md'), 'utf8');
     const deep = await readFile(path.join(packageRoot, 'skills', 'vibe-tether-deep', 'SKILL.md'), 'utf8');
     for (const adapter of prepared.adapters) {
@@ -381,6 +453,7 @@ export async function upgradeProject(options = {}, runtimeHooks = {}) {
     if (verified.manifest.vibetether_version !== VERSION || verified.manifest.control_generation !== nextManifest.control_generation) throw conflictError('Upgraded Project Contract did not validate.', 'UPGRADE_FAILED');
     if (typeof runtimeHooks.afterApply === 'function') await runtimeHooks.afterApply({ context, id, record });
     record.output_inventory = await inventoryItems(record, items);
+    record.lifecycle_assets = lifecycleAssets(items, record.before_inventory, record.output_inventory);
     record.output_snapshot=path.join(recordRoot(id),'output');
     await snapshotItems(record,items,record.output_snapshot);
     record.status = 'applied';
@@ -431,10 +504,17 @@ export async function rollbackUpgrade({ id, yes = false } = {}) {
       record.status='conflict-preserved';
       record.rollback_conflict_path=cause.conflict_path??null;
       record.rollback_conflict_at=new Date().toISOString();
+      if (cause.current_inventory) record.lifecycle_assets = lifecycleAssets(
+        Object.values((await readJsonFile(path.join(record.backup, 'backup-manifest.json'), 'Upgrade backup manifest')).items),
+        record.before_inventory,
+        record.output_inventory ?? record.failure_inventory ?? record.before_inventory,
+        cause.current_inventory,
+      );
       await atomicJson(recordPath,record);
     }
     throw cause;
   }
+  for (const asset of Object.values(record.lifecycle_assets??{})) asset.current_digest=asset.before_digest;
   record.status = 'rolled-back';
   record.rolled_back_at = new Date().toISOString();
   await atomicJson(recordPath, record);

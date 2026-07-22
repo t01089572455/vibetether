@@ -63,6 +63,41 @@ function legacySourcePaths(source) {
   return [...new Set(output)];
 }
 
+const LEGACY_TRACKER_PATHS = [
+  '.vibetether/coverage.json', '.vibetether/outcomes.json', '.vibetether/outcomes.yaml',
+  '.vibetether/PROGRESS.md', 'PROGRESS.md', 'ROADMAP.md', 'TODO.md',
+];
+const TRACKER_COLLISION_DESTINATIONS = new Map([
+  ['.vibetether/outcomes.json', '.vibetether/legacy-candidates/outcomes.json'],
+  ['.vibetether/PROGRESS.md', '.vibetether/legacy-candidates/PROGRESS.md'],
+]);
+
+async function discoverLegacyTrackers(root) {
+  const trackers=[];
+  for (const relative of LEGACY_TRACKER_PATHS) {
+    const target=path.join(root,...relative.split('/'));
+    if (!await exists(target)) continue;
+    const metadata=await lstat(target);
+    if (!metadata.isFile()||metadata.isSymbolicLink()) continue;
+    let candidatePath=TRACKER_COLLISION_DESTINATIONS.get(relative)??relative;
+    if (candidatePath!==relative) {
+      const candidateTarget=path.join(root,...candidatePath.split('/'));
+      if (await exists(candidateTarget) && await sha256File(candidateTarget)!==await sha256File(target)) {
+        const extension=path.posix.extname(candidatePath);
+        candidatePath=`${candidatePath.slice(0,-extension.length)}-${(await sha256File(target)).slice(0,12)}${extension}`;
+      }
+    }
+    trackers.push({
+      path:relative,
+      candidate_path:candidatePath,
+      role:'legacy-tracker',
+      destination:'candidate',
+      reason:'An unknown legacy progress or coverage tracker is preserved for explicit user review and never inferred as a requirement source.',
+    });
+  }
+  return trackers;
+}
+
 
 
 
@@ -402,7 +437,7 @@ function replaceLegacyManagedBlock(source) {
   return `${content.slice(0, start)}${managedBlock()}${content.slice(end + MANAGED_END.length)}`;
 }
 
-export async function planMigration({ project = process.cwd(), control_mode = 'team' } = {}) {
+export async function planMigration({ project = process.cwd(), control_mode = 'team', agent = 'both' } = {}) {
   const root = path.resolve(project);
   const legacyManifest = path.join(root, '.vibetether', 'project.yaml');
   if (!await exists(legacyManifest)) throw conflictError('No 0.x VibeTether project.yaml was found.', 'MIGRATION_NOT_APPLICABLE');
@@ -411,12 +446,44 @@ export async function planMigration({ project = process.cwd(), control_mode = 't
   const source = await readFile(legacyManifest, 'utf8');
   const truthPath = safeRelative(yamlScalar(source, 'truth_index') ?? '.vibetether/TRUTH.md', 'Legacy Truth index');
   const truthSource = await readTextIfPresent(path.join(root, ...truthPath.split('/')));
+  const truthDestination=migrationTruthIndex(truthPath);
+  const trackerCandidates=await discoverLegacyTrackers(root);
+  const operations=[
+    {action:'preserve',path:'.vibetether/project.yaml'},
+    {action:'preserve',path:truthPath},
+    {action:'replace',path:'.vibetether/intent.md'},
+    {action:'preserve',path:'.vibetether/experience-index.yaml'},
+    {action:'preserve',path:'.vibetether/routes.local.yaml'},
+    {action:'preserve',path:'.vibetether/providers.lock.yaml'},
+    ...trackerCandidates.flatMap((item)=>item.candidate_path===item.path
+      ? [{action:'preserve-candidate',path:item.path}]
+      : [{action:'preserve',path:item.path},{action:'create-candidate-copy',path:item.candidate_path,source:item.path}]),
+    {action:'create',path:'.vibetether/project.json'},
+    {action:'create',path:truthDestination},
+    {action:'create',path:'.vibetether/experience.json'},
+    {action:'create',path:'.vibetether/skills.lock.json'},
+    {action:'create',path:'.vibetether/routes.json'},
+    {action:'create',path:'.vibetether/vt.mjs'},
+    {action:'create',path:'.vibetether/outcomes.json'},
+    {action:'create',path:'.vibetether/PROGRESS.md'},
+    ...['capabilities.yaml','providers.lock.yaml','providers','licenses','state','bin'].map((item)=>({action:'remove-after-verified-backup',path:`.vibetether/${item}`})),
+  ];
+  for (const adapter of selectedAdapters(agent)) {
+    const config=ADAPTERS[adapter];
+    operations.push(
+      {action:'replace-managed-block',path:config.instruction},
+      {action:'replace',path:path.posix.dirname(config.skill)},
+      {action:'create-or-replace',path:path.posix.dirname(config.deepSkill)},
+    );
+  }
   return {
     schema_version: 1,
     status: 'preview',
     project: root,
     control_mode,
     legacy_sources: legacySourcePaths(source).map((item) => ({ path: item, destination: 'candidate' })),
+    tracker_candidates: trackerCandidates,
+    operations,
     truth: { path: truthPath, canonical: truthSource?.includes('vibetether:truth-map-v1') === true, action: truthSource?.includes('vibetether:truth-map-v1') ? 'preserve-map' : 'preserve-prose-and-create-sidecar' },
     experience: { action: 'downgrade-all-proven-to-provisional' },
     routes: { action: 'preserve-and-resolve-installed-providers', path: '.vibetether/routes.local.yaml' },
@@ -427,6 +494,64 @@ export async function planMigration({ project = process.cwd(), control_mode = 't
 }
 
 const MIGRATION_MANAGED_PATHS = ['.vibetether', '.agents', '.claude', 'AGENTS.md', 'CLAUDE.md', '.gitignore'];
+
+function migrationAssetItems(plan, agent) {
+  const items=[
+    {key:'legacy:manifest',relative:'.vibetether/project.yaml'},
+    {key:'legacy:truth',relative:plan.truth.path},
+    {key:'legacy:experience',relative:'.vibetether/experience-index.yaml'},
+    {key:'legacy:routes',relative:'.vibetether/routes.local.yaml'},
+    {key:'contract:manifest',relative:'.vibetether/project.json'},
+    {key:'contract:intent',relative:'.vibetether/intent.md'},
+    {key:'contract:truth',relative:migrationTruthIndex(plan.truth.path)},
+    {key:'contract:experience',relative:'.vibetether/experience.json'},
+    {key:'contract:skills-lock',relative:'.vibetether/skills.lock.json'},
+    {key:'contract:routes',relative:'.vibetether/routes.json'},
+    {key:'contract:launcher',relative:'.vibetether/vt.mjs'},
+    {key:'contract:outcomes',relative:'.vibetether/outcomes.json'},
+    {key:'contract:progress',relative:'.vibetether/PROGRESS.md'},
+    ...plan.tracker_candidates.flatMap((tracker)=>[
+      {key:`legacy:tracker-source:${tracker.path}`,relative:tracker.path},
+      ...(tracker.candidate_path===tracker.path?[]:[{key:`legacy:tracker-candidate:${tracker.candidate_path}`,relative:tracker.candidate_path}]),
+    ]),
+  ];
+  for (const adapter of selectedAdapters(agent)) {
+    const config=ADAPTERS[adapter];
+    items.push(
+      {key:`host:${adapter}:instructions`,relative:config.instruction},
+      {key:`host:${adapter}:skill`,relative:path.posix.dirname(config.skill)},
+      {key:`host:${adapter}:deep-skill`,relative:path.posix.dirname(config.deepSkill)},
+    );
+  }
+  return items.filter((item,index,all)=>all.findIndex((candidate)=>candidate.relative===item.relative)===index);
+}
+
+async function migrationAssetState(root, relative) {
+  const target=path.join(root,...relative.split('/'));
+  if (!await exists(target)) return {existed:false,kind:null,digest:null};
+  const metadata=await lstat(target);
+  if (metadata.isSymbolicLink()) throw conflictError(`Migration lifecycle inventory refuses linked path: ${relative}`,'UNSAFE_PATH');
+  if (metadata.isDirectory()) return {existed:true,kind:'directory',digest:await hashTree(target)};
+  if (metadata.isFile()) return {existed:true,kind:'file',digest:await sha256File(target)};
+  throw conflictError(`Migration lifecycle inventory requires a regular file or directory: ${relative}`,'UNSAFE_FILE');
+}
+
+async function inventoryMigrationAssets(root, items) {
+  const inventory={};
+  for (const item of items) inventory[item.key]=await migrationAssetState(root,item.relative);
+  return inventory;
+}
+
+function migrationDigestLabel(state) { return state?.existed ? state.digest : 'absent'; }
+
+function migrationLifecycleAssets(items,before,output=before,current=output) {
+  return Object.fromEntries(items.map((item)=>[item.key,{
+    path:item.relative,
+    before_digest:migrationDigestLabel(before[item.key]),
+    migration_output_digest:migrationDigestLabel(output[item.key]),
+    current_digest:migrationDigestLabel(current[item.key]),
+  }]));
+}
 
 async function inventoryManagedPaths(root) {
   const inventory = {};
@@ -566,9 +691,12 @@ export async function migrate(options = {}, runtimeHooks = {}) {
   const id = `migration-${randomUUID()}`;
   const createBackup = runtimeHooks.backupProject ?? backupProject;
   const backup = await createBackup(root, id);
+  const lifecycleItems=migrationAssetItems(plan,options.agent??'both');
+  const lifecycleBefore=await inventoryMigrationAssets(root,lifecycleItems);
   const record = {
     schema_version: 1, id, project: root, backup, created_at: new Date().toISOString(), status: 'applying', plan,
     recovery: { attempted: false, completed: false, errors: [] },
+    lifecycle_assets:migrationLifecycleAssets(lifecycleItems,lifecycleBefore),
   };
   const recordPath = path.join(migrationRoot(id), 'migration.json');
   await atomicJson(recordPath, record);
@@ -590,6 +718,18 @@ export async function migrate(options = {}, runtimeHooks = {}) {
         registered.add(sourcePath);
       } catch {
         // Unsafe legacy paths remain available only in the external backup.
+      }
+    }
+    const legacyTrackers=await discoverLegacyTrackers(root);
+    for (const tracker of legacyTrackers) {
+      if (registered.has(tracker.candidate_path)) continue;
+      try {
+        truthMap=addTruthCandidate(truthMap,{
+          path:tracker.candidate_path,role:tracker.role,scope:'.',source:'0.x-tracker-migration',reason:tracker.reason,
+        });
+        registered.add(tracker.candidate_path);
+      } catch {
+        // Unsafe or conflicting tracker paths remain only in the verified external backup.
       }
     }
     if (truthIndex !== legacyTruthPath && legacyTruthSource !== null && !legacyTruthSource.includes('vibetether:truth-map-v1') && !registered.has(legacyTruthPath)) {
@@ -618,6 +758,10 @@ export async function migrate(options = {}, runtimeHooks = {}) {
       { target: path.join(root, ...manifest.outcome_index.split('/')), content: canonicalJson(outcomes) },
       { target: path.join(root, ...manifest.progress_projection.split('/')), content: renderInitialProgress(outcomes) },
     ];
+    for (const tracker of legacyTrackers) if (tracker.candidate_path!==tracker.path) plans.push({
+      target:path.join(root,...tracker.candidate_path.split('/')),
+      content:await readFile(path.join(root,...tracker.path.split('/'))),
+    });
     for (const adapter of selectedAdapters(options.agent ?? 'both')) {
       const config = ADAPTERS[adapter];
       plans.push({ target: path.join(root, config.instruction), content: replaceLegacyManagedBlock(await readTextIfPresent(path.join(root, config.instruction))) });
@@ -652,6 +796,8 @@ export async function migrate(options = {}, runtimeHooks = {}) {
     }
     if (typeof runtimeHooks.afterApply === 'function') await runtimeHooks.afterApply({ root, id, record });
     record.output_inventory = await inventoryManagedPaths(root);
+    const lifecycleOutput=await inventoryMigrationAssets(root,lifecycleItems);
+    record.lifecycle_assets=migrationLifecycleAssets(lifecycleItems,lifecycleBefore,lifecycleOutput);
     record.output_snapshot=path.join(migrationRoot(id),'output');
     await copyManagedSnapshot(root,record.output_snapshot);
     record.status = 'applied';
@@ -705,6 +851,13 @@ export async function rollbackMigration({ id, yes = false } = {}) {
       return { status: 'already-restored', migration_id: id, project: record.project };
     }
     const conflictPath = await preserveRollbackConflict(record.project, record);
+    const lifecycleItems=Object.entries(record.lifecycle_assets??{}).map(([key,value])=>({key,relative:value.path}));
+    if (lifecycleItems.length) {
+      const currentAssets=await inventoryMigrationAssets(record.project,lifecycleItems);
+      const before=Object.fromEntries(lifecycleItems.map((item)=>[item.key,{existed:record.lifecycle_assets[item.key].before_digest!=='absent',digest:record.lifecycle_assets[item.key].before_digest}]));
+      const output=Object.fromEntries(lifecycleItems.map((item)=>[item.key,{existed:record.lifecycle_assets[item.key].migration_output_digest!=='absent',digest:record.lifecycle_assets[item.key].migration_output_digest}]));
+      record.lifecycle_assets=migrationLifecycleAssets(lifecycleItems,before,output,currentAssets);
+    }
     record.status = 'conflict-preserved';
     record.rollback_conflict_path = conflictPath;
     record.rollback_conflict_at = new Date().toISOString();
@@ -712,6 +865,7 @@ export async function rollbackMigration({ id, yes = false } = {}) {
     throw conflictError(`Rollback stopped because managed assets changed after migration. Current bytes were preserved at ${conflictPath}.`, 'ROLLBACK_CONFLICT');
   }
   await restoreBackup(record.project, record.backup,{expectedCurrent});
+  for (const asset of Object.values(record.lifecycle_assets??{})) asset.current_digest=asset.before_digest;
   record.status = 'rolled-back';
   record.rolled_back_at = new Date().toISOString();
   await atomicJson(recordPath, record);

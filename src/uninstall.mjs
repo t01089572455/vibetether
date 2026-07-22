@@ -4,8 +4,9 @@ import path from 'node:path';
 import { conflictError } from './errors.mjs';
 import { ADAPTERS, hasCanonicalManagedBlock, removeManagedBlock, selectedAdapters } from './adapters.mjs';
 import { discoverContract } from './contract.mjs';
-import { portableTextEqual, readTextIfPresent, transactionalWrites } from './files.mjs';
+import { canonicalJson, portableTextEqual, readJsonFile, readTextIfPresent, transactionalWrites } from './files.mjs';
 import { renderProjectLauncher } from './launcher.mjs';
+import { renderInitialProgress, validateOutcomeRegistry } from './outcomes.mjs';
 
 const packageRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 export async function uninstallProject({project=process.cwd(),agent='both',dry_run=false,yes=false,remove_contract=false}={}) {
@@ -31,6 +32,18 @@ export async function uninstallProject({project=process.cwd(),agent='both',dry_r
     plans.push({target:launcher,remove:true});
   }
   if (remove_contract) {
+    if (context.manifest.schema_version === 2) {
+      const outcomesPath=path.join(context.root,...context.manifest.outcome_index.split('/'));
+      const outcomesSource=await readTextIfPresent(outcomesPath);
+      if (outcomesSource===null) throw conflictError(`Refusing to remove missing Outcome registry: ${context.manifest.outcome_index}`,'FILE_COLLISION');
+      const outcomes=validateOutcomeRegistry(await readJsonFile(outcomesPath,'Outcome registry'));
+      const userGoverned=outcomes.coverage_status!=='draft'||outcomes.coverage_decision!==null||outcomes.integration_worktree_id!==null||outcomes.coverage_sources.length||outcomes.validator_migrations.length||outcomes.outcomes.length;
+      if (userGoverned||!portableTextEqual(outcomesSource,canonicalJson(outcomes))) throw conflictError(`Refusing to remove modified Outcome registry: ${context.manifest.outcome_index}`,'FILE_COLLISION');
+      const progressPath=path.join(context.root,...context.manifest.progress_projection.split('/'));
+      const progressSource=await readTextIfPresent(progressPath);
+      if (progressSource===null||!portableTextEqual(progressSource,renderInitialProgress(outcomes))) throw conflictError(`Refusing to remove modified generated Progress projection: ${context.manifest.progress_projection}`,'FILE_COLLISION');
+      plans.push({target:outcomesPath,remove:true},{target:progressPath,remove:true});
+    }
     for (const relative of ['.vibetether/project.json',context.manifest.intent,context.manifest.truth_index,context.manifest.experience_index,context.manifest.skills_lock,context.manifest.routes]) plans.push({target:path.join(context.root,...relative.split('/')),remove:true});
   }
   if (dry_run) return {status:'preview',preserves_user_contract:!remove_contract,files:plans.map((item)=>path.relative(context.root,item.target).replaceAll('\\','/'))};
