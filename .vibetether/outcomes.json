@@ -1,0 +1,470 @@
+{
+  "coverage_decision": {
+    "action": "confirm-coverage",
+    "id": "decision-0b3b2252-ec1f-4ece-88a5-e62403a079a7",
+    "prior_registry_digest": "sha256:e07d49f8a025137bd8360f23b5c633031089613cce1283e9e1de3be69647278b",
+    "reason": "A+B.",
+    "recorded_at": "2026-07-22T15:00:30.349Z",
+    "result_registry_digest": "sha256:5299d738eb25cf9a5993b5c1dc206a7bb57f39182c8217350c61e95d816ae686",
+    "target_ids": [
+      "goal_project_delivery"
+    ],
+    "user_message_locator": "user:gate-a-b"
+  },
+  "coverage_sources": [],
+  "coverage_status": "confirmed",
+  "goal_id": "goal_project_delivery",
+  "goal_revision_digest": "sha256:6cd4b2d96845a9ce4f94f9c96ba93ba07149983ecf49a9f8d350b2c8156efa0e",
+  "integration_worktree_id": "05b073ee-dea8-4958-b124-41514a767f94",
+  "outcomes": [
+    {
+      "acceptance": [
+        {
+          "claim": "Custody and isolation are preserved.",
+          "evidence_kind": "command",
+          "id": "acceptance_stage0_custody",
+          "required_maturity": "functional",
+          "validator": {
+            "command": [
+              "node",
+              "--test",
+              "test/stage0-readme.test.mjs"
+            ],
+            "covers_paths": [
+              "test/stage0-readme.test.mjs"
+            ],
+            "kind": "command",
+            "validator_revision": "sha256:97ae6d57cf51a34196375fada7e0f08c55a41bd13beeedf5a1be5e5074e27062"
+          }
+        }
+      ],
+      "authority_sources": [
+        "truth:truth-9a5e5b11f127ce48"
+      ],
+      "decision_receipt": {
+        "action": "confirm-required",
+        "id": "decision-11b8d812-d3ff-4f16-aadc-0718e541ee01",
+        "prior_registry_digest": "sha256:a5a15954c1bd21f350a188f1a9ec2661f6f3fc1965f8bb528e8de65b52153b0f",
+        "reason": "A+B.",
+        "recorded_at": "2026-07-22T15:00:27.719Z",
+        "result_registry_digest": "sha256:8056cd081b3216df512afd015adbb988bc2527242b07cbfc84a868acf4e33666",
+        "target_ids": [
+          "outcome_stage0_custody"
+        ],
+        "user_message_locator": "user:gate-a-b"
+      },
+      "dependencies": [],
+      "disposition": "required",
+      "id": "outcome_stage0_custody",
+      "parent_id": null,
+      "required_at": [
+        "goal"
+      ],
+      "revision_digest": "sha256:f1da32779ac0447d6f0eef7ecd597fce2a948e013027412230118dd3d285a536",
+      "superseded_by": [],
+      "title": "S0-O1"
+    },
+    {
+      "acceptance": [
+        {
+          "claim": "Contract and status agree.",
+          "evidence_kind": "command",
+          "id": "acceptance_stage0_self_control",
+          "required_maturity": "functional",
+          "validator": {
+            "command": [
+              "node",
+              "--test",
+              "test/stage0-self-control.test.mjs"
+            ],
+            "covers_paths": [
+              "test/stage0-self-control.test.mjs"
+            ],
+            "kind": "command",
+            "validator_revision": "sha256:4b04ebd46ee87653003cbf6a806f6890308784713f3e6df5999534765987e5f6"
+          }
+        }
+      ],
+      "authority_sources": [
+        "truth:truth-9a5e5b11f127ce48"
+      ],
+      "decision_receipt": {
+        "action": "confirm-required",
+        "id": "decision-aaef086a-8d48-4517-bd38-e7b83d7d06a9",
+        "prior_registry_digest": "sha256:8056cd081b3216df512afd015adbb988bc2527242b07cbfc84a868acf4e33666",
+        "reason": "A+B.",
+        "recorded_at": "2026-07-22T15:00:28.077Z",
+        "result_registry_digest": "sha256:3904c62a145930232e7eea9deb0fccb265fdb767dfcc6d90c9819e75e6ad87a5",
+        "target_ids": [
+          "outcome_stage0_self_control"
+        ],
+        "user_message_locator": "user:gate-a-b"
+      },
+      "dependencies": [],
+      "disposition": "required",
+      "id": "outcome_stage0_self_control",
+      "parent_id": null,
+      "required_at": [
+        "goal"
+      ],
+      "revision_digest": "sha256:d738acd74909de2b1137b5a11a9b5e8058f6044214b5208e19a155992396c516",
+      "superseded_by": [],
+      "title": "S0-O2"
+    },
+    {
+      "acceptance": [
+        {
+          "claim": "Inventory audit passes.",
+          "evidence_kind": "command",
+          "id": "acceptance_stage0_inventory",
+          "required_maturity": "functional",
+          "validator": {
+            "command": [
+              "node",
+              "scripts/audit-stage0-baseline.mjs"
+            ],
+            "covers_paths": [
+              "scripts/audit-stage0-baseline.mjs"
+            ],
+            "kind": "command",
+            "validator_revision": "sha256:c6cbd0b1344cb5cf59cc4168a7170c132eb6afc2bef85b18995f4471401cda11"
+          }
+        }
+      ],
+      "authority_sources": [
+        "truth:truth-9a5e5b11f127ce48"
+      ],
+      "decision_receipt": {
+        "action": "confirm-required",
+        "id": "decision-9e998b18-c2d2-4e64-92d5-bd929c65dd60",
+        "prior_registry_digest": "sha256:3904c62a145930232e7eea9deb0fccb265fdb767dfcc6d90c9819e75e6ad87a5",
+        "reason": "A+B.",
+        "recorded_at": "2026-07-22T15:00:28.399Z",
+        "result_registry_digest": "sha256:2346b35b19b0aced4dfe8d287143d80aa623ca9dee7538fba5a0f1b46c55f7d6",
+        "target_ids": [
+          "outcome_stage0_inventory"
+        ],
+        "user_message_locator": "user:gate-a-b"
+      },
+      "dependencies": [],
+      "disposition": "required",
+      "id": "outcome_stage0_inventory",
+      "parent_id": null,
+      "required_at": [
+        "goal"
+      ],
+      "revision_digest": "sha256:b8f17fb52f9cca5da0ed60f2874a2205bcd7d678bf6f866606203c35102a6fcc",
+      "superseded_by": [],
+      "title": "S0-O3"
+    },
+    {
+      "acceptance": [
+        {
+          "claim": "UI direction is owner-approved.",
+          "evidence_kind": "user-decision",
+          "id": "acceptance_ui_golden_screen",
+          "required_maturity": "owner-accepted",
+          "validator": {
+            "covers_paths": [],
+            "decision_type": "stage0-ui-golden",
+            "kind": "user-decision",
+            "validator_revision": "sha256:551df892bc69dc2a3d9c1df3d8951030975adbaff993d374fb4261cb479a8d07"
+          }
+        },
+        {
+          "claim": "UI function is accepted.",
+          "evidence_kind": "command",
+          "id": "acceptance_ui_functional",
+          "required_maturity": "functional",
+          "validator": {
+            "command": [
+              "node",
+              "--test",
+              "--test-name-pattern=propagation gate",
+              "test/stage0-ui-control.test.mjs"
+            ],
+            "covers_paths": [
+              "test/stage0-ui-control.test.mjs"
+            ],
+            "kind": "command",
+            "validator_revision": "sha256:aa0fabe95ba392749a19a008ad450029dbc8ba005cbed35d8e98e3b7aff98ca6"
+          }
+        },
+        {
+          "claim": "UI visuals are reviewed.",
+          "evidence_kind": "review-decision",
+          "id": "acceptance_ui_visual",
+          "required_maturity": "reviewed",
+          "validator": {
+            "covers_paths": [],
+            "decision_type": "ui-visual-review",
+            "kind": "review-decision",
+            "validator_revision": "sha256:2739a8c01dfd0d5060e3dee7918d3db7ad0012888fc6fb8674e6b3cf9ea8f612"
+          }
+        },
+        {
+          "claim": "Re-entry contracts pass.",
+          "evidence_kind": "command",
+          "id": "acceptance_stage0_reentry",
+          "required_maturity": "functional",
+          "validator": {
+            "command": [
+              "node",
+              "--test",
+              "test/stage0-entry-reentry.test.mjs"
+            ],
+            "covers_paths": [
+              "test/stage0-entry-reentry.test.mjs"
+            ],
+            "kind": "command",
+            "validator_revision": "sha256:d0c894578a0c423e36db0009bfa1f7c62b893b68cc32e9dbd6214e215335efc9"
+          }
+        }
+      ],
+      "authority_sources": [
+        "truth:truth-9a5e5b11f127ce48"
+      ],
+      "decision_receipt": {
+        "action": "confirm-required",
+        "id": "decision-7526ca62-c166-446d-aba2-b127c11e1fca",
+        "prior_registry_digest": "sha256:2346b35b19b0aced4dfe8d287143d80aa623ca9dee7538fba5a0f1b46c55f7d6",
+        "reason": "A+B.",
+        "recorded_at": "2026-07-22T15:00:28.697Z",
+        "result_registry_digest": "sha256:c213649ccbca3ba612f7a8a97ee331f31b03693813c5e2b63ef0f04790e838e1",
+        "target_ids": [
+          "outcome_stage0_ui_reentry"
+        ],
+        "user_message_locator": "user:gate-a-b"
+      },
+      "dependencies": [],
+      "disposition": "required",
+      "id": "outcome_stage0_ui_reentry",
+      "parent_id": null,
+      "required_at": [
+        "goal"
+      ],
+      "revision_digest": "sha256:abfb71822496f6730caf9edb8a21447b44d5cf06f6f0cc84372024f9960260c3",
+      "superseded_by": [],
+      "title": "S0-O4"
+    },
+    {
+      "acceptance": [
+        {
+          "claim": "Installed TGZ journeys pass.",
+          "evidence_kind": "command",
+          "id": "acceptance_stage0_public_package",
+          "required_maturity": "functional",
+          "validator": {
+            "command": [
+              "node",
+              "--test",
+              "test/rc4-package-journey.test.mjs",
+              "test/stage0-package-capabilities.test.mjs",
+              "test/stage0-package-contract.test.mjs"
+            ],
+            "covers_paths": [
+              "test/stage0-package-contract.test.mjs"
+            ],
+            "kind": "command",
+            "validator_revision": "sha256:c3fe6f1ed8fc06d39cd3d702475b561f8af9dae93f57f22fedeb7248e0fd0434"
+          }
+        }
+      ],
+      "authority_sources": [
+        "truth:truth-9a5e5b11f127ce48"
+      ],
+      "decision_receipt": {
+        "action": "confirm-required",
+        "id": "decision-71bc04a6-f39c-4133-a1ea-b2e55d741026",
+        "prior_registry_digest": "sha256:c213649ccbca3ba612f7a8a97ee331f31b03693813c5e2b63ef0f04790e838e1",
+        "reason": "A+B.",
+        "recorded_at": "2026-07-22T15:00:29.073Z",
+        "result_registry_digest": "sha256:0399c7272b47614b5a9dbc0309416750a1b3edea8053d4f5ba7d127681437319",
+        "target_ids": [
+          "outcome_stage0_public_non_regression"
+        ],
+        "user_message_locator": "user:gate-a-b"
+      },
+      "dependencies": [],
+      "disposition": "required",
+      "id": "outcome_stage0_public_non_regression",
+      "parent_id": null,
+      "required_at": [
+        "goal"
+      ],
+      "revision_digest": "sha256:d46c548de1c6eeb9580aa320143d3611e8b2429dbd77962dad9542822f9ad57f",
+      "superseded_by": [],
+      "title": "S0-O5"
+    },
+    {
+      "acceptance": [
+        {
+          "claim": "Beginner surface is verified.",
+          "evidence_kind": "command",
+          "id": "acceptance_stage0_beginner_surface",
+          "required_maturity": "functional",
+          "validator": {
+            "command": [
+              "node",
+              "--test",
+              "test/stage0-readme.test.mjs"
+            ],
+            "covers_paths": [
+              "test/stage0-readme.test.mjs"
+            ],
+            "kind": "command",
+            "validator_revision": "sha256:97ae6d57cf51a34196375fada7e0f08c55a41bd13beeedf5a1be5e5074e27062"
+          }
+        }
+      ],
+      "authority_sources": [
+        "truth:truth-9a5e5b11f127ce48"
+      ],
+      "decision_receipt": {
+        "action": "confirm-required",
+        "id": "decision-ff98ff09-f538-4954-a8f3-92b52d6033f9",
+        "prior_registry_digest": "sha256:0399c7272b47614b5a9dbc0309416750a1b3edea8053d4f5ba7d127681437319",
+        "reason": "A+B.",
+        "recorded_at": "2026-07-22T15:00:29.392Z",
+        "result_registry_digest": "sha256:890dae4b05c8dda88e6990f1c88920f8b0156d8503df20ec55d71793b59cbd9c",
+        "target_ids": [
+          "outcome_stage0_beginner_surface"
+        ],
+        "user_message_locator": "user:gate-a-b"
+      },
+      "dependencies": [],
+      "disposition": "required",
+      "id": "outcome_stage0_beginner_surface",
+      "parent_id": null,
+      "required_at": [
+        "goal"
+      ],
+      "revision_digest": "sha256:a25022f4a56a89ea9ba1e17e0dde804471aaf4a9419026500876e663e8d527f5",
+      "superseded_by": [],
+      "title": "S0-O6"
+    },
+    {
+      "acceptance": [
+        {
+          "claim": "TGZ and ZIP identities match.",
+          "evidence_kind": "command",
+          "id": "acceptance_stage0_exact_package",
+          "required_maturity": "functional",
+          "validator": {
+            "command": [
+              "node",
+              "scripts/verify-stage0-evidence.mjs"
+            ],
+            "covers_paths": [
+              "scripts/verify-stage0-evidence.mjs"
+            ],
+            "kind": "command",
+            "validator_revision": "sha256:5c6210406fae3b7ef2d3cbd99ed568bc5de313efb00559fb0bfb1a8eb947ecc4"
+          }
+        },
+        {
+          "claim": "v0.6.3 evidence is current.",
+          "evidence_kind": "command",
+          "id": "acceptance_stage0_live_v063",
+          "required_maturity": "functional",
+          "validator": {
+            "command": [
+              "node",
+              "scripts/verify-stage0-evidence.mjs"
+            ],
+            "covers_paths": [
+              "scripts/verify-stage0-evidence.mjs"
+            ],
+            "kind": "command",
+            "validator_revision": "sha256:5c6210406fae3b7ef2d3cbd99ed568bc5de313efb00559fb0bfb1a8eb947ecc4"
+          }
+        },
+        {
+          "claim": "Four matrix jobs bind the candidate.",
+          "evidence_kind": "command",
+          "id": "acceptance_stage0_remote_matrix",
+          "required_maturity": "functional",
+          "validator": {
+            "command": [
+              "node",
+              "scripts/verify-stage0-evidence.mjs"
+            ],
+            "covers_paths": [
+              "scripts/verify-stage0-evidence.mjs"
+            ],
+            "kind": "command",
+            "validator_revision": "sha256:5c6210406fae3b7ef2d3cbd99ed568bc5de313efb00559fb0bfb1a8eb947ecc4"
+          }
+        }
+      ],
+      "authority_sources": [
+        "truth:truth-9a5e5b11f127ce48"
+      ],
+      "decision_receipt": {
+        "action": "confirm-required",
+        "id": "decision-27f8de8e-599d-4894-ba01-658187ba4253",
+        "prior_registry_digest": "sha256:890dae4b05c8dda88e6990f1c88920f8b0156d8503df20ec55d71793b59cbd9c",
+        "reason": "A+B.",
+        "recorded_at": "2026-07-22T15:00:29.702Z",
+        "result_registry_digest": "sha256:d4d7525a44b36367beea7ee3a1049eb5c5606d6174134d5c57375d3115bf43d5",
+        "target_ids": [
+          "outcome_stage0_exact_delivery"
+        ],
+        "user_message_locator": "user:gate-a-b"
+      },
+      "dependencies": [],
+      "disposition": "required",
+      "id": "outcome_stage0_exact_delivery",
+      "parent_id": null,
+      "required_at": [
+        "goal"
+      ],
+      "revision_digest": "sha256:4fb534c107ca8fd13c737cdbce6f387e0e450415fa5f6bab4f57fdf8e07b4e75",
+      "superseded_by": [],
+      "title": "S0-O7"
+    },
+    {
+      "acceptance": [
+        {
+          "claim": "Independent review is recorded.",
+          "evidence_kind": "review-decision",
+          "id": "acceptance_stage0_independent_review",
+          "required_maturity": "reviewed",
+          "validator": {
+            "covers_paths": [],
+            "decision_type": "stage0-review",
+            "kind": "review-decision",
+            "validator_revision": "sha256:b8fe29e682f9c0e865896dddb8336eb0eb03a538a593f50993ea0d802a584b7e"
+          }
+        }
+      ],
+      "authority_sources": [
+        "truth:truth-9a5e5b11f127ce48"
+      ],
+      "decision_receipt": {
+        "action": "confirm-required",
+        "id": "decision-659afec2-2905-4d5d-8fd6-2fe489143a76",
+        "prior_registry_digest": "sha256:d4d7525a44b36367beea7ee3a1049eb5c5606d6174134d5c57375d3115bf43d5",
+        "reason": "A+B.",
+        "recorded_at": "2026-07-22T15:00:30.014Z",
+        "result_registry_digest": "sha256:e07d49f8a025137bd8360f23b5c633031089613cce1283e9e1de3be69647278b",
+        "target_ids": [
+          "outcome_stage0_independent_review"
+        ],
+        "user_message_locator": "user:gate-a-b"
+      },
+      "dependencies": [],
+      "disposition": "required",
+      "id": "outcome_stage0_independent_review",
+      "parent_id": null,
+      "required_at": [
+        "goal"
+      ],
+      "revision_digest": "sha256:d3bfa7aab8913133979d471928185e7b636d7c23be5bcf728cbe9cc4e94301de",
+      "superseded_by": [],
+      "title": "S0-O8"
+    }
+  ],
+  "schema_version": 1,
+  "validator_migrations": []
+}

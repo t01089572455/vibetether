@@ -1,0 +1,16 @@
+{
+  "control_generation": "c0082888-7395-4724-a3f5-9ae93c345c97",
+  "control_mode": "team",
+  "created_at": "2026-07-22T14:44:14.739Z",
+  "experience_index": ".vibetether/experience.json",
+  "intent": ".vibetether/intent.md",
+  "launcher": ".vibetether/vt.mjs",
+  "outcome_index": ".vibetether/outcomes.json",
+  "progress_projection": ".vibetether/PROGRESS.md",
+  "project_id": "67887a43-ef33-40c6-868d-3730f3b475ab",
+  "routes": ".vibetether/routes.json",
+  "schema_version": 2,
+  "skills_lock": ".vibetether/skills.lock.json",
+  "truth_index": ".vibetether/TRUTH.md",
+  "vibetether_version": "1.0.0-rc.4"
+}

@@ -1,0 +1,13 @@
+{
+  "auto_activate": "stable-only",
+  "disabled": [],
+  "hotset": [],
+  "hotset_max": 4,
+  "packs": [
+    "standard"
+  ],
+  "pins": [],
+  "preferences": [],
+  "schema_version": 1,
+  "shortlist_max": 3
+}
