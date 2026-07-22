@@ -7,3 +7,7 @@
 *.yaml text eol=lf
 *.sh text eol=lf
 *.md text
+
+# Community Provider bytes are immutable, fingerprint-checked upstream inputs.
+# Preserve their exact source formatting; provider-integrity is the change gate.
+registry/community/** -whitespace
