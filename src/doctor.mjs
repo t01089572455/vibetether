@@ -174,7 +174,14 @@ export async function inspectProject(options={}) {
   if (route?.status==='active'&&atCompletion) issues.push(error('ACTIVE_ROUTE','Completion-like boundary cannot retain an active step.'));
   if (route?.status==='broken'&&atCompletion) issues.push(error('BROKEN_ROUTE','Completion-like boundary cannot accept a step whose lease was broken.'));
   if (route?.status==='active'&&authority&&route.authority_start!==authority.authority_digest) issues.push(error('ACTIVE_ROUTE_AUTHORITY_DRIFT','Confirmed authority changed during the active step.'));
-  if (route&&route.status!=='active'&&route.truth_reconciliation?.status==='pending') (atCompletion?issues:warnings).push((atCompletion?error:warning)('PENDING_TRUTH_RECONCILIATION','Exited step still has pending Truth reconciliation.'));
+  if (route&&route.status!=='active'&&route.truth_reconciliation?.status==='pending') {
+    const referencedRouteId=['route_instance_id','route_id','pending_route_id']
+      .map((key)=>route.truth_reconciliation?.[key]).find((value)=>typeof value==='string'&&value);
+    if (referencedRouteId&&referencedRouteId!==route.id) {
+      (atCompletion?issues:warnings).push((atCompletion?error:warning)('BLOCKED_REANCHOR_REQUIRED',`Legacy Truth reconciliation names route ${referencedRouteId}, not ${route.id}. Preserve it with \`vibetether step recover-truth-reconciliation --project . --reason "Reviewed legacy mismatch." --yes\`, then re-anchor before a fresh route.`));
+    } else (atCompletion?issues:warnings).push((atCompletion?error:warning)('PENDING_TRUTH_RECONCILIATION','Exited step still has pending Truth reconciliation.'));
+  }
+  if (route&&route.status!=='active'&&route.truth_reconciliation?.status==='blocked_reanchor_required') (atCompletion?issues:warnings).push((atCompletion?error:warning)('BLOCKED_REANCHOR_REQUIRED','Legacy Truth reconciliation recovery is preserved but still requires `vibetether step reanchor` before a fresh route.'));
   if (runtime) {
     const lease=await inspectLease(runtime.paths).catch(()=>null);
     if (route?.status==='active'&&!lease) issues.push(error('MISSING_LEASE','Active step has no writer lease.'));

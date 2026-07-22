@@ -23,7 +23,7 @@ import { consumeDeepPermit, invalidateDeepPermitState, validateDeepPermit } from
 import { loadOutcomeRegistry, outcomeRegistryDigest } from './outcomes.mjs';
 import {
   applyRouteOutcomeEvidence, bindRouteOutcomes, readOutcomeProgress,
-  renderProgressMarkdown, verifyProgressProjection,
+  isProgressProjectionOwner, renderProgressMarkdown, verifyProgressProjection,
 } from './outcome-progress.mjs';
 
 async function loaded(project) {
@@ -66,14 +66,87 @@ function reconcile(route,currentAuthority,truth,decision='no-material-change',tr
   throw conflictError(`Unsupported Truth decision: ${decision}`,'TRUTH_RECONCILIATION');
 }
 
+function pendingReconciliationRouteId(route) {
+  const reconciliation=route?.truth_reconciliation;
+  if (!reconciliation || reconciliation.status!=='pending') return null;
+  for (const key of ['route_instance_id','route_id','pending_route_id']) {
+    if (typeof reconciliation[key]==='string'&&reconciliation[key]) return reconciliation[key];
+  }
+  return null;
+}
+
+function hasLegacyReconciliationMismatch(route) {
+  const referenced=pendingReconciliationRouteId(route);
+  return Boolean(route&&route.status!=='active'&&referenced&&referenced!==route.id);
+}
+
 export async function reanchorStep({project=process.cwd(),reason='Re-anchored after inspecting current project authority.'}={}) {
-  const value=await loaded(project); const active=await readRoute(value.runtime.paths,{allowMissing:true});
-  if (active?.status==='active') throw conflictError('Cannot re-anchor while a step is active.','ACTIVE_STEP');
+  const value=await loaded(project); const route=await readRoute(value.runtime.paths,{allowMissing:true});
+  if (route?.status==='active') throw conflictError('Cannot re-anchor while a step is active.','ACTIVE_STEP');
   const current=await readCurrent(value.runtime.paths);
   current.authority_digest=value.authority.authority_digest; current.control_generation=value.context.manifest.control_generation;
   current.updated_at=new Date().toISOString(); current.status='ready'; current.open_risks=[]; current.next_action=boundedText(reason,500,'Re-anchor reason');
-  await writeCurrentProjection(value.runtime.paths,current); await appendRuntimeEvent(value.runtime.paths,{type:'reanchored',authority_digest:value.authority.authority_digest,reason:current.next_action});
+  if (route?.truth_reconciliation?.status==='blocked_reanchor_required') {
+    route.truth_reconciliation={...route.truth_reconciliation,status:'reanchored',reanchored_at:current.updated_at,reanchor_reason:current.next_action};
+    route.updated_at=current.updated_at;
+    await writeStepState(value.runtime.paths,route,current);
+  } else await writeCurrentProjection(value.runtime.paths,current);
+  await appendRuntimeEvent(value.runtime.paths,{type:'reanchored',route_id:route?.id??null,authority_digest:value.authority.authority_digest,reason:current.next_action});
   return current;
+}
+
+export async function recoverTruthReconciliation({project=process.cwd(),reason,yes=false}={}) {
+  if (!yes) throw conflictError('Truth-reconciliation recovery requires --yes after reviewing the affected route.','CONFIRMATION_REQUIRED');
+  const initial=await loaded(project);
+  return withWorktreeStateLock(initial.runtime.paths,async()=>{
+    const value=await loaded(project);
+    const route=await readRoute(value.runtime.paths,{allowMissing:true});
+    if (!hasLegacyReconciliationMismatch(route)) {
+      throw conflictError('Recovery applies only to an exited legacy route whose pending Truth reconciliation names a different route instance.','RECONCILIATION_RECOVERY_NOT_APPLICABLE');
+    }
+    const boundedReason=boundedText(reason,500,'Truth-reconciliation recovery reason');
+    const referencedRouteId=pendingReconciliationRouteId(route);
+    const recoveredAt=new Date().toISOString();
+    const preservedReceipt=path.join(value.runtime.paths.quarantine,`truth-reconciliation-${route.id}-${randomUUID()}.json`);
+    const preservedRelative=path.relative(value.runtime.paths.worktree,preservedReceipt).replaceAll('\\','/');
+    const current=await readCurrent(value.runtime.paths);
+    const nextRoute={
+      ...route,
+      status:'abandoned',
+      generation:(route.generation??1)+1,
+      abandonment_reason:boundedReason,
+      activation_id:null,
+      truth_reconciliation:{
+        ...route.truth_reconciliation,
+        status:'blocked_reanchor_required',
+        legacy_route_instance_id:referencedRouteId,
+        recovery_reason:boundedReason,
+        preserved_receipt:preservedRelative,
+        recovered_at:recoveredAt,
+      },
+      updated_at:recoveredAt,
+    };
+    const nextCurrent={
+      ...current,
+      status:'blocked',
+      route_instance_id:route.id,
+      implementation_permit_id:null,
+      open_risks:[`Legacy Truth reconciliation references ${referencedRouteId}, not ${route.id}.`],
+      next_action:'Run `vibetether step reanchor --reason "Reviewed legacy Truth reconciliation recovery."`, then start a fresh bounded route.',
+      updated_at:recoveredAt,
+    };
+    await transactionalWrites([
+      {target:preservedReceipt,content:canonicalJson(route),mode:0o600},
+      {target:value.runtime.paths.route,content:canonicalJson(nextRoute),mode:0o600},
+      {target:value.runtime.paths.current,content:canonicalJson(nextCurrent),mode:0o600},
+    ]);
+    await appendRuntimeEvent(value.runtime.paths,{type:'truth-reconciliation-recovered',route_id:route.id,legacy_route_instance_id:referencedRouteId,preserved_receipt:preservedRelative,reason:boundedReason});
+    return {
+      status:'blocked-reanchor-required',route_id:route.id,legacy_route_instance_id:referencedRouteId,
+      preserved_receipt:preservedRelative,
+      next_action:nextCurrent.next_action,
+    };
+  });
 }
 
 
@@ -275,6 +348,9 @@ export async function startStep(options={}) {
   if (value.context.shared&&value.context.tracked&&value.context.manifest.control_mode==='team') throw conflictError('This branch does not contain the tracked Project Contract.','CONTRACT_MISSING_ON_BRANCH');
   const prior=await readRoute(value.runtime.paths,{allowMissing:true}); if (prior?.status==='active') throw conflictError('Finish or abandon the active step first.','ACTIVE_STEP');
   const current=await readCurrent(value.runtime.paths);
+  if (current.status==='blocked'&&prior?.truth_reconciliation?.status==='blocked_reanchor_required') {
+    throw conflictError('Legacy Truth reconciliation recovery is pending; run `vibetether step reanchor` before starting a fresh route.','BLOCKED_REANCHOR_REQUIRED');
+  }
   if (current.authority_digest!==value.authority.authority_digest||current.control_generation!==value.context.manifest.control_generation) throw conflictError('Current checkpoint is stale; run `vibetether step reanchor` after reviewing the authority change.','AUTHORITY_CHANGED');
   const routePhase=phase(options.phase);
   const capability=boundedText(options.capability,128,'Capability');
@@ -489,7 +565,7 @@ export async function finishStep(options={},runtimeHooks={}) {
     controlPlans.push({target:resolveInside(finalValue.context.root,finalValue.context.manifest.experience_index,'Experience index'),content:canonicalJson(capture.index)});
     route.governance_writes.push(finalValue.context.manifest.experience_index);
   }
-  route.governance_writes.push(finalValue.context.manifest.progress_projection);
+  if (isProgressProjectionOwner(finalValue.outcomes,latestProgress)) route.governance_writes.push(finalValue.context.manifest.progress_projection);
   route.success_capture={disposition:capture.disposition,candidate_id:capture.candidate_id};
   const activationId=route.activation_id;
   const routeGenerationBefore=route.generation??1;
@@ -500,10 +576,10 @@ export async function finishStep(options={},runtimeHooks={}) {
   const current=await readCurrent(finalValue.runtime.paths); current.status='ready'; current.route_instance_id=route.id; current.authority_digest=currentAuthority.authority_digest; current.control_generation=finalValue.context.manifest.control_generation; current.evidence_ids=route.evidence_ids.slice(-8); current.open_risks=[]; current.next_action='Review the evidence and choose the next bounded slice or stop.'; current.task_mode='adaptive'; current.deep_start_card_id=null; current.implementation_permit_id=null; current.outcome_ids=route.outcome_ids; current.outcome_registry_digest=route.registry_digest; current.updated_at=new Date().toISOString();
   controlPlans.push(
     {target:finalValue.runtime.paths.outcome_progress,content:canonicalJson(nextProgress),mode:0o600},
-    {target:resolveInside(finalValue.context.root,finalValue.context.manifest.progress_projection,'Progress projection path'),content:progressProjection,mode:0o644},
     {target:finalValue.runtime.paths.route,content:canonicalJson(route),mode:0o600},
     {target:finalValue.runtime.paths.current,content:canonicalJson(current),mode:0o600},
   );
+  if (isProgressProjectionOwner(finalValue.outcomes,nextProgress)) controlPlans.push({target:resolveInside(finalValue.context.root,finalValue.context.manifest.progress_projection,'Progress projection path'),content:progressProjection,mode:0o644});
   if (typeof runtimeHooks.beforeControlCommit==='function') await runtimeHooks.beforeControlCommit({route,current,progress:nextProgress,plans:controlPlans});
   await transactionalWrites(controlPlans);
   if (activationId) await removeActivation(finalValue.runtime.paths,activationId).catch(()=>{}); if (route.implementation_permit_id) await consumeDeepPermit(finalValue.runtime.paths,route.implementation_permit_id,'Deep controlled step completed.'); await appendRuntimeEvent(finalValue.runtime.paths,{type:'step-finished',route_id:route.id,evidence_ids:route.evidence_ids,truth_status:reconciliation.status,outcome_ids:route.outcome_ids}); await recordProviderOutcome(finalValue.runtime.paths,route.provider.id,true); await releaseLease(finalValue.runtime.paths,route.id);

@@ -5,18 +5,16 @@ description: Prepare and govern high-ambiguity or high-impact coding work before
 
 # VibeTether Deep
 
-Use this Skill for work that must not begin from guessed intent.
+Use Deep when coding from a guess would create expensive rework. The goal is not a larger plan; it is a user-confirmed, bounded implementation permit.
 
-1. Run `vibetether context --task "<request>" --boundary task-entry --json`.
-2. Read only applicable confirmed Truth and inspect discoverable repository facts. Do not ask the user for facts the repository or an authoritative source can answer. Do not write product code.
-3. Expand the request into the smallest complete Start Card: exact task, bounded slice, approved paths, permissions, success evidence, executable success checks, verified facts, explicit assumptions, and user-owned decisions.
-4. Run `vibetether deep prepare ...`. It returns exactly one `next_question`.
-5. Ask only that question. State a concrete recommended answer and its impact, then wait for the user's reply. Never answer it on the user's behalf and never batch later questions into the same turn.
-6. Record the normalized decision with `vibetether deep answer --question-id <ID> --selected-option "<decision the user made>" --user-message-locator "<durable user-message reference>"`. Ask the next returned question and repeat.
-7. When status becomes `awaiting-final-confirmation`, show the complete resolved Start Card, including evidence verifiers and the strongest counterexample considered. Ask whether this exact card may govern implementation.
-8. Only after that reply, create the machine-readable resolution and run `vibetether deep permit --confirmed-by-user --reason "<exact approval>" --resolution-json '<JSON>'`.
-9. Start the controlled step with `vibetether step start --deep ...`. Its task, slice, phase, capability, scope, permissions, and success checks must match the Permit.
+1. At task entry, compaction, resume, or a direction change, run `vibetether context --task "<request>" --boundary task-entry --json`.
+2. Read applicable confirmed Truth and inspect discoverable facts. Do not ask the user for facts the repository or an authority can answer, and do not write product code.
+3. Prepare the smallest complete Start Card: goal, exact slice, scope, permissions, facts, assumptions, user-owned decisions, success evidence, executable checks, and a counterexample challenge.
+4. Ask exactly one unresolved user decision at a time, with a recommendation and impact. Wait for the answer; never choose a product, visual, architectural, security, data, or release direction on the user's behalf.
+5. Show the resolved card and ask for confirmation of that exact slice. Only then create an Implementation Permit and start the matching controlled step.
 
-A Start Card is planning evidence, not permission. A decision receipt records the Agent's durable interpretation of a user message; without a mandatory host hook it is not cryptographic proof of authorship. The final confirmation is required to catch a wrong expansion before coding.
+The Permit binds the task, slice, Truth, worktree, permissions, Provider, and checks. It expires or becomes stale when any of them changes. It does not authorize credentials, networking, destructive data work, migration, deployment, publication, or release unless those exact permissions were separately approved.
 
-The Permit expires or is consumed when the step exits. It becomes stale when its Start Card, answer receipts, authority, control generation, worktree, task, slice, approved scope, permissions, or success checks change. It does not authorize credentials, networking, external writes, destructive data changes, migration, deployment, publication, or release unless those exact permissions were included and separately approved.
+`SLICE_GREEN` is not `GOAL_ENGINEERING_CLOSED` or `RELEASE_READY`: governed Outcomes, source coverage, integration bytes, external/review/owner evidence, and release authorization retain their own gates. The user owns Truth and Outcome decisions; a Start Card records the Agent's interpretation, not proof of user identity.
+
+Without a mandatory host hook, VibeTether still depends on Agent cooperation. Use the managed host instructions and CLI re-entry points, but never claim the Skill can force an uninvoked Agent to stop.

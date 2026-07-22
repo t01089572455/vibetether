@@ -175,17 +175,19 @@ export async function writeOutcomeGovernance(context, paths, priorRegistryValue,
   const prior = await readJsonFile(paths.outcome_progress,'Outcome progress',{allowMissing:true})??initialOutcomeProgress(paths,priorRegistryValue);
   const registry = validateOutcomeRegistry(structuredClone(nextRegistryValue));
   const progress = reconcileOutcomeProgress(prior, paths, registry);
-  await transactionalWrites([
+  const plans=[
     { target: resolveInside(context.root, context.manifest.outcome_index, 'Outcome registry path'), content: canonicalJson(registry), mode: 0o644 },
     { target: paths.outcome_progress, content: canonicalJson(progress), mode: 0o600 },
-    { target: resolveInside(context.root, context.manifest.progress_projection, 'Progress projection path'), content: renderProgressMarkdown(registry, progress), mode: 0o644 },
-  ]);
+  ];
+  if (isProgressProjectionOwner(registry,progress)) plans.push({ target: resolveInside(context.root, context.manifest.progress_projection, 'Progress projection path'), content: renderProgressMarkdown(registry, progress), mode: 0o644 });
+  await transactionalWrites(plans);
   return { registry, progress };
 }
 
 export async function writeProgressProjection(context, paths, registryValue) {
   const registry = validateOutcomeRegistry(structuredClone(registryValue));
   const progress = await readOutcomeProgress(paths, registry);
+  if (!isProgressProjectionOwner(registry,progress)) return { ...progress, projection_status:'integration-worktree-only' };
   await transactionalWrites([
     {target:paths.outcome_progress,content:canonicalJson(progress),mode:0o600},
     { target: resolveInside(context.root, context.manifest.progress_projection, 'Progress projection path'), content: renderProgressMarkdown(registry, progress), mode: 0o644 },
@@ -226,11 +228,12 @@ export async function recordAcceptanceDecision(context, paths, registryValue, ac
   entry.state=entry.missing_acceptance_ids.length?'in-progress':'satisfied';
   next.generation+=1; next.updated_at=new Date().toISOString();
   validateOutcomeProgress(next,paths,registry);
-  await transactionalWrites([
+  const plans=[
     {target:path.join(paths.decisions,`${receipt.id}.json`),content:canonicalJson(receipt),mode:0o600},
     {target:paths.outcome_progress,content:canonicalJson(next),mode:0o600},
-    {target:resolveInside(context.root,context.manifest.progress_projection,'Progress projection path'),content:renderProgressMarkdown(registry,next),mode:0o644},
-  ]);
+  ];
+  if (isProgressProjectionOwner(registry,next)) plans.push({target:resolveInside(context.root,context.manifest.progress_projection,'Progress projection path'),content:renderProgressMarkdown(registry,next),mode:0o644});
+  await transactionalWrites(plans);
   return {outcome_id:outcome.id,acceptance_id:acceptance.id,decision_receipt:receipt,progress:next};
 }
 
@@ -342,7 +345,19 @@ export function renderProgressMarkdown(registryValue, progressValue) {
   ].join('\n');
 }
 
+export function isProgressProjectionOwner(registryValue, progressValue) {
+  const registry=validateOutcomeRegistry(structuredClone(registryValue));
+  return !registry.integration_worktree_id||registry.integration_worktree_id===progressValue?.worktree_id;
+}
+
 export async function verifyProgressProjection(context, registryValue, progressValue) {
+  if (!isProgressProjectionOwner(registryValue,progressValue)) {
+    return {
+      expected:null,digest:null,status:'integration-worktree-only',
+      integration_worktree_id:registryValue.integration_worktree_id,
+      local_worktree_id:progressValue?.worktree_id??null,
+    };
+  }
   let source;
   try { source = await readFile(resolveInside(context.root, context.manifest.progress_projection, 'Progress projection path'), 'utf8'); }
   catch (error) {

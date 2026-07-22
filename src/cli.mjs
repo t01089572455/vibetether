@@ -4,7 +4,7 @@ import { VERSION } from './constants.mjs';
 import { usageError, conflictError } from './errors.mjs';
 import { initialize } from './init.mjs';
 import { buildContext, readContextHandle } from './context.mjs';
-import { startStep, finishStep, abandonStep, heartbeatStep, reanchorStep } from './step.mjs';
+import { startStep, finishStep, abandonStep, heartbeatStep, reanchorStep, recoverTruthReconciliation } from './step.mjs';
 import { discoverContract, skillsLockDigest } from './contract.mjs';
 import { parseTruthMap, renderTruthMap, addTruthCandidate, confirmTruthCandidate, declineTruthCandidate, authoritySnapshot } from './truth.mjs';
 import { writeProjectJson, writeProjectText, normalizeSignal, readJsonFile } from './files.mjs';
@@ -43,7 +43,7 @@ Usage:
   vibetether step start [--task TEXT | --phase PHASE --capability ID] --slice TEXT [--outcome ID] --success-evidence TEXT --success-check-json JSON [--signal ID] [--confirmed-by-user --decision-reason TEXT]
   vibetether step finish [--evidence-command-json JSON] --output-proof-json JSON --exit-proof-json JSON
   vibetether step abandon --reason TEXT
-  vibetether step heartbeat | reanchor | break-lease | break-state-lock --reason TEXT --yes
+  vibetether step heartbeat | reanchor | recover-truth-reconciliation | break-lease | break-state-lock --reason TEXT --yes
   vibetether truth add|confirm|decline|list
   vibetether outcomes status|list|propose|confirm|defer|reject|supersede|coverage confirm|acceptance record|validator-migration record
   vibetether experience add|confirm|status|audit
@@ -125,7 +125,8 @@ export async function main(args=[],runtime={}) {
   if (command==='bootstrap') return response(await bootstrap({project:options.project,goal:options.goal,success_evidence:options.success_evidence?.[0],scope_boundaries:options.scope_boundary,constraints:options.constraint,confirmed:options.confirmed,dry_run:options.dry_run,yes:options.yes}),options.json);
   if (command==='context') {
     if (action==='read') return response(await readContextHandle({project:options.project,handle:options._[1],offset:number(options.offset,'offset',0),limit:number(options.limit,'limit',8192)}),true);
-    return response(await buildContext({project:options.project,boundary:options.boundary,phase:options.phase?.[0],capability:options.capability?.[0],signals:options.signal,agent:options.agent,provider:options.provider,permissions:{network:options.network===true,external_write:options.external_write===true,code_write:options.code_write===true},task_text:options.task,paths:options.path??[]}),options.json);
+    const permissionsSupplied=options.network===true||options.external_write===true||options.code_write===true;
+    return response(await buildContext({project:options.project,boundary:options.boundary,phase:options.phase?.[0],capability:options.capability?.[0],signals:options.signal,agent:options.agent,provider:options.provider,permissions:permissionsSupplied?{network:options.network===true,external_write:options.external_write===true,code_write:options.code_write===true}:undefined,task_text:options.task,paths:options.path??[]}),options.json);
   }
   if (command==='deep') {
     if (action==='prepare') return response(await prepareDeep({project:options.project,task:options.task,slice:options.slice,phase:options.phase?.[0],capability:options.capability?.[0],provider:options.provider,scope_paths:options.path??[],permissions:{network:options.network===true,external_write:options.external_write===true,code_write:options.code_write===true},success_evidence:options.success_evidence,success_checks:(options.success_check_json??[]).map((item)=>json(item,'success-check-json')),facts:options.fact,assumptions:options.assumption,decisions:options.decision}),options.json);
@@ -148,6 +149,7 @@ export async function main(args=[],runtime={}) {
     if (action==='abandon') return response(await abandonStep({project:options.project,reason:options.reason,truth_decision:options.truth_decision,truth_path:options.truth_path}),options.json);
     if (action==='heartbeat') return response(await heartbeatStep({project:options.project}),options.json);
     if (action==='reanchor') return response(await reanchorStep({project:options.project,reason:options.reason}),options.json);
+    if (action==='recover-truth-reconciliation') return response(await recoverTruthReconciliation({project:options.project,reason:options.reason,yes:options.yes===true}),options.json);
     if (action==='break-lease') { const {runtime}=await contextRuntime(options.project); const route=await breakLease(runtime.paths,options.reason); return response({status:'lease-broken',route_status:route?.status??null,route_id:route?.id??null},options.json); }
     if (action==='break-state-lock') { const {runtime}=await contextRuntime(options.project); return response(await breakWorktreeStateLock(runtime.paths,options.reason,{confirmed:options.yes===true}),options.json); }
     throw usageError('Unknown step action.');
