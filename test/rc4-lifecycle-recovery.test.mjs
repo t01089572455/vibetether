@@ -103,6 +103,20 @@ test('concurrent contenders serialize while reclaiming the same proven-dead lock
   assert.equal(await exists(`${lock}.recovery`), false);
 });
 
+test('rapid lock handoff cannot let a retiring owner collide with its successor', async () => {
+  const f = await fixture('lock-release-handoff', { gitRepo: false });
+  const lock = path.join(f.base, 'operation.lock');
+  let operations = 0;
+  for (let round = 0; round < 5; round += 1) {
+    await Promise.all(Array.from({ length: 40 }, () => withFileLock(lock, async () => {
+      operations += 1;
+    }, { retries: 5000, delayMs: 0 })));
+  }
+  assert.equal(operations, 200);
+  assert.equal(await exists(lock), false);
+  assert.deepEqual((await readdir(f.base)).filter((name) => name.includes('.release-')), []);
+});
+
 test('an unverifiable state lock requires an explicit audited recovery command', async () => {
   const project = await initProject('explicit-state-lock-recovery', { agent: 'codex' });
   await main([

@@ -10,4 +10,8 @@
 
 # Community Provider bytes are immutable, fingerprint-checked upstream inputs.
 # Preserve their exact source formatting; provider-integrity is the change gate.
-registry/community/** -whitespace
+registry/community/** -text -whitespace
+
+# License and declaration evidence is pinned by its exact upstream byte digest.
+# Git must not rewrite it during a Windows autocrlf checkout.
+registry/licenses/** -text

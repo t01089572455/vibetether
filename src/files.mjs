@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import {
-  access, appendFile, cp, lstat, mkdir, open, readFile, realpath, readdir, rename, rm, stat, writeFile,
+  access, appendFile, cp, lstat, mkdir, open, readFile, realpath, readdir, rename, rm, rmdir, stat, writeFile,
 } from 'node:fs/promises';
 import path from 'node:path';
 import { conflictError } from './errors.mjs';
@@ -310,6 +310,17 @@ function sameLockOwner(left, right) {
     && (left?.created_at ?? null) === (right?.created_at ?? null);
 }
 
+async function removeEmptyLockDirectory(lockPath, { retries = 20, delayMs = 5 } = {}) {
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try { await rmdir(lockPath); return; }
+    catch (error) {
+      if (error.code === 'ENOENT') return;
+      if (!['EACCES', 'ENOTEMPTY', 'EPERM'].includes(error.code) || attempt === retries) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 export async function withFileLock(lockPath, operation, { staleMs = 120_000, retries = 100, delayMs = 20 } = {}) {
   await mkdir(path.dirname(lockPath), { recursive: true });
   const recoveryPath = `${lockPath}.recovery`;
@@ -321,7 +332,8 @@ export async function withFileLock(lockPath, operation, { staleMs = 120_000, ret
       try { owner = await readJsonFile(path.join(lockPath, 'owner.json'), 'Lock owner', { allowMissing: true }); }
       catch { return; }
       if (owner?.owner_id === ownerId || (allowMissingOwner && owner === null)) {
-        await rm(lockPath, { recursive: true, force: true });
+        await rm(path.join(lockPath, 'owner.json'), { force: true });
+        await removeEmptyLockDirectory(lockPath);
       }
     };
     try {
@@ -384,7 +396,9 @@ export async function withFileLock(lockPath, operation, { staleMs = 120_000, ret
         if (reclaimed) continue;
       }
       // Age is diagnostic only. A live or unverifiable owner is never stolen automatically.
-      await stat(lockPath).catch((statError) => { if (statError.code !== 'ENOENT') throw statError; });
+      await stat(lockPath).catch((statError) => {
+        if (!['EACCES', 'ENOENT', 'EPERM'].includes(statError.code)) throw statError;
+      });
       if (attempt === retries) throw conflictError(`Timed out acquiring lock: ${lockPath}`, 'LOCKED');
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }

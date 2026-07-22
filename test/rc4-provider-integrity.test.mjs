@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { cp, link, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -14,7 +15,7 @@ import { assertProviderClosure, inspectProviderTree } from '../src/provider-inte
 import { startStep, abandonStep } from '../src/step.mjs';
 import { authoritySnapshot, parseTruthMap } from '../src/truth.mjs';
 import { attachWorktree } from '../src/worktree.mjs';
-import { fixture, initProject, testSuccessCheck } from './helpers.mjs';
+import { fixture, git, initProject, testSuccessCheck } from './helpers.mjs';
 
 async function providerSource(base, id) {
   const source = path.join(base, id);
@@ -118,6 +119,33 @@ test('normalized Provider identity is stable across LF and CRLF worktrees', asyn
   const observed = await inspectProviderTree(copied);
   assert.equal(observed.digest, card.fingerprint);
   assert.doesNotThrow(() => assertProviderClosure(card, observed));
+});
+
+test('an autocrlf checkout preserves the exact packaged license-evidence bytes', async () => {
+  const { base } = await fixture('provider-license-autocrlf', { gitRepo: false });
+  const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const repository = path.join(base, 'source');
+  const checkout = path.join(base, 'checkout');
+  await mkdir(path.join(repository, 'registry'), { recursive: true });
+  await cp(path.join(sourceRoot, '.gitattributes'), path.join(repository, '.gitattributes'));
+  await cp(path.join(sourceRoot, 'registry', 'licenses'), path.join(repository, 'registry', 'licenses'), { recursive: true });
+  git(repository, ['init', '-q']);
+  git(repository, ['config', 'user.email', 'test@example.com']);
+  git(repository, ['config', 'user.name', 'VibeTether Tests']);
+  git(repository, ['-c', 'core.autocrlf=false', 'add', '.']);
+  git(repository, ['commit', '-qm', 'license evidence fixture']);
+  git(base, ['-c', 'core.autocrlf=true', 'clone', '-q', repository, checkout]);
+
+  const provenance = JSON.parse(await readFile(path.join(sourceRoot, 'registry', 'community-provenance.json'), 'utf8'));
+  for (const source of provenance.sources) {
+    const evidence = source.license_evidence;
+    const relative = evidence.mode === 'full-text'
+      ? `registry/licenses/${source.id}.LICENSE.txt`
+      : evidence.evidence_file;
+    const expected = evidence.mode === 'full-text' ? evidence.sha256 : evidence.evidence_file_sha256;
+    const actual = createHash('sha256').update(await readFile(path.join(checkout, ...relative.split('/')))).digest('hex');
+    assert.equal(actual, expected, `${source.id} evidence bytes changed during checkout`);
+  }
 });
 
 test('activation materializes the declared entry, resource, and script closure', async () => {
