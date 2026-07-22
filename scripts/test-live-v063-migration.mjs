@@ -7,7 +7,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const scriptPath = fileURLToPath(import.meta.url);
+const sourceRoot = path.resolve(path.dirname(scriptPath), '..');
 const repository = 'https://github.com/t01089572455/vibetether.git';
 const tag = 'v0.6.3';
 const LEGACY_V063 = Object.freeze({
@@ -174,6 +175,34 @@ function inventoryDigest(value) {
   return sha256(Buffer.from(JSON.stringify(value)));
 }
 
+export async function retainRollbackEvidence(base, agent, {
+  migrationId, rollbackResult, before, after,
+}) {
+  if (!['codex', 'claude', 'both'].includes(agent)) throw new Error(`Unsupported live v0.6.3 fixture agent: ${agent}.`);
+  if (typeof migrationId !== 'string' || !migrationId) throw new Error(`Live v0.6.3 ${agent} migration id is missing.`);
+  if (!rollbackResult || rollbackResult.migration_id !== migrationId || !['rolled-back', 'already-restored'].includes(rollbackResult.status)) {
+    throw new Error(`Live v0.6.3 ${agent} rollback receipt is incomplete.`);
+  }
+  if (!sameInventory(before, after)) throw new Error(`Exact ${tag} ${agent} rollback inventory differs from its protected baseline.`);
+  const directory = path.join(path.resolve(base), 'inventories');
+  await mkdir(directory, { recursive: true });
+  const beforeBytes = `${JSON.stringify(before, null, 2)}\n`;
+  const afterBytes = `${JSON.stringify(after, null, 2)}\n`;
+  const beforePath = path.join(directory, `${agent}-rollback-before.json`);
+  const afterPath = path.join(directory, `${agent}-rollback-after.json`);
+  await writeFile(beforePath, beforeBytes, 'utf8');
+  await writeFile(afterPath, afterBytes, 'utf8');
+  return {
+    migration_id: migrationId,
+    rollback_id: rollbackResult.migration_id,
+    rollback_status: rollbackResult.status,
+    rollback_result: 'restored',
+    before_inventory: { path: beforePath, sha256: sha256(Buffer.from(beforeBytes)) },
+    post_rollback_inventory: { path: afterPath, sha256: sha256(Buffer.from(afterBytes)) },
+    post_rollback_matches: true,
+  };
+}
+
 function outcome(id, acceptanceId, artifact) {
   const command = [process.execPath, '-e', `const fs=require('node:fs');if(fs.readFileSync(${JSON.stringify(artifact)},'utf8')!=='verified\\n')process.exit(7)`];
   return {
@@ -321,9 +350,14 @@ async function oneFixture(base, installedCli, legacyCli, agent, environment) {
 
   const rollback = await createLegacy('rollback');
   const rollbackMigration = runCandidate(installedCli, rollback.project, env, ['migrate', '--project', rollback.project, '--agent', agent, '--yes']).body;
-  runCandidate(installedCli, rollback.project, env, ['migrate', 'rollback', '--project', rollback.project, '--id', rollbackMigration.migration_id, '--yes']);
+  const rollbackResult = runCandidate(installedCli, rollback.project, env, ['migrate', 'rollback', '--project', rollback.project, '--id', rollbackMigration.migration_id, '--yes']).body;
   const after = await inventory(rollback.project);
-  if (!sameInventory(rollback.before, after)) throw new Error(`Exact ${tag} ${agent} rollback did not restore the byte inventory.`);
+  const rollbackEvidence = await retainRollbackEvidence(base, agent, {
+    migrationId: rollbackMigration.migration_id,
+    rollbackResult,
+    before: rollback.before,
+    after,
+  });
 
   const conflictProject = await createLegacy('post-migration-edit');
   const conflictMigration = runCandidate(installedCli, conflictProject.project, env, ['migrate', '--project', conflictProject.project, '--agent', agent, '--yes']).body;
@@ -336,6 +370,9 @@ async function oneFixture(base, installedCli, legacyCli, agent, environment) {
   if (conflict.status !== 3 || !preserved) throw new Error(`Rollback conflict did not preserve the post-migration ${agent} user edit.`);
   return {
     agent,
+    controlled_migration_id: migrated.migration_id,
+    conflict_migration_id: conflictMigration.migration_id,
+    ...rollbackEvidence,
     before_files: rollback.before.length,
     byte_identical_normal_rollback: true,
     crlf_fixture_sha256: rollback.before.find((item) => item.path === 'docs/legacy-crlf-notes.md')?.sha256 ?? null,
@@ -377,7 +414,6 @@ async function main() {
       reason:network?'network-or-remote-unavailable':error?.code??'LIVE_V063_FAILED',
       failure:{code:error?.code??null,message:String(error?.message??error)},artifact_dir:base,commands,
     };
-    await writeFile(path.join(base,'live-v063-report.json'),JSON.stringify(report,null,2),'utf8');
     return report;
   } finally {
     const keep=process.env.VIBETETHER_LIVE_V063_KEEP_ARTIFACTS==='1';
@@ -388,17 +424,20 @@ async function main() {
     } else if (report) {
       report.artifact_retained=true;
       report.artifact_dir=base;
+      await writeFile(path.join(base,'live-v063-report.json'),`${JSON.stringify(report,null,2)}\n`,'utf8');
     }
     artifactRoot=null;
   }
 }
 
-try {
-  const report = await main();
-  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-  if (report.status === 'not-run' && requireLive) process.exitCode = 4;
-  else if (report.status !== 'pass' && report.status !== 'not-run') process.exitCode = 1;
-} catch (error) {
-  process.stderr.write(`VibeTether live v0.6.3 migration failed: ${error.stack ?? error.message}\n`);
-  process.exitCode = 1;
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(scriptPath)) {
+  try {
+    const report = await main();
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    if (report.status === 'not-run' && requireLive) process.exitCode = 4;
+    else if (report.status !== 'pass' && report.status !== 'not-run') process.exitCode = 1;
+  } catch (error) {
+    process.stderr.write(`VibeTether live v0.6.3 migration failed: ${error.stack ?? error.message}\n`);
+    process.exitCode = 1;
+  }
 }

@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { retainRollbackEvidence } from '../scripts/test-live-v063-migration.mjs';
 import { validateStage0Evidence } from '../scripts/verify-stage0-evidence.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
@@ -236,4 +237,37 @@ test('package scripts and remote matrix execute the governed Stage 0 checks', as
   for (const command of ['npm run audit:stage0', 'npm run test:stage0-evidence', 'npm run test:stage0-package']) {
     assert.match(workflow, new RegExp(command.replaceAll(':', '\\:')));
   }
+});
+
+test('live v0.6.3 exports the exact rollback receipt consumed by final evidence', async (t) => {
+  const base = await mkdtemp(path.join(os.tmpdir(), 'vibetether-live-v063-receipt-'));
+  t.after(() => rm(base, { recursive: true, force: true }));
+  const before = [{ path: 'AGENTS.md', kind: 'file', bytes: 12, sha256: 'a'.repeat(64) }];
+  const receipt = await retainRollbackEvidence(base, 'codex', {
+    migrationId: 'migration-live-codex',
+    rollbackResult: { status: 'rolled-back', migration_id: 'migration-live-codex' },
+    before,
+    after: structuredClone(before),
+  });
+
+  assert.equal(receipt.migration_id, 'migration-live-codex');
+  assert.equal(receipt.rollback_id, 'migration-live-codex');
+  assert.equal(receipt.rollback_result, 'restored');
+  assert.equal(receipt.post_rollback_matches, true);
+  assert.deepEqual(JSON.parse(await readFile(receipt.before_inventory.path, 'utf8')), before);
+  assert.deepEqual(
+    await readFile(receipt.post_rollback_inventory.path),
+    await readFile(receipt.before_inventory.path),
+  );
+  assert.equal(receipt.before_inventory.sha256, receipt.post_rollback_inventory.sha256);
+
+  await assert.rejects(
+    retainRollbackEvidence(base, 'claude', {
+      migrationId: 'migration-live-claude',
+      rollbackResult: { status: 'rolled-back', migration_id: 'migration-live-claude' },
+      before,
+      after: [{ ...before[0], bytes: 13 }],
+    }),
+    /inventory differs/i,
+  );
 });
