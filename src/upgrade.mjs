@@ -23,6 +23,8 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 
 const RC1_BODY = `Use the \`vibe-tether\` Skill at task entry, after compaction or resume, before a consequential decision, and before completion or handoff.\n\nRun \`vibetether context --boundary <boundary> --json\` before reading VibeTether state. Follow only its confirmed truth handles, current slice, blockers, selected provider, and fresh applicable experience.\n\nDo not read raw VibeTether runtime state, provider catalogs, unselected Skills, or unselected experience. Do not alter project direction or activate project truth without the required user confirmation.`;
 const RC1_BLOCK = `${MANAGED_START}\n${RC1_BODY}\n${MANAGED_END}`;
+const RC3_BODY = `Use the \`vibe-tether\` Skill at task entry, after compaction or resume, before a consequential decision, and before completion or handoff.\n\nRun \`vibetether context --boundary <boundary> --json\` before reading VibeTether state. Follow only its confirmed truth handles, current slice, blockers, selected provider, and fresh applicable experience.\n\nDo not read raw VibeTether runtime state, provider catalogs, unselected Skills, or unselected experience. For an explicit deep request or unresolved direction, use the \`vibe-tether-deep\` Skill and do not write product code until its Start Card has a user-confirmed Implementation Permit. Do not alter project direction or activate project truth without the required user confirmation.`;
+const RC3_BLOCK = `${MANAGED_START}\n${RC3_BODY}\n${MANAGED_END}`;
 const HISTORICAL_ENTRY_DIGESTS = {
   '1.0.0-rc.3': {
     entry: 'b3d45043548cef069d53a264745fdcd932808743860f43a836a40b8ab6ad44c5',
@@ -114,7 +116,7 @@ function extractManagedBlock(source, label) {
 
 function replaceKnownManagedBlock(source, label) {
   const located = extractManagedBlock(source, label);
-  if (![managedBlock(), RC1_BLOCK].some((candidate) => portableTextEqual(located.block, candidate))) {
+  if (![managedBlock(), RC3_BLOCK, RC1_BLOCK].some((candidate) => portableTextEqual(located.block, candidate))) {
     throw conflictError(`${label} managed instruction block was modified; preserve the customization and upgrade it deliberately.`, 'MANAGED_BLOCK_CONFLICT');
   }
   return `${source.slice(0, located.start)}${managedBlock()}${source.slice(located.end)}`;
