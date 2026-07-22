@@ -367,7 +367,12 @@ export async function withFileLock(lockPath, operation, { staleMs = 120_000, ret
         await removeIfOwned({ allowMissingOwner: true }).catch(() => {});
         throw error;
       }
-      if (error.code !== 'EEXIST') throw error;
+      // On Windows, mkdir can briefly report EPERM/EACCES while the prior
+      // owner is retiring the same directory. Treat that window as lock
+      // contention, not as authority to steal or as an immediate hard error.
+      // A persistent permission failure still exhausts the bounded retries
+      // and fails closed as LOCKED.
+      if (!['EACCES', 'EEXIST', 'EPERM'].includes(error.code)) throw error;
       const owner = await readJsonFile(path.join(lockPath, 'owner.json'), 'Lock owner', { allowMissing: true }).catch(() => null);
       if (await lockOwnerProvenDead(owner)) {
         let recoveryAcquired = false;
