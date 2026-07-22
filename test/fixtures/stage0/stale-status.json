@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "generated_from": "registry/stage0-baseline.json",
+  "source_snapshot": "2ea8de1",
+  "generated": false,
+  "feature": "adaptive-task-classification",
+  "maturity": "implemented"
+}

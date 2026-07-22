@@ -25,6 +25,8 @@
     "eval": "node evals/run-routing-evals.mjs && node evals/run-longitudinal-evals.mjs --json",
     "audit:budgets": "node scripts/audit-budgets.mjs",
     "audit:release": "node scripts/audit-release.mjs",
+    "audit:stage0": "node scripts/audit-stage0-baseline.mjs",
+    "render:capability-status": "node scripts/render-capability-status.mjs",
     "check:syntax": "node scripts/check-syntax.mjs",
     "check": "npm run check:syntax && npm test && npm run eval && npm run audit:budgets && npm run audit:release",
     "test:compat:v063-live": "node scripts/test-live-v063-migration.mjs"
