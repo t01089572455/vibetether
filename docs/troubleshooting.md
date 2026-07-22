@@ -1,77 +1,47 @@
 # Troubleshooting
 
-## No Contract found
+## No Contract or Contract missing on this branch
 
-Run `vibetether init`, or use `vibetether worktree attach --contract-root <tracked-worktree>` for a linked worktree of the same Git repository.
+Initialize the project, or deliberately attach a linked worktree of the same Git repository. If a tracked Contract exists only on another branch, bring it into the current branch before consequential work. VibeTether does not treat another branch as current authority.
 
-## Contract missing on this branch
+## Compaction or resume
 
-The Context Capsule found a valid tracked Contract in another worktree. Merge or deliberately copy the Contract into this branch before consequential writes. VibeTether does not silently treat another branch as current authority.
+After compaction, handoff, a new task, or phase change, invoke the normal `vibe-tether` entry again. Read `vibetether context --boundary task-entry --json` and `vibetether outcomes status --json` before acting. Do not continue from a compressed summary alone and do not read raw runtime files; use stable public handles for omitted context.
+
+## Manual correction: abandon and re-anchor
+
+When user direction changes during an active route, manual correction means stop, abandon the wrong route with a reason, update user-owned authority if required, then re-anchor and start a new bounded route. Do not mutate the old route into compliance. Automatic Correction and a Correction Lock are future-stage work.
 
 ## Active writer lease
 
-Another route owns this worktree. Use another worktree, finish or abandon the existing route, or inspect it before an explicit `step break-lease`. Never break a live lease merely to bypass coordination.
+Another route owns this worktree. Use another worktree, finish or abandon the existing route, or inspect the reported state before an explicit lease break. Never break a live lease merely to bypass coordination.
 
-## Stale execution snapshot
+## Stale bytes or evidence
 
-Files, branch, HEAD, or dirty bytes changed after evidence. Run fresh verification and finish a new bounded step.
+Files, branch, HEAD, authority, Skills, or dirty bytes changed after evidence. Run fresh verification against the new bytes and finish a new bounded route. Editing a receipt or `PROGRESS.md` cannot restore freshness.
 
-## `GOAL_OUTCOMES_INCOMPLETE` or `RELEASE_OUTCOMES_INCOMPLETE`
+## Goal or release Outcomes incomplete
 
-The latest slice may be green, but the complete user-governed Outcome set is not. Inspect exact remaining IDs instead of treating a progress sentence as authority:
+A green slice is smaller than its parent goal. Inspect exact remaining Outcome and acceptance IDs, then run the goal and release Doctor boundaries separately. Do not lower or omit an Outcome to make the report pass.
 
-```sh
-vibetether outcomes list --project . --json
-vibetether doctor --project . --boundary goal --json
-vibetether doctor --project . --boundary release --json
-```
-
-Confirm missing Outcomes only after the user reviews them. Do not lower the goal boundary to make the Doctor pass.
-
-## `INTEGRATION_WORKTREE_REQUIRED`
-
-Only the worktree designated when coverage was confirmed may close the parent goal and update the tracked `PROGRESS.md` projection. A feature worktree can close its own slice but cannot silently claim the parent is complete. Merge or integrate the verified bytes into the designated worktree, then rerun the goal boundary.
-
-## `PROGRESS_PROJECTION_MISSING` or a modified `PROGRESS.md`
-
-`PROGRESS.md` is generated from the Outcome Contract and per-worktree ledger. Do not hand-edit it to change status. Restore it from Git or regenerate it from the integration worktree:
-
-```sh
-vibetether outcomes status --project . --write-progress
-```
-
-If regeneration is refused, first resolve the current Contract, worktree, or coverage error reported by `doctor`.
-
-The projection's completion label records the latest verified transition. It is not a substitute for a fresh Doctor run: a changed artifact, authority revision, or tampered receipt can make the live boundary fail even when the generated document still shows an older label.
-
-## Stale Experience
-
-Inspect the audit reasons. Re-run the workflow under current authority and environment, then confirm it again with fresh evidence. Do not manually edit hashes to restore proven status.
-
-## Provider unavailable
-
-Check channel, pin, host, OS, permission grants, positive and negative triggers, cache fingerprint, and project failure history. Optional work uses the built-in fallback; a permission-sensitive capability may stop instead of bypassing the missing authorization.
-
-## Invalid runtime
-
-The corrupt current projection is moved to quarantine and replaced with a small blocked state. Re-anchor from the validated Contract; do not copy prose from the invalid file back into runtime.
+Only the designated integration worktree can update the tracked progress projection and close the parent goal. Feature worktrees may close their own slices.
 
 ## User decision or Deep Permit required
 
-A vague or direction-sensitive request cannot start code-write. Clarify the requested behavior and acceptance evidence, then retry with a durable `--confirmed-by-user --decision-reason` record. For explicit deep mode, prepare and show the Start Card, obtain user confirmation, and issue a fresh `deep permit`.
+Investigate discoverable facts, show the unresolved decision, and wait for the user. Deep mode requires the complete confirmed Start Card and a fresh scope-bound Permit. An Agent-supplied boolean does not replace unanswered questions or durable confirmation.
 
-## Route contract unsatisfied
+## Provider unavailable or custom route rejected
 
-Provide every non-path required output with `--output`, create every path-like output, and acknowledge each declared exit-evidence statement with `--exit-evidence`. A successful empty command cannot replace missing outputs.
+Check profile, bundle, channel, pin, host, OS, permissions, positive/negative signals, cache fingerprint, route schema, and project failure history. No Provider is downloaded during an active route. A route cannot weaken confirmed Truth, Outcome coverage, permissions, or required evidence.
 
-## Rollback conflict
+## Stale Experience
 
-Rollback stopped because managed assets changed after migration. VibeTether preserves the current bytes in the reported conflict directory rather than overwriting them. Merge the original, migration output, and current versions deliberately.
+Inspect the exact audit reasons. Re-run under current authority, Skills, artifacts, and environment, then request explicit confirmation with fresh evidence. Do not edit hashes to restore proven status.
 
-## Windows `EPERM`, file lock, or interrupted upgrade
+## Rollback conflict or Windows file lock
 
-Close editors, terminals, indexers, and Agents holding the affected project files, then rerun the same preview command first. The transaction keeps recoverable copies rather than deleting the old asset before a replacement succeeds. If it reports a recovery directory, preserve it and use the exact reported recovery command; do not delete the transaction folder to "unstick" the install.
+Rollback preserves post-migration user edits and reports conflicts rather than overwriting them. Close processes holding files, preserve the transaction/recovery directory, rerun the preview, and follow the exact recovery instruction. Do not delete recovery bytes to force success.
 
 ## External evidence will not close
 
-`EXTERNAL_EVIDENCE_VERIFIED` cannot be produced by an Agent saying that a deployment, payment, or external system succeeded. This reference candidate intentionally ships **no trusted authority-adapter executor**: neither the CLI nor an imported helper accepts caller-supplied `PASS` data. Leave that acceptance open in this RC. A future adapter must be separately designed with pinned code and a real host trust boundary; simply installing or importing an arbitrary Skill is not sufficient evidence.
+The RC intentionally has no trusted authority-adapter executor. A statement that deployment, payment, CI, or another service succeeded is not external evidence. Leave the acceptance open until a pinned adapter with a real trust boundary exists and runs.

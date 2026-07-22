@@ -1,25 +1,21 @@
 # Truth and Experience lifecycle
 
-## Truth
+## Truth is authority
 
-The Truth Map is a human-readable registry. Only confirmed entries contribute to the authority digest. Context selects applicable confirmed entries using stable ID, role, scope, phase, operation/capability, and current paths; it reports omitted counts instead of silently treating a truncated projection as complete. Candidates and declined entries remain visible for review but cannot guide implementation.
+Only confirmed Truth contributes to the authority digest. Context selects applicable entries by stable ID, role, scope, phase, operation, capability, and current paths. Candidates and declined entries remain reviewable but cannot direct implementation.
 
-Confirmation, decline, removal, role/scope changes, and supersession are user-owned actions. During a step, `no-material-change` succeeds only when confirmed authority matches the start snapshot. `applied` can reconcile only the declared confirmed path; unrelated authority changes require a separate decision.
+Confirmation, decline, removal, scope change, and supersession are user-owned. A stable Truth ID is separate from its revision digest. Direction-sensitive drift requires a user decision and re-anchor; a test or prior success cannot silently accept it.
 
-## Experience
+## Experience is procedure
 
-Experience stores metadata and artifact pointers, not transcripts. A proven entry requires:
+Experience stores sanitized metadata and artifact pointers, not transcripts. Truth always outranks Experience.
 
-- non-trivial regular artifacts and SHA-256 hashes;
-- successful command or artifact evidence receipts;
-- matching authority and Skills-lock digests;
-- OS and Node major version;
-- verification and review timestamps;
-- revalidation signals and counterevidence.
+A Proven Path follows an explicit beginner lifecycle: a verified non-routine route may capture a candidate; the user inspects the observed sequence, evidence, artifacts, conditions, and environment; explicit confirmation can make it proven; later matching signals may recall it. Capture, candidate review, confirm, and recall are separate events.
 
-Audit computes an effective status without silently deleting user records. Any mismatch makes a declared proven entry suspect and excludes it from recall. At most three exact signal matches are returned. Truth always outranks Experience.
+A proven entry binds artifact hashes, successful evidence receipts, authority and Skills-lock digests, OS and Node major, verification time, review deadline, and revalidation signals. Artifact, authority, Skill, environment, evidence, or time drift makes it effectively suspect and removes it from trusted recall. Counterevidence is retained rather than erased.
 
+At most three exact signal matches are recalled. Routine successes do not create Experience noise, and a design document alone is never a Proven Path.
 
-A stable Truth ID is separate from its revision digest. A digest change records drift and requires re-anchor. Only entries predeclared as deterministic, machine-verifiable, and non-directional may accept a new revision after their versioned validator succeeds; direction-sensitive changes remain user decisions.
+## Correction boundary
 
-Verified reusable success candidates contain a bounded observed sequence, evidence receipt references, decisive conditions, reusability reasons, and any validated durable output artifacts. Routine results do not create Experience noise.
+Stage 0 has manual route abandonment and re-anchor. It does not have automatic raw-session Decision reconciliation or a Correction Lock. Those later mechanisms must not be inferred from Truth and Experience behavior.

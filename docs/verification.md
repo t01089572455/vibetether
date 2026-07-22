@@ -1,65 +1,27 @@
 # VibeTether RC.4 verification boundary
 
-This file is a verification contract, not a self-issued release certificate. A green source-tree test does not prove that the final TGZ works, and a configured CI matrix does not prove that Windows has run.
+This is a verification contract, not a self-issued release certificate. A green source test, configured workflow, prose summary, or historical artifact does not prove the final candidate.
 
-## What must be verified
+## Local candidate gates
 
-Run these commands against the final candidate bytes before any release recommendation:
+The final clean commit must pass locked dependency installation, syntax and policy checks, coverage, Stage 0 audits, the exact installed-package contract, package preview, and dependency audit. The exact installed-package journey packs the clean commit, verifies the TGZ manifest and digest, installs only that TGZ into an isolated prefix, redirects state/cache/config/home, and rejects imports from the source tree.
 
-```sh
-npm ci --ignore-scripts --no-audit --no-fund
-npm run check
-npm run test:coverage
-npm run test:compat:v063-live
-node scripts/test-package-journey.mjs
-npm pack --dry-run
-npm audit --audit-level=low
-```
+Installed journeys cover all 45 public capabilities, profiles and bundles, Provider integrity and permission limits, custom route non-weakening, UI and Outcome gates, worktree recovery, Proven Path recall and invalidation, upgrade, rollback, uninstall, Deep revocation, and goal-versus-release blocking.
 
-The package journey first rejects a dirty worktree and records the exact Git commit/tree it packs. It rejects unsupported archive extension records (including unparsed PAX records), installs the exact TGZ into an isolated prefix with redirected state/cache/home, and runs installed CLIs behind an import guard that rejects source-tree modules. It exercises adaptive ambiguity blocking, Deep Permit revocation, re-anchor recovery, bounded Outcome progress, slice/goal/release distinction, uninstall conflict preservation, and offline launcher reuse.
+Local proof must bind the final candidate commit, tree, TGZ and ZIP hashes, archive entries, runtime identity, commands, exit codes, and retained failure artifacts. Evidence generated before later candidate-byte changes is stale for the final candidate.
 
-The live compatibility journey verifies the historical `v0.6.3` tag object, peeled commit, Git tree, and normalized source-content digest before it runs an exact historical CLI. It installs that CLI's committed lockfile with lifecycle scripts disabled and a minimal environment, then initializes Codex-only, Claude-only, and both-host fixtures before the packed candidate migrates, reads context, finishes an Outcome-controlled slice, rolls back byte inventories, and preserves a post-migration user edit. A moved tag is a hard failure; network unavailability at any remote acquisition step is reported as `not-run`, never as a pass. Failure logs, fixtures, and inventories are retained under the configured artifact directory, and CI uploads them when that gate fails.
+## Gate B remains pending until it runs
+
+Gate B covers the immutable live v0.6.3 migrate/rollback exercise, the Ubuntu and Windows Node 20/24 review-branch matrix, and independent review. A configured matrix is not a pass. Network unavailability is `not-run`, never success. The live journey must verify the historical tag object, peeled commit, tree, normalized content, exact historical CLI behavior, migrated context, one controlled slice, rollback inventory, and preservation of post-migration user edits.
 
 ## Completion evidence is layered
 
-The Doctor reports one of these precise labels:
+The precise labels are `SLICE_GREEN`, `GOAL_ENGINEERING_CLOSED`, `EXTERNAL_EVIDENCE_VERIFIED`, `REVIEW_DISPOSITION_RECORDED`, `OWNER_ACCEPTED`, and `RELEASE_READY`. Each applies only to its declared boundary. A route can be green while its parent Outcome remains open; a closed goal is not release authorization.
 
-```text
-SLICE_GREEN
-GOAL_ENGINEERING_CLOSED
-EXTERNAL_EVIDENCE_VERIFIED
-REVIEW_DISPOSITION_RECORDED
-OWNER_ACCEPTED
-RELEASE_READY
-```
+This RC has no trusted authority-adapter executor. External evidence remains open instead of accepting caller-supplied `PASS` data. `PROGRESS.md` projects the last verified transition; Doctor recalculates freshness against current bytes.
 
-The report is valid only at its requested boundary. A `SLICE_GREEN` route is not a closed parent goal; a closed goal is not release-ready; an Agent cannot manufacture external authority evidence. This reference RC deliberately has no trusted authority-adapter executor, so a declared external gate stays open rather than accepting a caller-supplied result. The labels are ordered only among maturity gates declared by the project: a project without an external gate can still have a review/owner milestone, but it cannot claim external verification. `PROGRESS.md` records the last verified transition; Doctor recalculates freshness against current bytes. Tests verify that authority, user/review decision receipts, and release evidence become stale when final product bytes change.
+## Review boundary
 
-## Local versus remote evidence
+A final review inspects the exact commit and tree, artifact hashes and manifests, raw command results, live compatibility inventories, all four terminating CI job URLs, the final diff, and an independently scoped product/migration/security review. The implementing Agent's own summary is self-review only.
 
-The repository defines four mandatory remote jobs:
-
-```text
-ubuntu-latest  / Node 20
-ubuntu-latest  / Node 24
-windows-latest / Node 20
-windows-latest / Node 24
-```
-
-Each must run the source checks, coverage, exact live-v0.6.3 journey, exact package journey, package preview, and audit. The remote matrix remains a release blocker until all jobs terminate successfully. Windows file-lock, case, short-path, and path-normalization behavior are not inferred from Linux tests.
-
-## What a final review must inspect
-
-- the final commit and tree ID;
-- the exact TGZ/ZIP hashes and archive manifests;
-- raw exit codes and summaries for the commands above;
-- the live v0.6.3 inventories and rollback conflict report;
-- the GitHub Actions URLs for all four jobs;
-- the final diff against the delivery packet;
-- an independently scoped review of product claims, migration safety, and security boundaries.
-
-The implementing Agent’s own test summary is self-review. It is useful evidence, but not independent approval.
-
-## Limits
-
-VibeTether is not an operating-system sandbox, semantic oracle, or host-enforced daemon. Hashes prove byte identity, not product meaning. A receipt proves the recorded command or adapter result, not that every relevant test exists. Without a mandatory host hook, an Agent that never invokes VibeTether cannot be forced into its control plane.
+No local or remote green result authorizes `main` merge, tag creation, publication, deployment, or release without the owner's explicit decision.
