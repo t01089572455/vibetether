@@ -147,7 +147,7 @@ OWNER_ACCEPTED
 RELEASE_READY
 ```
 
-These are ordered among the maturity gates your Contract actually declares. `SLICE_GREEN` never means every required Outcome is complete. `GOAL_ENGINEERING_CLOSED` never means a package can be released. `EXTERNAL_EVIDENCE_VERIFIED` is available only when a declared authority adapter supplies a valid receipt; the reference RC ships no fake adapter that lets an Agent self-attest an external fact. If a project does not declare an external gate, a declared review/owner gate can still be the next applicable milestone. `RELEASE_READY` additionally requires current release evidence and explicit release authorization.
+These are ordered among the maturity gates your Contract actually declares. `SLICE_GREEN` never means every required Outcome is complete. `GOAL_ENGINEERING_CLOSED` never means a package can be released. This reference RC ships **no trusted authority-adapter executor**, so a declared external gate remains blocked rather than accepting caller-supplied `PASS` data. A future adapter needs a pinned implementation and a real host trust boundary; it cannot be enabled by an Agent importing a helper. If a project does not declare an external gate, a declared review/owner gate can still be the next applicable milestone. `RELEASE_READY` additionally requires current release evidence and explicit release authorization.
 
 `PROGRESS.md` records the highest label reached by a verified transition. It is a generated ledger projection, not a freshness oracle: `doctor` rechecks the current final bytes and can lower the live verdict when evidence has gone stale.
 

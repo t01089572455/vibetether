@@ -38,7 +38,6 @@ const AUTHORITY_RECEIPT_KEYS = new Set([
   'id', 'acceptance_id', 'outcome_id', 'kind', 'adapter', 'claim_scope', 'evidence_locator', 'evidence_digest', 'verdict',
   'registry_digest', 'outcome_revision_digest', 'authority_digest', 'worktree_id', 'execution_snapshot', 'recorded_at', 'digest',
 ]);
-const AUTHORITY_RESULT_KEYS = new Set(['adapter', 'claim_scope', 'evidence_locator', 'evidence_digest', 'verdict']);
 
 function only(value, allowed, label) {
   for (const key of Object.keys(value)) if (!allowed.has(key)) throw conflictError(`${label} contains unsupported field: ${key}`, 'INVALID_OUTCOME_PROGRESS');
@@ -67,17 +66,6 @@ function validateAuthorityReceipt(value, label, { acceptanceId = null, outcomeId
   if (!/^[a-f0-9]{64}$/.test(value.authority_digest ?? '') || !value.execution_snapshot || typeof value.execution_snapshot !== 'object' || Array.isArray(value.execution_snapshot)) throw conflictError(`${label} authority binding is invalid.`, 'INVALID_OUTCOME_PROGRESS');
   if (typeof value.recorded_at !== 'string' || Number.isNaN(Date.parse(value.recorded_at)) || value.digest !== sealReceipt(value).digest || containsSecret(value)) throw conflictError(`${label} is stale or contains a secret.`, 'INVALID_OUTCOME_PROGRESS');
   if ((acceptanceId && value.acceptance_id !== acceptanceId) || (outcomeId && value.outcome_id !== outcomeId) || (adapter && value.adapter !== adapter) || (registryDigest && value.registry_digest !== registryDigest) || (worktreeId && value.worktree_id !== worktreeId) || (outcomeRevisionDigest && value.outcome_revision_digest !== outcomeRevisionDigest)) throw conflictError(`${label} does not bind the current acceptance.`, 'INVALID_OUTCOME_PROGRESS');
-  return value;
-}
-
-function validateAuthorityResult(value, expectedAdapter) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw conflictError('Authority adapter result is invalid.', 'INVALID_AUTHORITY_ADAPTER_RESULT');
-  only(value, AUTHORITY_RESULT_KEYS, 'Authority adapter result');
-  if (value.adapter !== expectedAdapter || value.verdict !== 'PASS') throw conflictError('Authority adapter result does not match the declared passing adapter.', 'AUTHORITY_ADAPTER_RESULT_INVALID');
-  logicalId(value.adapter, 'Authority adapter result adapter');
-  boundedText(value.claim_scope, 512, 'Authority adapter result claim scope');
-  boundedText(value.evidence_locator, 1000, 'Authority adapter result evidence locator');
-  if (!/^sha256:[a-f0-9]{64}$/.test(value.evidence_digest ?? '') || containsSecret(value)) throw conflictError('Authority adapter result evidence is invalid.', 'AUTHORITY_ADAPTER_RESULT_INVALID');
   return value;
 }
 
@@ -297,45 +285,19 @@ export async function recordAcceptanceDecision(context, paths, registryValue, ac
 }
 
 /**
- * Extension point for a purpose-built authority adapter. There is deliberately no
- * generic CLI command for this operation: an Agent must not self-attest an
- * external fact by emitting a JSON blob. The adapter must verify its authority
- * path before it calls this function, and the resulting receipt is bound to the
- * current authority, worktree, Outcome revision, and final-byte snapshot.
+ * Reserved for a future trusted authority-adapter executor.
+ *
+ * This reference RC has no pinned executor or host trust boundary for an
+ * external system. A caller-supplied PASS object is therefore not evidence and
+ * must never manufacture an authority receipt. Contracts that declare this
+ * validator intentionally remain blocked until a separately designed adapter
+ * trust chain exists.
  */
-export async function recordAuthorityAdapterAcceptance(context, paths, registryValue, acceptanceId, options={}) {
-  const registry=validateOutcomeRegistry(structuredClone(registryValue));
-  const outcome=registry.outcomes.find((item)=>item.disposition==='required'&&item.acceptance.some((acceptance)=>acceptance.id===acceptanceId));
-  const acceptance=outcome?.acceptance.find((item)=>item.id===acceptanceId);
-  if (!outcome||!acceptance) throw conflictError(`Required acceptance is not found: ${acceptanceId}`, 'ACCEPTANCE_NOT_FOUND');
-  if (acceptance.validator.kind!=='authority-adapter') throw conflictError(`Acceptance ${acceptanceId} does not accept an authority adapter receipt.`, 'ACCEPTANCE_AUTHORITY_ADAPTER_NOT_APPLICABLE');
-  const result=validateAuthorityResult(options.adapter_result,acceptance.validator.adapter);
-  if (!/^[a-f0-9]{64}$/.test(options.authority_digest??'')) throw conflictError('Authority adapter receipt requires the current confirmed authority digest.', 'AUTHORITY_REQUIRED');
-  const progress=await readOutcomeProgress(paths,registry,{persist_reconciled:true});
-  await verifyProgressProjection(context,registry,progress);
-  const snapshot=await executionSnapshot(context.executionRoot);
-  const receipt=sealReceipt({
-    id:`authority-receipt-${randomUUID()}`,
-    acceptance_id:acceptance.id,outcome_id:outcome.id,kind:'authority-adapter',adapter:result.adapter,
-    claim_scope:result.claim_scope,evidence_locator:result.evidence_locator,evidence_digest:result.evidence_digest,verdict:'PASS',
-    registry_digest:outcomeRegistryDigest(registry),outcome_revision_digest:outcome.revision_digest,
-    authority_digest:options.authority_digest,worktree_id:paths.worktree_id,execution_snapshot:snapshot,recorded_at:new Date().toISOString(),
-  });
-  if (containsSecret(receipt)) throw conflictError('Authority adapter receipt appears to contain a secret.', 'SECRET_VALUE');
-  const next=structuredClone(progress); const entry=next.outcomes[outcome.id];
-  entry.satisfied_acceptance_ids=[...new Set([...entry.satisfied_acceptance_ids,acceptance.id])].sort();
-  entry.missing_acceptance_ids=outcome.acceptance.map((item)=>item.id).filter((id)=>!entry.satisfied_acceptance_ids.includes(id));
-  entry.acceptance_proofs[acceptance.id]={kind:'authority-adapter',evidence_ids:[],decision_receipt:null,authority_receipt:receipt};
-  entry.state=entry.missing_acceptance_ids.length?'in-progress':'satisfied';
-  next.generation+=1; next.precise_completion_label=deriveRecordedCompletionLabel(registry,next); next.updated_at=new Date().toISOString();
-  validateOutcomeProgress(next,paths,registry);
-  const plans=[
-    {target:path.join(paths.authority_receipts,`${receipt.id}.json`),content:canonicalJson(receipt),mode:0o600},
-    {target:paths.outcome_progress,content:canonicalJson(next),mode:0o600},
-  ];
-  if (isProgressProjectionOwner(registry,next)) plans.push({target:resolveInside(context.root,context.manifest.progress_projection,'Progress projection path'),content:renderProgressMarkdown(registry,next),mode:0o644});
-  await transactionalWrites(plans);
-  return {outcome_id:outcome.id,acceptance_id:acceptance.id,authority_receipt:receipt,progress:next};
+export async function recordAuthorityAdapterAcceptance() {
+  throw conflictError(
+    'The reference RC has no trusted authority-adapter executor; external acceptance remains open.',
+    'AUTHORITY_ADAPTER_UNAVAILABLE',
+  );
 }
 
 export function bindRouteOutcomes(registryValue, outcomeIdsValue, successChecks, { consequential = false } = {}) {
@@ -378,7 +340,7 @@ export function bindRouteOutcomes(registryValue, outcomeIdsValue, successChecks,
 function hasRecordedAcceptance(entry, acceptance) {
   const proof=entry?.acceptance_proofs?.[acceptance.id];
   if (!entry?.satisfied_acceptance_ids?.includes(acceptance.id) || !proof) return false;
-  if (acceptance.validator.kind==='authority-adapter') return proof.kind==='authority-adapter' && proof.authority_receipt?.verdict==='PASS';
+  if (acceptance.validator.kind==='authority-adapter') return false;
   if (['user-decision','review-decision'].includes(acceptance.validator.kind)) return proof.kind===acceptance.validator.kind && proof.decision_receipt?.decision_type===acceptance.validator.decision_type;
   return proof.kind==='route-evidence' && Array.isArray(proof.evidence_ids) && proof.evidence_ids.length>0;
 }

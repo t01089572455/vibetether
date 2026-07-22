@@ -271,35 +271,31 @@ test('release Doctor exposes reviewed and owner-accepted milestones without prom
   assert.equal((await progressFor(root)).progress.precise_completion_label,'RELEASE_READY');
 });
 
-test('a declared authority adapter can record a sealed external receipt, while the ordinary CLI cannot forge it', async () => {
+test('the reference RC refuses caller-supplied external adapter PASS data', async () => {
   const {root}=await initProject('rc4-authority-adapter-receipt');
   const goal=outcome('outcome_goal','acceptance_goal','goal-result.txt');
   const external=partialExternalReleaseOutcome();
   await govern(root,[goal,external]);
   await satisfy(root,goal,'acceptance_goal','goal-result.txt');
   const {context,authority,runtime}=await progressFor(root);
-  await recordAuthorityAdapterAcceptance(context,runtime.paths,context.outcomes,'acceptance_release_external',{
-    authority_digest:authority.authority_digest,
-    adapter_result:{
-      adapter:'fixture_authority',
-      claim_scope:'fixture_release_revision',
-      evidence_locator:'fixture://authority/release-revision/1',
-      evidence_digest:digest('fixture-external-evidence-v1'),
-      verdict:'PASS',
-    },
-  });
-  let report=await inspectProject({project:root,boundary:'release',throw_on_error:false});
-  assert.equal(report.completion.label,'EXTERNAL_EVIDENCE_VERIFIED');
-  assert.equal((await progressFor(root)).progress.precise_completion_label,'EXTERNAL_EVIDENCE_VERIFIED');
+  await assert.rejects(
+    recordAuthorityAdapterAcceptance(context,runtime.paths,context.outcomes,'acceptance_release_external',{
+      authority_digest:authority.authority_digest,
+      adapter_result:{
+        adapter:'fixture_authority',
+        claim_scope:'fixture_release_revision',
+        evidence_locator:'fixture://authority/release-revision/1',
+        evidence_digest:digest('fixture-external-evidence-v1'),
+        verdict:'PASS',
+      },
+    }),
+    (error)=>error.code==='AUTHORITY_ADAPTER_UNAVAILABLE',
+  );
   await assert.rejects(
     mainJson(['outcomes','acceptance','record','--project',root,'--id','acceptance_release_external','--user-message-locator','user-message:attempt-to-forge-external-proof','--reason','This ordinary CLI path must not be able to manufacture an external authority receipt.','--yes']),
     (error)=>error.code==='ACCEPTANCE_DECISION_NOT_APPLICABLE',
   );
-
-  const progress=(await progressFor(root)).progress;
-  const receipt=progress.outcomes[external.id].acceptance_proofs.acceptance_release_external.authority_receipt;
-  await writeFile(path.join(runtime.paths.authority_receipts,`${receipt.id}.json`),'{}\n');
-  report=await inspectProject({project:root,boundary:'release',throw_on_error:false});
+  const report=await inspectProject({project:root,boundary:'release',throw_on_error:false});
   assert.notEqual(report.completion.label,'EXTERNAL_EVIDENCE_VERIFIED');
   assert.ok(report.completion.unproven_maturity.some((item)=>item.acceptance_id==='acceptance_release_external'));
 });

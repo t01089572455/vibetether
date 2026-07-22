@@ -33,7 +33,7 @@ OWNER_ACCEPTED
 RELEASE_READY
 ```
 
-The report is valid only at its requested boundary. A `SLICE_GREEN` route is not a closed parent goal; a closed goal is not release-ready; an Agent cannot manufacture external authority evidence. The labels are ordered only among maturity gates declared by the project: a project without an external gate can still have a review/owner milestone, but it cannot claim external verification. `PROGRESS.md` records the last verified transition; Doctor recalculates freshness against current bytes. Tests verify that authority, user/review decision receipts, and release evidence become stale when final product bytes change.
+The report is valid only at its requested boundary. A `SLICE_GREEN` route is not a closed parent goal; a closed goal is not release-ready; an Agent cannot manufacture external authority evidence. This reference RC deliberately has no trusted authority-adapter executor, so a declared external gate stays open rather than accepting a caller-supplied result. The labels are ordered only among maturity gates declared by the project: a project without an external gate can still have a review/owner milestone, but it cannot claim external verification. `PROGRESS.md` records the last verified transition; Doctor recalculates freshness against current bytes. Tests verify that authority, user/review decision receipts, and release evidence become stale when final product bytes change.
 
 ## Local versus remote evidence
 

@@ -74,4 +74,4 @@ Close editors, terminals, indexers, and Agents holding the affected project file
 
 ## External evidence will not close
 
-`EXTERNAL_EVIDENCE_VERIFIED` cannot be produced by an Agent saying that a deployment, payment, or external system succeeded. It requires the declared authority adapter's sealed receipt, bound to the current Outcome, Truth, worktree, and final-byte snapshot. The reference candidate intentionally ships no generic CLI command that lets an Agent self-attest external facts; leave that acceptance open or install and trust a purpose-built adapter that verifies its own authority path before recording its receipt.
+`EXTERNAL_EVIDENCE_VERIFIED` cannot be produced by an Agent saying that a deployment, payment, or external system succeeded. This reference candidate intentionally ships **no trusted authority-adapter executor**: neither the CLI nor an imported helper accepts caller-supplied `PASS` data. Leave that acceptance open in this RC. A future adapter must be separately designed with pinned code and a real host trust boundary; simply installing or importing an arbitrary Skill is not sufficient evidence.

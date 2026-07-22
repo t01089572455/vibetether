@@ -62,15 +62,7 @@ async function currentAcceptanceProof(context,runtime,entry,acceptance,authority
     return {ok:true,decision_receipt_id:proof.decision_receipt.id};
   }
   if (validator.kind==='authority-adapter') {
-    const receipt=proof?.authority_receipt;
-    if (proof?.kind!=='authority-adapter'||receipt?.adapter!==validator.adapter||receipt?.verdict!=='PASS'||receipt.authority_digest!==authorityDigest) return {ok:false,reason:'authority-adapter-receipt-missing-or-stale'};
-    try {
-      const sealed=await readReceipt(path.join(runtime.paths.authority_receipts,`${receipt.id}.json`),'Authority adapter receipt');
-      if (canonicalJson(sealed)!==canonicalJson(receipt)) return {ok:false,reason:'authority-adapter-receipt-mismatch'};
-    } catch { return {ok:false,reason:'authority-adapter-receipt-missing-or-tampered'}; }
-    const now=await executionSnapshot(context.executionRoot).catch(()=>null);
-    if (!now||!snapshotsMatchIgnoringPaths(receipt.execution_snapshot,now,[context.manifest.progress_projection])) return {ok:false,reason:'authority-adapter-final-bytes-changed'};
-    return {ok:true,authority_receipt_id:receipt.id};
+    return {ok:false,reason:'authority-adapter-unavailable-in-reference-rc'};
   }
   if (!['command','artifact'].includes(validator.kind)) return {ok:false,reason:`${validator.kind}-receipt-missing`};
   if (proof?.kind!=='route-evidence') return {ok:false,reason:'acceptance-route-proof-missing'};
