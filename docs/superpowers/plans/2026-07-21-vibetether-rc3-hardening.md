@@ -506,3 +506,16 @@ Expected: remote review branch created; remote `main` and tags remain unchanged.
 - Placeholder scan: no deferred implementation marker is used; every task has exact files, commands, expected results, and a concrete implementation shape.
 - Type consistency: `task_digest`, `start_card_digest`, decision receipts, route/lease/permit generations, success-check digests, and final snapshots use the same names from grant through validation and Doctor.
 - Scope boundary: no task authorizes a formal release, remote `main` update, or real user-project migration.
+
+<!-- stage0-reconciliation-2026-07-22 -->
+## Stage 0 reconciliation (2026-07-22)
+
+This append-only reconciliation does not rewrite the original checklist, reconstruct an unobserved RED, or promote historical evidence into current evidence.
+
+- Commit `a71851e98a0b2c00130796a3370c6f5dd86771d2` and the results attributed to it above are historical/non-current evidence for the earlier RC4 attempt.
+- Later bounded Stage 0 work added the tracked self Project Contract, generated capability status, controlled UI/re-entry paths, and exact installed-package journeys. When an earlier unchecked task now has implementation but its earlier failing observation was not preserved, its honest label is `implemented later / original RED provenance unavailable`; the original checkbox remains unchanged.
+- `registry/stage0-baseline.json` is the canonical status manifest; the generated capability-status document is its review projection. Exact current delivery evidence remains outside candidate package bytes.
+- Exact current Stage 0 candidate commit: pending final candidate bytes.
+- Gate B live v0.6.3, remote matrix, and independent-review evidence remain pending.
+
+STAGE0_COMPLETE remains pending owner acceptance.

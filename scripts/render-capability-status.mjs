@@ -40,9 +40,9 @@ export function renderCapabilityStatus(baseline, baselineBytes) {
     '',
     '## Status vocabulary',
     '',
-    '- **implemented** — a current public/runtime path exists; exact package and delivery evidence remain separate gates.',
-    '- **partial-advisory** — useful mechanics exist, but an explicit enforcement or coverage boundary remains.',
-    '- **designed** — written design exists; Stage 0 does not claim product implementation.',
+    '- **implemented** - a current public/runtime path exists; exact package and delivery evidence remain separate gates.',
+    '- **partial-advisory** - useful mechanics exist, but an explicit enforcement or coverage boundary remains.',
+    '- **designed** - written design exists; Stage 0 does not claim product implementation.',
     '',
     '## Control capability map',
     '',
@@ -75,8 +75,14 @@ export function renderCapabilityStatus(baseline, baselineBytes) {
     '| Axis | First required boundary |',
     '| --- | --- |',
   );
-  for (const axis of baseline.completion_evidence_axes) lines.push(`| \`${cell(axis.id)}\` | \`${cell(axis.required_for)}\` |`);
-  lines.push('', 'No source file, test count, configured CI matrix, historical receipt, or prose claim promotes a row by itself.', '');
+  for (const axis of baseline.completion_evidence_axes) {
+    lines.push(`| \`${cell(axis.id)}\` | \`${cell(axis.required_for)}\` |`);
+  }
+  lines.push(
+    '',
+    'No source file, test count, configured CI matrix, historical receipt, or prose claim promotes a row by itself.',
+    '',
+  );
   return lines.join('\n');
 }
 

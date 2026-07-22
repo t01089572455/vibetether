@@ -40,18 +40,31 @@ export async function auditStage0({
   const candidates = classifications.stage0_candidate_public ?? [];
   const classified = [...retained, ...(classifications.internal ?? []), ...(classifications.later_designed ?? []), ...candidates];
   const journeys = new Map((baseline.package_journeys ?? []).map((journey) => [journey.id, journey]));
+  const controlFeatures = baseline.control_features ?? [];
 
   if (new Set(entryIds).size !== entryIds.length) problems.push(issue('DUPLICATE_CAPABILITY', 'Stage 0 capability IDs must be unique.'));
   if (entryIds.length !== baseline.candidate_capability_count) problems.push(issue('CAPABILITY_COUNT_MISMATCH', 'Candidate capability count does not match the inventory.'));
   if (retained.length !== baseline.baseline_capability_count) problems.push(issue('BASELINE_COUNT_MISMATCH', 'Retained-public count does not match the baseline count.'));
   if (!sameMembers(classified, entryIds)) problems.push(issue('CAPABILITY_CLASSIFICATION_INCOMPLETE', 'Every inventory capability must have exactly one visibility/disposition classification.'));
   if (!sameMembers(registryIds, entryIds)) problems.push(issue('CAPABILITY_INVENTORY_STALE', 'registry/capabilities.json and the Stage 0 candidate inventory differ.'));
+  if (new Set(controlFeatures.map(({ id }) => id)).size !== controlFeatures.length) problems.push(issue('DUPLICATE_CONTROL_FEATURE', 'Stage 0 control feature IDs must be unique.'));
   for (const entry of entries) {
     if (!allowedMaturity.has(entry.maturity)) problems.push(issue('INVALID_MATURITY', `${entry.id} has unsupported maturity ${entry.maturity}.`));
     if (!Array.isArray(entry.journeys) || entry.journeys.length === 0) problems.push(issue('PUBLIC_JOURNEY_MISSING', `${entry.id} has no public journey.`));
     for (const journeyId of entry.journeys ?? []) {
       const journey = journeys.get(journeyId);
       if (!journey?.test_id || !journey?.test_file || !journey?.public_path) problems.push(issue('PUBLIC_JOURNEY_INVALID', `${entry.id} references incomplete journey ${journeyId}.`));
+    }
+  }
+  for (const feature of controlFeatures) {
+    if (!allowedMaturity.has(feature.maturity)) problems.push(issue('INVALID_CONTROL_MATURITY', `${feature.id} has unsupported maturity ${feature.maturity}.`));
+    if (!Number.isInteger(feature.owning_stage) || feature.owning_stage < 0) problems.push(issue('INVALID_OWNING_STAGE', `${feature.id} has an invalid owning stage.`));
+    if (!Array.isArray(feature.evidence) || feature.evidence.length === 0) {
+      problems.push(issue('CONTROL_EVIDENCE_MISSING', `${feature.id} has no current source/test evidence locator.`));
+      continue;
+    }
+    for (const relative of feature.evidence) {
+      await access(path.join(packageRoot, relative)).catch(() => problems.push(issue('CONTROL_LOCATOR_MISSING', `${feature.id} references missing locator: ${relative}`)));
     }
   }
   for (const relative of [

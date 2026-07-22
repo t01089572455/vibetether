@@ -115,3 +115,16 @@ Harden the exact RC.3 artifact on an isolated integration branch until its adapt
 - Encode every reproduced RC.3 defect as a regression test rather than relying on this narrative.
 - Feed lifecycle recovery findings into `docs/migration.md`, Windows behavior into `docs/troubleshooting.md`, evidence boundaries into `docs/verification.md`, and route behavior into the train/held-out corpus.
 - Keep experience candidates non-authoritative until the user reviews their scope and confirms indexing.
+
+<!-- stage0-reconciliation-2026-07-22 -->
+## Stage 0 reconciliation (2026-07-22)
+
+This append-only reconciliation does not rewrite the original checklist, reconstruct an unobserved RED, or promote historical evidence into current evidence.
+
+- Commit `a71851e98a0b2c00130796a3370c6f5dd86771d2` and its ZIP, TGZ, local-test, and review statements above are historical/non-current evidence for the earlier RC4 attempt.
+- Later bounded Stage 0 work added the tracked self Project Contract, generated capability status, controlled UI/re-entry paths, and exact installed-package journeys. When an earlier unchecked task now has implementation but its earlier failing observation was not preserved, its honest label is `implemented later / original RED provenance unavailable`; the original record remains unchanged.
+- `registry/stage0-baseline.json` is the canonical status manifest; the generated capability-status document is its review projection. Exact current delivery evidence remains outside candidate package bytes.
+- Exact current Stage 0 candidate commit: pending final candidate bytes.
+- Gate B live v0.6.3, remote matrix, and independent-review evidence remain pending.
+
+STAGE0_COMPLETE remains pending owner acceptance.

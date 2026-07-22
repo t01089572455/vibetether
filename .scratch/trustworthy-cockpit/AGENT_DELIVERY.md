@@ -99,3 +99,16 @@ This packet currently authorizes the written design only. Product-code implement
 
 - Encode the stale-parent-control discovery as a Stage 0 regression: VibeTether's own repository must not inherit or display an unrelated parent checkpoint as its project status.
 - Do not activate a new Proven Path from design work alone; no verified reusable operational workflow has been established yet.
+
+<!-- stage0-reconciliation-2026-07-22 -->
+## Stage 0 reconciliation (2026-07-22)
+
+This append-only reconciliation does not rewrite the original design record, reconstruct an unobserved RED, or promote historical evidence into current evidence.
+
+- Commit `a71851e98a0b2c00130796a3370c6f5dd86771d2` and any result inherited from the earlier RC4 packet are historical/non-current evidence only.
+- Later bounded Stage 0 work added the tracked self Project Contract, generated capability status, controlled UI/re-entry paths, and exact installed-package journeys. Where the earlier record described a missing control that was later implemented without preserved original failing evidence, the honest label is `implemented later / original RED provenance unavailable`; this does not implement the cockpit.
+- `registry/stage0-baseline.json` is the canonical status manifest; the generated capability-status document is its review projection. Decision Memory, Correction, Claim governance, Host Enforcement, Failure Replay, inspect, and the cockpit remain designed future-stage work.
+- Exact current Stage 0 candidate commit: pending final candidate bytes.
+- Gate B live v0.6.3, remote matrix, and independent-review evidence remain pending.
+
+STAGE0_COMPLETE remains pending owner acceptance.
