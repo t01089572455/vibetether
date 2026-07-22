@@ -2,13 +2,20 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+  STAGE0_PACKAGE_JOURNEYS, assertCapabilityCoverage, downgradeProjectToRc1,
+  validateStage0PackageReport,
+} from './test-stage0-package-contract.mjs';
 
-const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const sourceArgument = process.argv.indexOf('--source');
+const sourceRoot = sourceArgument >= 0
+  ? path.resolve(process.argv[sourceArgument + 1] ?? '')
+  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const json = process.argv.includes('--json');
 const commands = [];
 let guardedNodeInvocations = 0;
@@ -109,11 +116,11 @@ function runGit(project, args) {
 
 function captureCleanSourceIdentity() {
   const dirty=run('git',['status','--porcelain=v1','--untracked-files=all'],{cwd:sourceRoot,label:'verify source worktree clean'}).stdout;
-  if (dirty.trim()) throw new Error('PACKAGE_SOURCE_DIRTY: exact package journey requires a clean committed source worktree. Commit or stash every change first.');
+  if (dirty.trim()) throw new Error(`PACKAGE_SOURCE_DIRTY: exact package journey requires a clean committed source worktree: ${sourceRoot}`);
   const commit=run('git',['rev-parse','HEAD'],{cwd:sourceRoot,label:'resolve packaged source commit'}).stdout.trim().toLowerCase();
   const tree=run('git',['rev-parse','HEAD^{tree}'],{cwd:sourceRoot,label:'resolve packaged source tree'}).stdout.trim().toLowerCase();
   if (!/^[a-f0-9]{40}$/.test(commit)||!/^[a-f0-9]{40}$/.test(tree)) throw new Error('Unable to resolve the exact source commit and tree for package verification.');
-  return {clean:true,commit,tree};
+  return {clean:true,commit,tree,tree_status:[]};
 }
 
 async function writeSourceTreeImportGuard(base) {
@@ -144,6 +151,7 @@ async function inspectTgz(tgz) {
   try { tar=gunzipSync(compressed,{maxOutputLength:10*1024*1024}); }
   catch (error) { throw new Error(`Package archive exceeds the bounded decompression limit: ${error.message}`); }
   const paths = new Set();
+  const files = [];
   let offset = 0;
   let entries = 0;
   let regularFiles = 0;
@@ -171,13 +179,17 @@ async function inspectTgz(tgz) {
       regularFiles += 1;
       unpackedBytes += size;
     }
+    files.push(archivePath);
     entries += 1;
     offset += 512 + Math.ceil(size / 512) * 512;
   }
   if (entries === 0 || regularFiles === 0) throw new Error('Package archive contains no regular files.');
   if (unpackedBytes > 8 * 1024 * 1024) throw new Error(`Package archive exceeds the 8 MiB unpacked safety budget: ${unpackedBytes}`);
   if (unpackedBytes > compressed.length * 120) throw new Error('Package archive exceeds the 120x compression safety ratio.');
-  return { safe: true, entries, regular_files: regularFiles, compressed_bytes: compressed.length, unpacked_bytes: unpackedBytes, sha256: sha256(compressed) };
+  return {
+    safe: true, entries, regular_files: regularFiles, compressed_bytes: compressed.length,
+    unpacked_bytes: unpackedBytes, sha256: sha256(compressed), files: files.sort(),
+  };
 }
 
 async function inventory(root, relative = '', output = []) {
@@ -377,9 +389,264 @@ async function exerciseDeepRevocation(installedCli, project, env) {
   return refused.status === 3 && blocked.status === 4;
 }
 
+async function initializeInstalledProject(installedCli, base, env, name, initArgs = [], seed = {}) {
+  const project = path.join(base, 'stage0-projects', name);
+  await mkdir(project, { recursive: true });
+  runGit(project, ['init', '-q']);
+  runGit(project, ['config', 'user.email', 'package-journey@example.test']);
+  runGit(project, ['config', 'user.name', 'VibeTether Package Journey']);
+  const entries = Object.entries({ 'app.txt': 'initial\n', ...seed });
+  for (const [relative, content] of entries) {
+    const target = path.join(project, ...relative.split('/'));
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, content);
+  }
+  runGit(project, ['add', '.']);
+  runGit(project, ['commit', '-qm', `initial ${name} fixture`]);
+  runJsonCli(installedCli, project, env, [
+    'init', '--project', project, '--agent', 'codex',
+    '--goal', `Exercise the installed ${name} package journey.`,
+    '--success-evidence', 'The installed package journey passes.',
+    '--confirmed', '--yes', ...initArgs,
+  ]);
+  return project;
+}
+
+async function exerciseCapabilityCoverage(installedCli, installedRoot, project, env) {
+  const baseline = JSON.parse(await readFile(path.join(installedRoot, 'registry', 'stage0-baseline.json'), 'utf8'));
+  const registry = runJsonCli(installedCli, project, env, ['capabilities']).body;
+  const observed = [];
+  for (const capability of registry.capabilities) {
+    const routed = runJsonCli(installedCli, project, env, [
+      'capabilities', '--project', project, '--phase', capability.phases[0], '--capability', capability.id,
+      '--network', '--external-write', '--code-write',
+    ]).body;
+    observed.push({
+      id: capability.id,
+      journey_id: 'installed-capability-routing',
+      phase: routed.phase,
+      provider_id: routed.selected.id,
+      provider_fingerprint: routed.selected.fingerprint,
+      provider_object_hash: routed.selected.object_hash,
+      shortlist_size: routed.shortlist.length,
+    });
+  }
+  return assertCapabilityCoverage({ baseline, registry, observed });
+}
+
+async function exerciseProviderProfiles(installedCli, base, env) {
+  const specifications = [
+    ['core', ['--profile', 'core']],
+    ['standard', ['--profile', 'standard']],
+    ['extended', ['--profile', 'extended']],
+    ['web', ['--profile', 'standard', '--bundle', 'web']],
+    ['production', ['--profile', 'standard', '--bundle', 'production']],
+  ];
+  const profiles = [];
+  let runtimeDownloadDirectoryCreated = false;
+  for (const [id, args] of specifications) {
+    const project = await initializeInstalledProject(installedCli, base, env, `profile-${id}`, args);
+    const routed = runJsonCli(installedCli, project, env, [
+      'capabilities', '--project', project, '--phase', 'DIAGNOSE', '--capability', 'debugging',
+    ]).body;
+    profiles.push({
+      id, provider_id: routed.selected.id, fingerprint: routed.selected.fingerprint,
+      object_hash: routed.selected.object_hash, shortlist_size: routed.shortlist.length,
+    });
+    runtimeDownloadDirectoryCreated ||= existsSync(path.join(project, '.vibetether', 'providers'));
+  }
+  return {
+    profile_ids: profiles.map((item) => item.id), profiles,
+    runtime_download_directory_created: runtimeDownloadDirectoryCreated,
+  };
+}
+
+async function exerciseCustomRoutes(installedCli, base, env) {
+  const project = await initializeInstalledProject(
+    installedCli, base, env, 'custom-routes', ['--profile', 'extended', '--bundle', 'production'],
+  );
+  const routesPath = path.join(project, '.vibetether', 'routes.json');
+  const routes = JSON.parse(await readFile(routesPath, 'utf8'));
+  routes.routes.push({
+    id: 'package-primary', phases: ['EXECUTE_ONE'], capability: 'implementation',
+    signals: { all: [], any: ['package-overlay'], none: [] }, provider: 'vibetether-built-in-implementation',
+    role: 'primary', priority: 100, required_outputs: ['package_primary_output'], exit_evidence: ['Package primary evidence.'],
+  }, {
+    id: 'package-alternative', phases: ['EXECUTE_ONE'], capability: 'implementation',
+    signals: { all: [], any: ['package-overlay'], none: [] }, provider: 'addy-incremental-implementation',
+    role: 'alternative', priority: 50, required_outputs: ['package_alternative_output'], exit_evidence: ['Package alternative evidence.'],
+  }, {
+    id: 'package-overlay', phases: ['EXECUTE_ONE'], capability: 'implementation',
+    signals: { all: [], any: ['package-overlay'], none: [] }, provider: 'vibetether-built-in-implementation',
+    role: 'overlay', priority: 10, required_outputs: ['package_overlay_output'], exit_evidence: ['Package overlay evidence.'],
+  });
+  await writeFile(routesPath, `${JSON.stringify(routes, null, 2)}\n`);
+  const composed = runJsonCli(installedCli, project, env, [
+    'capabilities', '--project', project, '--phase', 'EXECUTE_ONE', '--capability', 'implementation',
+    '--signal', 'package-overlay', '--code-write',
+  ]).body;
+  const overlayUnionOnly = ['bounded_change', 'package_primary_output', 'package_alternative_output', 'package_overlay_output']
+    .every((item) => composed.required_outputs.includes(item));
+
+  const uiRoutes = structuredClone(routes);
+  uiRoutes.routes.push({
+    id: 'attempted-ui-weakening', phases: ['EXECUTE_ONE'], capability: 'frontend-propagation',
+    signals: { all: [], any: ['attempted-ui-weakening'], none: [] }, provider: 'vibetether-built-in-implementation',
+    role: 'overlay', priority: 1000, required_outputs: [], exit_evidence: [],
+  });
+  await writeFile(routesPath, `${JSON.stringify(uiRoutes, null, 2)}\n`);
+  const uiCheck = {
+    id: 'check-installed-ui-weakening', claim: 'The attempted installed UI propagation passes.', kind: 'command',
+    command: [process.execPath, '-e', "const fs=require('node:fs');if(!fs.existsSync('ui.txt'))process.exit(7)"],
+    covers_paths: ['ui.txt'], consumer_paths: ['ui.txt'], acceptance_ids: [],
+  };
+  const ui = runJsonCli(installedCli, project, env, [
+    'step', 'start', '--project', project, '--phase', 'EXECUTE_ONE', '--capability', 'frontend-propagation',
+    '--task', 'Attempt to weaken installed UI propagation.', '--slice', 'Attempt only the refused UI route.',
+    '--path', 'ui.txt', '--success-evidence', uiCheck.claim, '--success-check-json', JSON.stringify(uiCheck),
+    '--signal', 'attempted-ui-weakening', '--code-write', '--confirmed-by-user',
+    '--decision-reason', 'The fixture user confirms this exact refused route.',
+  ], { allowed: [3] });
+  const uiPrerequisiteNotWeakened = ui.status === 3 && /required UI Outcome/i.test(ui.stderr);
+
+  const permission = runJsonCli(installedCli, project, env, [
+    'capabilities', '--project', project, '--phase', 'EXECUTE_ONE', '--capability', 'implementation',
+    '--signal', 'package-overlay',
+  ], { allowed: [3] });
+  const permissionBoundaryNotWeakened = permission.status === 3 && /permission|unavailable/i.test(permission.stderr);
+
+  const ambiguous = structuredClone(routes);
+  ambiguous.routes.push({ ...ambiguous.routes[0], id: 'package-primary-duplicate' });
+  await writeFile(routesPath, `${JSON.stringify(ambiguous, null, 2)}\n`);
+  const refused = runJsonCli(installedCli, project, env, [
+    'capabilities', '--project', project, '--phase', 'EXECUTE_ONE', '--capability', 'implementation',
+    '--signal', 'package-overlay', '--code-write',
+  ], { allowed: [3] });
+  return {
+    overlay_union_only: overlayUnionOnly,
+    ambiguous_primaries_rejected: refused.status === 3 && /equally matching primaries/i.test(refused.stderr),
+    ui_prerequisite_not_weakened: uiPrerequisiteNotWeakened,
+    permission_boundary_not_weakened: permissionBoundaryNotWeakened,
+  };
+}
+
+async function exerciseUpgrade(installedCli, base, env) {
+  const project = await initializeInstalledProject(
+    installedCli, base, env, 'upgrade-rollback', ['--profile', 'extended', '--bundle', 'production'],
+  );
+  const routesPath = path.join(project, '.vibetether', 'routes.json');
+  const skillsPath = path.join(project, '.vibetether', 'skills.lock.json');
+  const routes = JSON.parse(await readFile(routesPath, 'utf8'));
+  routes.routes.push({
+    id: 'preserved-upgrade-route', phases: ['EXECUTE_ONE'], capability: 'implementation',
+    signals: { all: [], any: ['upgrade-preserve'], none: [] }, provider: 'vibetether-built-in-implementation',
+    role: 'primary', priority: 100, required_outputs: ['preserved_route_output'], exit_evidence: ['Preserved route evidence.'],
+  });
+  await writeFile(routesPath, `${JSON.stringify(routes, null, 2)}\n`);
+  runJsonCli(installedCli, project, env, ['skills', 'prefer', '--project', project, '--id', 'addy-incremental-implementation']);
+  runJsonCli(installedCli, project, env, ['skills', 'disable', '--project', project, '--id', 'vibetether-built-in-tdd']);
+  const routesBefore = await readFile(routesPath);
+  const skillsBefore = await readFile(skillsPath);
+  await downgradeProjectToRc1(project, { agent: 'codex' });
+  const before = await inventory(project);
+  const preview = runJsonCli(installedCli, project, env, ['upgrade', '--project', project, '--agent', 'codex', '--dry-run']).body;
+  const applied = runJsonCli(installedCli, project, env, ['upgrade', '--project', project, '--agent', 'codex', '--yes']).body;
+  const routesAfterApply = await readFile(routesPath);
+  const skillsAfterApply = await readFile(skillsPath);
+  runJsonCli(installedCli, project, env, ['upgrade', 'rollback', '--id', applied.upgrade_id, '--yes']);
+  const after = await inventory(project);
+  return {
+    previewed: preview.status === 'preview', applied: applied.status === 'upgraded',
+    user_routes_byte_preserved: routesBefore.equals(routesAfterApply) && routesBefore.equals(await readFile(routesPath)),
+    provider_choices_byte_preserved: skillsBefore.equals(skillsAfterApply) && skillsBefore.equals(await readFile(skillsPath)),
+    rollback_byte_exact: JSON.stringify(before) === JSON.stringify(after),
+    upgrade_id: applied.upgrade_id,
+  };
+}
+
+function routeProofArguments(route, checkId, artifact) {
+  const args = [];
+  for (const output of route.required_outputs ?? []) args.push('--output-proof-json', JSON.stringify({
+    output, check_ids: [checkId], summary: `The installed package check proves ${output}.`, artifact_paths: [artifact],
+  }));
+  for (const criterion of route.exit_evidence ?? []) args.push('--exit-proof-json', JSON.stringify({
+    criterion, check_ids: [checkId], summary: 'The installed package check passed on final bytes.', artifact_paths: [artifact],
+  }));
+  return args;
+}
+
+async function exerciseProvenPath(installedCli, base, env) {
+  const project = await initializeInstalledProject(installedCli, base, env, 'proven-path');
+  const artifact = 'recovery.txt';
+  const original = '# Installed recovery path\n\nRun the verified installed recovery sequence and preserve its bounded evidence.\n';
+  const check = {
+    id: 'check-installed-proven-path', claim: 'The recovered installed-package workflow passes.', kind: 'command',
+    command: [process.execPath, '-e', "const fs=require('node:fs');if(!fs.readFileSync('recovery.txt','utf8').includes('verified installed recovery sequence'))process.exit(7)"],
+    covers_paths: [artifact], consumer_paths: [artifact], acceptance_ids: [],
+  };
+  const started = runJsonCli(installedCli, project, env, [
+    'step', 'start', '--project', project, '--phase', 'EXECUTE_ONE', '--capability', 'implementation',
+    '--task', 'Recover the non-obvious installed package workflow.', '--slice', 'Recover only the reusable local workflow.',
+    '--path', artifact, '--success-evidence', check.claim, '--success-check-json', JSON.stringify(check),
+    '--signal', 'bug-fix', '--signal', 'recovered-path', '--provider', 'vibetether-built-in-implementation',
+    '--code-write', '--confirmed-by-user', '--decision-reason', 'The fixture user approved this recovered path.',
+  ]).body;
+  await writeFile(path.join(project, artifact), original);
+  const finished = runJsonCli(installedCli, project, env, [
+    'step', 'finish', '--project', project, ...routeProofArguments(started.route, check.id, artifact),
+  ]).body;
+  const candidateId = finished.experience_capture.candidate_id;
+  const confirm = ['experience', 'confirm', '--project', project, '--id', candidateId];
+  for (const id of finished.route.evidence_ids) confirm.push('--evidence-id', id);
+  runJsonCli(installedCli, project, env, [...confirm, '--yes']);
+  const recalled = runJsonCli(installedCli, project, env, [
+    'context', '--project', project, '--boundary', 'task-entry', '--phase', 'EXECUTE_ONE',
+    '--capability', 'proven-path-recall', '--signal', 'recovered-path', '--code-write',
+  ]).body;
+  const recalledWhenMatching = recalled.experience.some((item) => item.id === candidateId);
+
+  await writeFile(path.join(project, artifact), '# Changed recovery path\n\nThe bytes changed and now require explicit revalidation.\n');
+  let audit = runJsonCli(installedCli, project, env, ['experience', 'audit', '--project', project, '--signal', 'recovered-path']).body;
+  const artifactChangeInvalidated = audit.find((item) => item.id === candidateId)?.reasons.includes('artifact-changed') === true;
+  await writeFile(path.join(project, artifact), original);
+  const lockPath = path.join(project, '.vibetether', 'skills.lock.json');
+  const lock = await readFile(lockPath);
+  runJsonCli(installedCli, project, env, ['skills', 'prefer', '--project', project, '--id', 'vibetether-built-in-tdd']);
+  audit = runJsonCli(installedCli, project, env, ['experience', 'audit', '--project', project, '--signal', 'recovered-path']).body;
+  const skillsChangeInvalidated = audit.find((item) => item.id === candidateId)?.reasons.includes('skills-changed') === true;
+  await writeFile(lockPath, lock);
+  await writeFile(path.join(project, 'new-truth.md'), '# Truth\nA new confirmed requirement.\n');
+  runJsonCli(installedCli, project, env, ['truth', 'add', '--project', project, '--path', 'new-truth.md', '--role', 'requirement', '--scope', '.', '--yes']);
+  runJsonCli(installedCli, project, env, ['truth', 'confirm', '--project', project, '--path', 'new-truth.md', '--yes']);
+  audit = runJsonCli(installedCli, project, env, ['experience', 'audit', '--project', project, '--signal', 'recovered-path']).body;
+  const authorityChangeInvalidated = audit.find((item) => item.id === candidateId)?.reasons.includes('authority-changed') === true;
+  return {
+    candidate_id: candidateId, recalled_when_matching: recalledWhenMatching,
+    artifact_change_invalidated: artifactChangeInvalidated,
+    skills_change_invalidated: skillsChangeInvalidated,
+    authority_change_invalidated: authorityChangeInvalidated,
+  };
+}
+
+async function exerciseProviderTamper(installedCli, installedRoot, project, env) {
+  const target = path.join(installedRoot, 'registry', 'builtins', 'vibetether-built-in-design', 'SKILL.md');
+  const original = await readFile(target);
+  try {
+    await writeFile(target, Buffer.concat([original, Buffer.from('\ntampered\n')]));
+    const refused = runJsonCli(installedCli, project, env, [
+      'capabilities', '--project', project, '--phase', 'DESIGN', '--capability', 'product-design',
+    ], { allowed: [3] });
+    return refused.status === 3 && /digest|integrity|fingerprint|hash|mismatch/i.test(refused.stderr);
+  } finally {
+    await writeFile(target, original);
+  }
+}
+
 async function main() {
   const source=captureCleanSourceIdentity();
   const base = await mkdtemp(path.join(os.tmpdir(), 'vibetether-package-journey-'));
+  let report = null;
+  let cleanup = { completed: false, base_removed: false };
   try {
     const packDirectory = path.join(base, 'pack');
     const prefix = path.join(base, 'prefix');
@@ -414,6 +681,7 @@ async function main() {
       cwd: base, env: environment, label: 'install exact TGZ into isolated prefix',
     });
     const installedCli = path.join(prefix, 'node_modules', 'vibetether', 'bin', 'vibetether.mjs');
+    const installedRoot = path.join(prefix, 'node_modules', 'vibetether');
     const installedCliStat = await stat(installedCli);
     if (!installedCliStat.isFile()) throw new Error('The isolated TGZ installation does not contain the CLI entrypoint.');
     if (path.resolve(installedCli).startsWith(`${sourceRoot}${path.sep}`)) throw new Error('Package journey attempted to execute a source-tree CLI.');
@@ -425,7 +693,16 @@ async function main() {
     runGit(project, ['config', 'user.email', 'package-journey@example.test']);
     runGit(project, ['config', 'user.name', 'VibeTether Package Journey']);
     await writeFile(path.join(project, 'app.txt'), 'initial\n');
-    runGit(project, ['add', 'app.txt']);
+    await mkdir(path.join(project, 'docs', 'adr'), { recursive: true });
+    await mkdir(path.join(project, 'docs', 'ui'), { recursive: true });
+    await Promise.all([
+      writeFile(path.join(project, 'README.md'), '# Product\n\nCandidate dark mode and SSO notes.\n'),
+      writeFile(path.join(project, 'docs', 'requirements.md'), '# Requirements\n\nCandidate requirements only.\n'),
+      writeFile(path.join(project, 'docs', 'adr', '0001.md'), '# ADR\n\nCandidate architecture only.\n'),
+      writeFile(path.join(project, 'docs', 'ui', 'reference.md'), '# UI reference\n\nCandidate visual reference only.\n'),
+      writeFile(path.join(project, 'docs', 'old-plan.md'), '# Old plan\n\nHistorical plan only.\n'),
+    ]);
+    runGit(project, ['add', '.']);
     runGit(project, ['commit', '-qm', 'initial package journey fixture']);
 
     runJsonCli(installedCli, project, guardedEnvironment, [
@@ -437,6 +714,27 @@ async function main() {
       cwd: project, env: guardedEnvironment, label: 'guarded offline generated project launcher version',
     }).stdout.trim();
     if (!version || launcherVersion !== version) throw new Error(`Project launcher ${launcherVersion} does not match installed CLI ${version}.`);
+
+    const truth = runJsonCli(installedCli, project, guardedEnvironment, ['truth', 'list', '--project', project]).body;
+    const intent = await readFile(path.join(project, '.vibetether', 'intent.md'), 'utf8');
+    const entrySkills = (await readdir(path.join(project, '.agents', 'skills'))).sort();
+    const freshContract = {
+      truth_confirmed: truth.confirmed?.length ?? 0,
+      truth_candidates: truth.candidates?.length ?? 0,
+      truth_declined: truth.declined?.length ?? 0,
+      repository_documents_activated: [...(truth.confirmed ?? []), ...(truth.candidates ?? []), ...(truth.declined ?? [])].length > 0,
+      intent_only_explicit: intent.includes('Prove the isolated exact package control journey.')
+        && intent.includes('The installed package preserves true completion boundaries.')
+        && !/dark mode|SSO|Candidate requirements|Candidate architecture|Historical plan/i.test(intent),
+      entry_skills: entrySkills,
+      requested_entry_skills_only: JSON.stringify(entrySkills) === JSON.stringify(['vibe-tether', 'vibe-tether-deep']),
+    };
+
+    const capabilityCoverage = await exerciseCapabilityCoverage(installedCli, installedRoot, project, guardedEnvironment);
+    const providers = await exerciseProviderProfiles(installedCli, base, guardedEnvironment);
+    const customRoutes = await exerciseCustomRoutes(installedCli, base, guardedEnvironment);
+    const upgradeContract = await exerciseUpgrade(installedCli, base, guardedEnvironment);
+    const provenPath = await exerciseProvenPath(installedCli, base, guardedEnvironment);
 
     const deepRevocationBlocksFinish = await exerciseDeepRevocation(installedCli, project, guardedEnvironment);
     const first = outcome('outcome_package_first', 'acceptance_package_first', 'first-result.txt');
@@ -462,10 +760,20 @@ async function main() {
       'uninstall', '--project', project, '--agent', 'codex', '--remove-contract', '--yes',
     ], { allowed: [3] });
     const uninstallPreservedModifiedContract = uninstall.status === 3 && (await readFile(progress, 'utf8')).includes('user-owned package journey edit');
+    const integrityTamperRejected = await exerciseProviderTamper(installedCli, installedRoot, project, guardedEnvironment);
+    providers.integrity_tamper_rejected = integrityTamperRejected;
+    providers.runtime_download_directory_created ||= existsSync(path.join(project, '.vibetether', 'providers'));
 
-    return {
+    const detailedGreen = freshContract.intent_only_explicit && freshContract.requested_entry_skills_only
+      && capabilityCoverage.complete && providers.runtime_download_directory_created === false && integrityTamperRejected
+      && Object.entries(customRoutes).every(([, value]) => value === true)
+      && upgradeContract.previewed && upgradeContract.applied && upgradeContract.user_routes_byte_preserved
+      && upgradeContract.provider_choices_byte_preserved && upgradeContract.rollback_byte_exact
+      && provenPath.recalled_when_matching && provenPath.artifact_change_invalidated
+      && provenPath.skills_change_invalidated && provenPath.authority_change_invalidated;
+    report = {
       ok: source.clean && archive.safe && goalBlockedAfterOneSlice && goalClosedAfterTwoSlices && releaseBlockedWithoutReleaseAuthorization
-        && deepRevocationBlocksFinish && upgradePreviewed && uninstallPreservedModifiedContract,
+        && deepRevocationBlocksFinish && upgradePreviewed && uninstallPreservedModifiedContract && detailedGreen,
       source,
       archive,
       install: {
@@ -476,6 +784,20 @@ async function main() {
         installed_cli_sha256: sha256(await readFile(installedCli)),
         version,
       },
+      runtime: {
+        node: process.version,
+        npm: process.env.npm_config_user_agent ?? null,
+        platform: process.platform,
+        arch: process.arch,
+        os_release: os.release(),
+      },
+      journey_ids: [...STAGE0_PACKAGE_JOURNEYS],
+      fresh_contract: freshContract,
+      providers,
+      custom_routes: customRoutes,
+      upgrade: upgradeContract,
+      proven_path: provenPath,
+      capability_coverage: capabilityCoverage,
       journey: {
         goal_blocked_after_one_slice: goalBlockedAfterOneSlice,
         goal_closed_after_two_slices: goalClosedAfterTwoSlices,
@@ -490,7 +812,12 @@ async function main() {
     };
   } finally {
     await rm(base, { recursive: true, force: true });
+    cleanup = { completed: true, base_removed: !existsSync(base) };
   }
+  report.cleanup = cleanup;
+  report.ok &&= cleanup.completed && cleanup.base_removed;
+  validateStage0PackageReport(report);
+  return report;
 }
 
 try {

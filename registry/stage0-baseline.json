@@ -83,7 +83,7 @@
     { "id": "frontend-product-design", "maturity": "partial-advisory", "journeys": ["installed-capability-enumeration", "ui-control"] },
     { "id": "frontend-engineering", "maturity": "partial-advisory", "journeys": ["installed-capability-enumeration", "ui-control"] },
     { "id": "browser-verification", "maturity": "partial-advisory", "journeys": ["installed-capability-enumeration", "ui-control"] },
-    { "id": "frontend-propagation", "maturity": "designed", "journeys": ["installed-capability-enumeration", "ui-control"] },
+    { "id": "frontend-propagation", "maturity": "partial-advisory", "journeys": ["installed-capability-enumeration", "ui-control"] },
     { "id": "security-review", "maturity": "implemented", "journeys": ["installed-capability-enumeration", "provider-integrity"] },
     { "id": "code-review", "maturity": "implemented", "journeys": ["installed-capability-enumeration"] },
     { "id": "review-feedback", "maturity": "implemented", "journeys": ["installed-capability-enumeration"] },
@@ -109,7 +109,7 @@
     { "id": "project-bootstrap", "maturity": "implemented", "journeys": ["installed-capability-enumeration", "fresh-contract"] }
   ],
   "package_journeys": [
-    { "id": "installed-capability-enumeration", "stage": 0, "test_id": "stage0-installed-capability-enumeration", "test_file": "test/stage0-package-capabilities.test.mjs", "public_path": "vibetether capabilities --json" },
+    { "id": "installed-capability-enumeration", "stage": 0, "test_id": "stage0-installed-capability-routing", "test_file": "test/stage0-package-capabilities.test.mjs", "public_path": "vibetether capabilities --phase <phase> --capability <id> --json" },
     { "id": "fresh-contract", "stage": 0, "test_id": "stage0-installed-fresh-contract", "test_file": "test/stage0-package-contract.test.mjs", "public_path": "vibetether init" },
     { "id": "custom-route-overlay", "stage": 0, "test_id": "stage0-installed-custom-route-overlay", "test_file": "test/stage0-package-contract.test.mjs", "public_path": ".vibetether/routes.json plus vibetether capabilities" },
     { "id": "ui-control", "stage": 0, "test_id": "stage0-ui-control", "test_file": "test/stage0-ui-control.test.mjs", "public_path": "vibetether step start/finish" },
