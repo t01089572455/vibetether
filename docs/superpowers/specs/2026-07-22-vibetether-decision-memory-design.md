@@ -3,7 +3,7 @@
 - Status: proposed for written-spec review
 - Decision owner: project user
 - Target: RC5-A after the reviewed RC4 branch
-- Scope: durable decisions, visible-session reconciliation, compaction/resume rehydration, document synchronization, lifecycle applicability, and Permit binding
+- Scope: durable decisions, on-demand local-session recheck, visible-session reconciliation, compaction/resume rehydration, document synchronization, lifecycle applicability, and Permit binding
 - Approval basis: the user approved this bounded direction in conversation; the exact written contract remains subject to this document review
 
 ## Problem
@@ -16,6 +16,7 @@ VibeTether currently separates Intent, confirmed Truth, Outcomes, Experience, an
 - the raw transcript contains proposals, system/developer context, tools, compacted summaries, duplicates, and obsolete branches, so it cannot be treated as authority;
 - an Implementation Permit is bound to its Start Card receipts, but not to a project-level durable decision inventory or its document synchronization state;
 - a later Agent can therefore resume from an incomplete summary, reinterpret an earlier answer, or start implementation while the governing design document is stale.
+- after the user reports a misunderstanding or asks the Agent to audit itself, the Agent may review only its own latest summary instead of the original visible conversation and repeat the same error.
 
 The required behavior is:
 
@@ -32,6 +33,16 @@ inspect facts and current authority
 ```
 
 The goal is to prevent expensive rework caused by lost or guessed intent. It is not to preserve every chat message or turn VibeTether into a transcript database.
+
+The anti-loss invariant is:
+
+```text
+host-owned raw visible session = original provenance
+confirmed Decision / Truth / Outcome = governed authority
+Context Capsule / checkpoint / compacted summary = disposable, rebuildable projection
+```
+
+A projection may accelerate normal work but may not validate its own completeness. When the user disputes understanding or requests recheck, VibeTether bypasses summary-on-summary reasoning and compares the attached raw visible message range with the current governed state and actual bytes.
 
 “Ready to implement” does not mean that the Agent claims omniscience. It means that, for the approved bounded slice, discoverable facts have been checked, every known consequential ambiguity has an explicit disposition, applicable lifecycle domains are resolved, governing documents and Outcomes reflect the decision set, and the user has confirmed the resulting implementation contract.
 
@@ -193,9 +204,23 @@ The projection also shows pending Outcome synchronization. It does not replace `
 
 ## Visible-session reconciliation
 
+### Source-of-record decision
+
+The host-owned local session file is the raw conversation source of record when it is available. VibeTether does not copy that transcript into a database, a tracked project file, or a second memory store. The host remains responsible for retention; VibeTether stores only a local attachment receipt containing the canonical locator, file identity, session ID, format version, bounded cursor, and digests.
+
+This separation has three purposes:
+
+- the original visible conversation remains available for exact recheck rather than being replaced by an Agent summary;
+- VibeTether remains lightweight and does not become a transcript database, daemon, or synchronization service;
+- project history contains only user-confirmed decisions and bounded provenance, not private conversation bodies.
+
+The raw session is provenance, not project authority. A user-authored message can support a proposed decision; only the reviewed Decision Diff promotes that meaning into the Decision registry. An assistant message, summary, extracted label, or parser result cannot authorize work.
+
 ### Explicit attachment
 
 RC5-A supports a host-adapter interface and ships one concrete reader for Codex JSONL. A session source is attached explicitly with its host and local path. VibeTether does not guess the newest session or search all user conversations automatically.
+
+The user may identify the source by exact path, session ID, or a host-provided current-session handle. A host-provided handle is accepted only when its adapter can resolve it deterministically and show the canonical path and identity before use. Ambiguous “latest session” discovery is rejected.
 
 The attached source and reconciliation cursor are stored only in per-worktree local state. The local state may retain the canonical path, file identity, session ID, last inspected message, last confirmed cursor, and digests. It never stores message bodies.
 
@@ -212,7 +237,29 @@ content.type in {input_text, output_text}
 
 It excludes developer/system messages, reasoning items, tool calls and outputs, `event_msg`, `compacted` summaries, world state, inter-agent metadata, and unsupported attachments. Known host-injected segments—including plugin inventories, `AGENTS.md`/workspace instructions, environment context, and ambient UI state—are separated from user-authored text and reported as ignored segments. If the adapter cannot unambiguously separate an injected segment from authored text, it stops with `SESSION_SEGMENT_AMBIGUOUS` instead of treating the segment as a decision. Assistant messages can explain a proposal but can never authorize a decision.
 
-Messages are identified by host message ID plus a digest of the exact ordered user-authored text segments after host-envelope separation. Normalized text may support duplicate-candidate detection, but it is never the provenance identity. Duplicate IDs or conflicting accepted bytes fail closed. The reader uses a shared read stream, imposes file/line/message limits, accepts only a regular JSONL file, and ignores one incomplete trailing record while rejecting malformed interior records.
+Messages are identified by host message ID plus a digest of the exact ordered user-authored text segments after host-envelope separation. Normalized text may support duplicate-candidate detection, but it is never the provenance identity. Duplicate IDs or conflicting accepted bytes fail closed. The reader uses a shared read stream, accepts only a regular JSONL file, and ignores one incomplete trailing record while rejecting malformed interior records. Per-batch byte/line/message budgets prevent unbounded model context; stable continuation handles allow a large source to be audited to completion. A hard resource limit never silently truncates “full” coverage: it returns `SESSION_SOURCE_LIMIT` with the covered range and remaining count or unknown remainder.
+
+### Recheck triggers and audit modes
+
+Session recheck is event-driven rather than continuous. It runs when:
+
+- the user explicitly asks the Agent to reread, review, self-audit, or reconcile the current or a named session;
+- the user reports that the Agent misunderstood, omitted, contradicted, concealed, weakened, or prematurely completed part of the request;
+- an alignment correction or the same correction family recurs;
+- compaction, resume, or handoff leaves visible user messages beyond the last confirmed cursor;
+- a consequential Start Card, correction, goal-closure, or release claim depends on decisions not yet represented by stable Decision handles;
+- a confirmed decision, governing document, Outcome mapping, or rejected branch appears inconsistent with the raw request provenance.
+
+Two modes are supported:
+
+- **incremental reconciliation** reads only messages after the last confirmed cursor and is the default for normal continuation, compaction, and handoff;
+- **bounded full recheck** rereads the complete attached visible conversation when the user explicitly requests a whole-session audit, an alignment failure may predate the cursor, the cursor is untrusted, or repeated correction indicates that incremental memory is insufficient.
+
+Both modes produce a review report containing covered message ranges, ignored segments, unresolved ambiguities, candidate additions, candidate supersessions, rejected-strategy resurrection, and an explicit omission count. They do not paste the whole transcript into Agent context. Large sessions are processed through stable message handles and bounded windows, while the final Decision Diff covers every inspected user message.
+
+The first concrete adapter is Codex JSONL because its local format can be inspected and tested. Claude Code and other hosts use the same adapter contract only when they expose a stable, user-authorized local source and a reliable visible-message filter. Until then, the host reports raw-session recheck as unsupported while durable Decisions and ordinary rehydration continue to work; feature parity is never simulated.
+
+Self-audit is therefore not “ask the same model whether it was right.” It is a comparison between the raw visible request history, current confirmed Decisions and Truth, current Outcomes, actual changed bytes, and the Agent's proposed next action or claim. When those disagree, the result is a correction or conflict report, not a stronger summary.
 
 ### Incremental flow
 
@@ -238,6 +285,8 @@ Every newly inspected user message receives one batch disposition:
 The CLI validates provenance and batch coverage but does not perform semantic extraction. The Agent proposes meanings; the user confirms the resulting diff. A no-material classification is therefore part of the reviewed batch rather than a silent cursor skip.
 
 If the source is missing, moved without matching identity, truncated before the confirmed cursor, conflicting, or unavailable, VibeTether returns `PROVENANCE_UNAVAILABLE` or `SESSION_RECONCILIATION_CONFLICT`. It never invents a locator or silently trusts the summary.
+
+If a host rotates or compacts the physical file while preserving stable message identities, the adapter may reattach only after proving that every previously confirmed message identity and digest is present. Otherwise the old attachment remains historical and consequential work blocks until the user selects or confirms a replacement source.
 
 ## Decision confirmation, document synchronization, and Outcome synchronization
 
@@ -514,6 +563,11 @@ RC5-A is acceptable only when black-box tests prove all of the following:
 14. `doctor --boundary slice|goal|release` reports decision failures separately from Outcome, Truth, Evidence, and release failures.
 15. A confirmed scope or acceptance change cannot leave the old Outcome registry or `PROGRESS.md` current; the reviewed Outcome diff is applied and regenerated, or Permit and completion remain blocked.
 16. Generated host instructions and both entry Skills require Decision Context re-entry after compaction/resume and fail closed before consequential work when reconciliation is incomplete.
+17. An explicit user request to audit the whole session produces a bounded full recheck from the attached raw source rather than reviewing only the Agent's summary or current Decision projection.
+18. A reported misunderstanding or alignment correction invalidates the affected Permit, compares the original visible request with current Decisions, Outcomes, bytes, and proposed action, and requires a reviewed correction before mutation resumes.
+19. The project and local runtime contain no copied transcript bodies or conversation database; removing the host session file makes provenance unavailable without deleting already confirmed bounded Decisions.
+20. A missing, ambiguous, rotated, malformed, or identity-mismatched session source yields an explicit provenance blocker and can never be represented as successfully remembered.
+21. Full-session and incremental reports expose covered ranges, ignored injected segments, unresolved items, and omissions without treating assistant prose or compacted summaries as authority.
 
 ## Non-scope
 
