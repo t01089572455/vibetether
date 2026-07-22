@@ -11,7 +11,7 @@ const failures=[];
 const packageJson=JSON.parse(await readFile(path.join(root,'package.json'),'utf8'));
 if(packageJson.version!==VERSION) failures.push(`package.json version ${packageJson.version} differs from runtime ${VERSION}`);
 if(packageJson.dependencies&&Object.keys(packageJson.dependencies).length) failures.push('Runtime dependencies must remain empty.');
-const required=['README.md','CHANGELOG.md','CONTRIBUTING.md','SECURITY.md','THIRD_PARTY_NOTICES.md','LICENSE','docs/architecture/0001-lean-control-kernel.md','docs/design/VIBETETHER-BEGINNER-AND-CAPABILITY-CONTRACT.md','docs/design/VIBETETHER-COMPATIBILITY-AND-DATA-CONTRACT.md','docs/verification.md','skills/vibe-tether/SKILL.md','skills/vibe-tether-deep/SKILL.md','registry/community-provenance.json','.gitattributes','.github/workflows/ci.yml','scripts/test-live-v063-migration.mjs','scripts/sync-provider-integrity.mjs'];
+const required=['README.md','CHANGELOG.md','CONTRIBUTING.md','SECURITY.md','THIRD_PARTY_NOTICES.md','LICENSE','docs/architecture/0001-lean-control-kernel.md','docs/design/VIBETETHER-BEGINNER-AND-CAPABILITY-CONTRACT.md','docs/design/VIBETETHER-COMPATIBILITY-AND-DATA-CONTRACT.md','docs/verification.md','skills/vibe-tether/SKILL.md','skills/vibe-tether-deep/SKILL.md','registry/community-provenance.json','.gitattributes','.github/workflows/ci.yml','scripts/test-package-journey.mjs','scripts/test-live-v063-migration.mjs','scripts/sync-provider-integrity.mjs'];
 for(const relative of required){try{const st=await lstat(path.join(root,relative));if(!st.isFile())failures.push(`${relative} is not a file`);}catch{failures.push(`${relative} is missing`);}}
 
 const registry=await loadProviderRegistry();

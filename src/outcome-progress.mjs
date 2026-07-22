@@ -11,7 +11,15 @@ import { executionSnapshot } from './git.mjs';
 import { sealReceipt } from './runtime.mjs';
 
 const PROGRESS_STATES = new Set(['open', 'in-progress', 'satisfied', 'stale', 'blocked']);
-const COMPLETION_LABELS = new Set(['NOT_STARTED', 'SLICE_GREEN', 'GOAL_ENGINEERING_CLOSED', 'RELEASE_READY']);
+const COMPLETION_LABELS = new Set([
+  'NOT_STARTED',
+  'SLICE_GREEN',
+  'GOAL_ENGINEERING_CLOSED',
+  'EXTERNAL_EVIDENCE_VERIFIED',
+  'REVIEW_DISPOSITION_RECORDED',
+  'OWNER_ACCEPTED',
+  'RELEASE_READY',
+]);
 const PROGRESS_KEYS = new Set([
   'schema_version', 'project_id', 'worktree_id', 'goal_id', 'goal_revision_digest',
   'registry_digest', 'generation', 'precise_completion_label', 'updated_at', 'outcomes',
@@ -20,12 +28,17 @@ const ENTRY_KEYS = new Set([
   'outcome_revision_digest', 'state', 'satisfied_acceptance_ids', 'route_ids', 'evidence_ids',
   'acceptance_proofs', 'validator_revisions', 'last_verified_snapshot', 'missing_acceptance_ids',
 ]);
-const PROOF_KEYS = new Set(['kind', 'evidence_ids', 'decision_receipt']);
+const PROOF_KEYS = new Set(['kind', 'evidence_ids', 'decision_receipt', 'authority_receipt']);
 const DECISION_PROOF_KEYS = new Set([
   'id', 'acceptance_id', 'outcome_id', 'kind', 'decision_type', 'user_message_locator', 'reason',
   'independence_level', 'registry_digest', 'outcome_revision_digest', 'authority_digest',
   'worktree_id', 'execution_snapshot', 'recorded_at', 'digest',
 ]);
+const AUTHORITY_RECEIPT_KEYS = new Set([
+  'id', 'acceptance_id', 'outcome_id', 'kind', 'adapter', 'claim_scope', 'evidence_locator', 'evidence_digest', 'verdict',
+  'registry_digest', 'outcome_revision_digest', 'authority_digest', 'worktree_id', 'execution_snapshot', 'recorded_at', 'digest',
+]);
+const AUTHORITY_RESULT_KEYS = new Set(['adapter', 'claim_scope', 'evidence_locator', 'evidence_digest', 'verdict']);
 
 function only(value, allowed, label) {
   for (const key of Object.keys(value)) if (!allowed.has(key)) throw conflictError(`${label} contains unsupported field: ${key}`, 'INVALID_OUTCOME_PROGRESS');
@@ -35,6 +48,37 @@ function uniqueStrings(values, label) {
   if (!Array.isArray(values) || values.some((item) => typeof item !== 'string' || !item)) throw conflictError(`${label} is invalid.`, 'INVALID_OUTCOME_PROGRESS');
   if (new Set(values).size !== values.length) throw conflictError(`${label} contains duplicates.`, 'INVALID_OUTCOME_PROGRESS');
   return values;
+}
+
+function logicalId(value, label) {
+  if (typeof value !== 'string' || !/^[a-z][a-z0-9_-]{2,95}$/.test(value)) throw conflictError(`${label} is invalid.`, 'INVALID_OUTCOME_PROGRESS');
+  return value;
+}
+
+function validateAuthorityReceipt(value, label, { acceptanceId = null, outcomeId = null, adapter = null, registryDigest = null, worktreeId = null, outcomeRevisionDigest = null } = {}) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw conflictError(`${label} is invalid.`, 'INVALID_OUTCOME_PROGRESS');
+  only(value, AUTHORITY_RECEIPT_KEYS, label);
+  if (typeof value.id !== 'string' || !/^authority-receipt-[0-9a-f-]{8,95}$/.test(value.id)) throw conflictError(`${label} id is invalid.`, 'INVALID_OUTCOME_PROGRESS');
+  if (value.kind !== 'authority-adapter' || value.verdict !== 'PASS') throw conflictError(`${label} must be a passing authority-adapter receipt.`, 'INVALID_OUTCOME_PROGRESS');
+  logicalId(value.adapter, `${label} adapter`);
+  boundedText(value.claim_scope, 512, `${label} claim scope`);
+  boundedText(value.evidence_locator, 1000, `${label} evidence locator`);
+  if (!/^sha256:[a-f0-9]{64}$/.test(value.evidence_digest ?? '')) throw conflictError(`${label} evidence digest is invalid.`, 'INVALID_OUTCOME_PROGRESS');
+  if (!/^[a-f0-9]{64}$/.test(value.authority_digest ?? '') || !value.execution_snapshot || typeof value.execution_snapshot !== 'object' || Array.isArray(value.execution_snapshot)) throw conflictError(`${label} authority binding is invalid.`, 'INVALID_OUTCOME_PROGRESS');
+  if (typeof value.recorded_at !== 'string' || Number.isNaN(Date.parse(value.recorded_at)) || value.digest !== sealReceipt(value).digest || containsSecret(value)) throw conflictError(`${label} is stale or contains a secret.`, 'INVALID_OUTCOME_PROGRESS');
+  if ((acceptanceId && value.acceptance_id !== acceptanceId) || (outcomeId && value.outcome_id !== outcomeId) || (adapter && value.adapter !== adapter) || (registryDigest && value.registry_digest !== registryDigest) || (worktreeId && value.worktree_id !== worktreeId) || (outcomeRevisionDigest && value.outcome_revision_digest !== outcomeRevisionDigest)) throw conflictError(`${label} does not bind the current acceptance.`, 'INVALID_OUTCOME_PROGRESS');
+  return value;
+}
+
+function validateAuthorityResult(value, expectedAdapter) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw conflictError('Authority adapter result is invalid.', 'INVALID_AUTHORITY_ADAPTER_RESULT');
+  only(value, AUTHORITY_RESULT_KEYS, 'Authority adapter result');
+  if (value.adapter !== expectedAdapter || value.verdict !== 'PASS') throw conflictError('Authority adapter result does not match the declared passing adapter.', 'AUTHORITY_ADAPTER_RESULT_INVALID');
+  logicalId(value.adapter, 'Authority adapter result adapter');
+  boundedText(value.claim_scope, 512, 'Authority adapter result claim scope');
+  boundedText(value.evidence_locator, 1000, 'Authority adapter result evidence locator');
+  if (!/^sha256:[a-f0-9]{64}$/.test(value.evidence_digest ?? '') || containsSecret(value)) throw conflictError('Authority adapter result evidence is invalid.', 'AUTHORITY_ADAPTER_RESULT_INVALID');
+  return value;
 }
 
 function initialEntry(outcome) {
@@ -94,11 +138,19 @@ export function validateOutcomeProgress(value, paths, registryValue) {
     if (Object.keys(entry.acceptance_proofs).some((acceptanceId) => !satisfied.has(acceptanceId)) || [...satisfied].some((acceptanceId) => !Object.hasOwn(entry.acceptance_proofs, acceptanceId))) throw conflictError(`Outcome progress ${id} acceptance proofs do not match satisfied acceptance.`, 'INVALID_OUTCOME_PROGRESS');
     for (const [acceptanceId, proof] of Object.entries(entry.acceptance_proofs)) {
       only(proof, PROOF_KEYS, `Outcome progress ${id} proof ${acceptanceId}`);
-      if (!['route-evidence', 'user-decision', 'review-decision'].includes(proof.kind)) throw conflictError(`Outcome progress ${id} proof ${acceptanceId} kind is invalid.`, 'INVALID_OUTCOME_PROGRESS');
+      if (!['route-evidence', 'user-decision', 'review-decision', 'authority-adapter'].includes(proof.kind)) throw conflictError(`Outcome progress ${id} proof ${acceptanceId} kind is invalid.`, 'INVALID_OUTCOME_PROGRESS');
       uniqueStrings(proof.evidence_ids, `Outcome progress ${id} proof ${acceptanceId} evidence_ids`);
+      const acceptance=outcome.acceptance.find((item)=>item.id===acceptanceId);
       if (proof.kind === 'route-evidence') {
-        if (!proof.evidence_ids.length || proof.decision_receipt !== null) throw conflictError(`Outcome progress ${id} route proof ${acceptanceId} is invalid.`, 'INVALID_OUTCOME_PROGRESS');
+        if (acceptance?.validator.kind==='authority-adapter' || !proof.evidence_ids.length || proof.decision_receipt !== null || proof.authority_receipt !== null) throw conflictError(`Outcome progress ${id} route proof ${acceptanceId} is invalid.`, 'INVALID_OUTCOME_PROGRESS');
+      } else if (proof.kind === 'authority-adapter') {
+        if (acceptance?.validator.kind!=='authority-adapter' || proof.evidence_ids.length || proof.decision_receipt !== null) throw conflictError(`Outcome progress ${id} authority proof ${acceptanceId} is invalid.`, 'INVALID_OUTCOME_PROGRESS');
+        validateAuthorityReceipt(proof.authority_receipt, `Outcome progress ${id} authority proof ${acceptanceId}`, {
+          acceptanceId, outcomeId:id, adapter:acceptance.validator.adapter, registryDigest:value.registry_digest,
+          worktreeId:value.worktree_id, outcomeRevisionDigest:outcome.revision_digest,
+        });
       } else {
+        if (acceptance?.validator.kind!==proof.kind || proof.authority_receipt !== null) throw conflictError(`Outcome progress ${id} decision proof ${acceptanceId} kind is invalid.`, 'INVALID_OUTCOME_PROGRESS');
         only(proof.decision_receipt, DECISION_PROOF_KEYS, `Outcome progress ${id} decision proof ${acceptanceId}`);
         const receipt=proof.decision_receipt;
         if (proof.evidence_ids.length || receipt.acceptance_id!==acceptanceId || receipt.outcome_id!==id || receipt.kind!==proof.kind || receipt.outcome_revision_digest!==outcome.revision_digest || receipt.registry_digest!==value.registry_digest || !/^[a-f0-9]{64}$/.test(receipt.authority_digest??'') || receipt.worktree_id!==value.worktree_id || !receipt.execution_snapshot || typeof receipt.execution_snapshot!=='object' || Array.isArray(receipt.execution_snapshot) || typeof receipt.recorded_at!=='string' || Number.isNaN(Date.parse(receipt.recorded_at)) || receipt.digest!==sealReceipt(receipt).digest) throw conflictError(`Outcome progress ${id} decision proof ${acceptanceId} is stale or invalid.`, 'INVALID_OUTCOME_PROGRESS');
@@ -112,6 +164,9 @@ export function validateOutcomeProgress(value, paths, registryValue) {
 export function reconcileOutcomeProgress(value, paths, registryValue) {
   const registry = validateOutcomeRegistry(structuredClone(registryValue));
   value=structuredClone(value);
+  for (const entry of Object.values(value.outcomes??{})) for (const proof of Object.values(entry?.acceptance_proofs??{})) {
+    if (!Object.hasOwn(proof,'authority_receipt')) proof.authority_receipt=null;
+  }
   for (const [id,entry] of Object.entries(value.outcomes??{})) if (!Object.hasOwn(entry,'acceptance_proofs')) {
     entry.acceptance_proofs={};
     if ((entry.satisfied_acceptance_ids??[]).length) {
@@ -125,7 +180,10 @@ export function reconcileOutcomeProgress(value, paths, registryValue) {
     if ((entry.satisfied_acceptance_ids??[]).length) { entry.state='stale'; entry.satisfied_acceptance_ids=[]; entry.acceptance_proofs={}; entry.missing_acceptance_ids=outcome?.acceptance.map((item)=>item.id)??[]; }
   }
   const expectedDigest = outcomeRegistryDigest(registry);
-  if (value.goal_revision_digest === registry.goal_revision_digest && value.registry_digest === expectedDigest) return validateOutcomeProgress(value, paths, registry);
+  if (value.goal_revision_digest === registry.goal_revision_digest && value.registry_digest === expectedDigest) {
+    value.precise_completion_label=deriveRecordedCompletionLabel(registry,value);
+    return validateOutcomeProgress(value, paths, registry);
+  }
   const next = initialOutcomeProgress(paths, registry);
   next.generation = (Number.isInteger(value.generation) ? value.generation : 0) + 1;
   next.precise_completion_label = value.precise_completion_label ?? 'NOT_STARTED';
@@ -154,6 +212,7 @@ export function reconcileOutcomeProgress(value, paths, registryValue) {
     const state=(staleDecisionIds.size>0||(prior.state==='satisfied'&&missing.length>0))?'stale':missing.length?prior.state:'satisfied';
     next.outcomes[outcome.id]={...prior,state,satisfied_acceptance_ids:satisfied,acceptance_proofs:proofs,missing_acceptance_ids:missing};
   }
+  next.precise_completion_label=deriveRecordedCompletionLabel(registry,next);
   return validateOutcomeProgress(next, paths, registry);
 }
 
@@ -209,7 +268,7 @@ export async function recordAcceptanceDecision(context, paths, registryValue, ac
     if (!['self','peer','independent'].includes(options.independence_level)) throw conflictError('Review decisions require --independence-level self, peer, or independent.', 'REVIEW_INDEPENDENCE_REQUIRED');
     independence=boundedText(options.independence_level,32,'Review independence level');
   }
-  const progress=await readOutcomeProgress(paths,registry);
+  const progress=await readOutcomeProgress(paths,registry,{persist_reconciled:true});
   await verifyProgressProjection(context,registry,progress);
   if (!/^[a-f0-9]{64}$/.test(options.authority_digest??'')) throw conflictError('Acceptance decision requires the current confirmed authority digest.', 'AUTHORITY_REQUIRED');
   const snapshot=await executionSnapshot(context.executionRoot);
@@ -224,9 +283,9 @@ export async function recordAcceptanceDecision(context, paths, registryValue, ac
   const next=structuredClone(progress); const entry=next.outcomes[outcome.id];
   entry.satisfied_acceptance_ids=[...new Set([...entry.satisfied_acceptance_ids,acceptance.id])].sort();
   entry.missing_acceptance_ids=outcome.acceptance.map((item)=>item.id).filter((id)=>!entry.satisfied_acceptance_ids.includes(id));
-  entry.acceptance_proofs[acceptance.id]={kind:acceptance.validator.kind,evidence_ids:[],decision_receipt:receipt};
+  entry.acceptance_proofs[acceptance.id]={kind:acceptance.validator.kind,evidence_ids:[],decision_receipt:receipt,authority_receipt:null};
   entry.state=entry.missing_acceptance_ids.length?'in-progress':'satisfied';
-  next.generation+=1; next.updated_at=new Date().toISOString();
+  next.generation+=1; next.precise_completion_label=deriveRecordedCompletionLabel(registry,next); next.updated_at=new Date().toISOString();
   validateOutcomeProgress(next,paths,registry);
   const plans=[
     {target:path.join(paths.decisions,`${receipt.id}.json`),content:canonicalJson(receipt),mode:0o600},
@@ -235,6 +294,48 @@ export async function recordAcceptanceDecision(context, paths, registryValue, ac
   if (isProgressProjectionOwner(registry,next)) plans.push({target:resolveInside(context.root,context.manifest.progress_projection,'Progress projection path'),content:renderProgressMarkdown(registry,next),mode:0o644});
   await transactionalWrites(plans);
   return {outcome_id:outcome.id,acceptance_id:acceptance.id,decision_receipt:receipt,progress:next};
+}
+
+/**
+ * Extension point for a purpose-built authority adapter. There is deliberately no
+ * generic CLI command for this operation: an Agent must not self-attest an
+ * external fact by emitting a JSON blob. The adapter must verify its authority
+ * path before it calls this function, and the resulting receipt is bound to the
+ * current authority, worktree, Outcome revision, and final-byte snapshot.
+ */
+export async function recordAuthorityAdapterAcceptance(context, paths, registryValue, acceptanceId, options={}) {
+  const registry=validateOutcomeRegistry(structuredClone(registryValue));
+  const outcome=registry.outcomes.find((item)=>item.disposition==='required'&&item.acceptance.some((acceptance)=>acceptance.id===acceptanceId));
+  const acceptance=outcome?.acceptance.find((item)=>item.id===acceptanceId);
+  if (!outcome||!acceptance) throw conflictError(`Required acceptance is not found: ${acceptanceId}`, 'ACCEPTANCE_NOT_FOUND');
+  if (acceptance.validator.kind!=='authority-adapter') throw conflictError(`Acceptance ${acceptanceId} does not accept an authority adapter receipt.`, 'ACCEPTANCE_AUTHORITY_ADAPTER_NOT_APPLICABLE');
+  const result=validateAuthorityResult(options.adapter_result,acceptance.validator.adapter);
+  if (!/^[a-f0-9]{64}$/.test(options.authority_digest??'')) throw conflictError('Authority adapter receipt requires the current confirmed authority digest.', 'AUTHORITY_REQUIRED');
+  const progress=await readOutcomeProgress(paths,registry,{persist_reconciled:true});
+  await verifyProgressProjection(context,registry,progress);
+  const snapshot=await executionSnapshot(context.executionRoot);
+  const receipt=sealReceipt({
+    id:`authority-receipt-${randomUUID()}`,
+    acceptance_id:acceptance.id,outcome_id:outcome.id,kind:'authority-adapter',adapter:result.adapter,
+    claim_scope:result.claim_scope,evidence_locator:result.evidence_locator,evidence_digest:result.evidence_digest,verdict:'PASS',
+    registry_digest:outcomeRegistryDigest(registry),outcome_revision_digest:outcome.revision_digest,
+    authority_digest:options.authority_digest,worktree_id:paths.worktree_id,execution_snapshot:snapshot,recorded_at:new Date().toISOString(),
+  });
+  if (containsSecret(receipt)) throw conflictError('Authority adapter receipt appears to contain a secret.', 'SECRET_VALUE');
+  const next=structuredClone(progress); const entry=next.outcomes[outcome.id];
+  entry.satisfied_acceptance_ids=[...new Set([...entry.satisfied_acceptance_ids,acceptance.id])].sort();
+  entry.missing_acceptance_ids=outcome.acceptance.map((item)=>item.id).filter((id)=>!entry.satisfied_acceptance_ids.includes(id));
+  entry.acceptance_proofs[acceptance.id]={kind:'authority-adapter',evidence_ids:[],decision_receipt:null,authority_receipt:receipt};
+  entry.state=entry.missing_acceptance_ids.length?'in-progress':'satisfied';
+  next.generation+=1; next.precise_completion_label=deriveRecordedCompletionLabel(registry,next); next.updated_at=new Date().toISOString();
+  validateOutcomeProgress(next,paths,registry);
+  const plans=[
+    {target:path.join(paths.authority_receipts,`${receipt.id}.json`),content:canonicalJson(receipt),mode:0o600},
+    {target:paths.outcome_progress,content:canonicalJson(next),mode:0o600},
+  ];
+  if (isProgressProjectionOwner(registry,next)) plans.push({target:resolveInside(context.root,context.manifest.progress_projection,'Progress projection path'),content:renderProgressMarkdown(registry,next),mode:0o644});
+  await transactionalWrites(plans);
+  return {outcome_id:outcome.id,acceptance_id:acceptance.id,authority_receipt:receipt,progress:next};
 }
 
 export function bindRouteOutcomes(registryValue, outcomeIdsValue, successChecks, { consequential = false } = {}) {
@@ -274,6 +375,48 @@ export function bindRouteOutcomes(registryValue, outcomeIdsValue, successChecks,
   };
 }
 
+function hasRecordedAcceptance(entry, acceptance) {
+  const proof=entry?.acceptance_proofs?.[acceptance.id];
+  if (!entry?.satisfied_acceptance_ids?.includes(acceptance.id) || !proof) return false;
+  if (acceptance.validator.kind==='authority-adapter') return proof.kind==='authority-adapter' && proof.authority_receipt?.verdict==='PASS';
+  if (['user-decision','review-decision'].includes(acceptance.validator.kind)) return proof.kind===acceptance.validator.kind && proof.decision_receipt?.decision_type===acceptance.validator.decision_type;
+  return proof.kind==='route-evidence' && Array.isArray(proof.evidence_ids) && proof.evidence_ids.length>0;
+}
+
+/**
+ * The projection records the highest gate reached by receipts at the last verified transition.
+ * Doctor recomputes freshness on current bytes before a user-facing completion claim.
+ */
+export function deriveRecordedCompletionLabel(registryValue, progressValue) {
+  const registry=validateOutcomeRegistry(structuredClone(registryValue));
+  const progress=progressValue;
+  const allRequired=(boundary)=>registry.outcomes.filter((outcome)=>outcome.disposition==='required'&&outcome.required_at.includes(boundary));
+  const goal=allRequired('goal');
+  const anySlice=Object.values(progress.outcomes??{}).some((entry)=>(entry.route_ids??[]).length>0);
+  let label=anySlice?'SLICE_GREEN':'NOT_STARTED';
+  const goalClosed=goal.length>0&&goal.every((outcome)=>progress.outcomes?.[outcome.id]?.state==='satisfied');
+  if (!goalClosed) return label;
+  label='GOAL_ENGINEERING_CLOSED';
+  const release=allRequired('release');
+  if (!release.length) return label;
+  const releaseAcceptances=release.flatMap((outcome)=>outcome.acceptance.map((acceptance)=>({outcome,acceptance,entry:progress.outcomes?.[outcome.id]})));
+  const milestone=(maturity)=>{
+    const declared=releaseAcceptances.filter(({acceptance})=>acceptance.required_maturity===maturity);
+    return {declared:declared.length>0,current:declared.length>0&&declared.every(({entry,acceptance})=>hasRecordedAcceptance(entry,acceptance))};
+  };
+  const external=milestone('external');
+  const reviewed=milestone('reviewed');
+  const owner=milestone('owner-accepted');
+  if (external.current) label='EXTERNAL_EVIDENCE_VERIFIED';
+  if (reviewed.current&&(!external.declared||external.current)) label='REVIEW_DISPOSITION_RECORDED';
+  if (owner.current&&(!external.declared||external.current)&&(!reviewed.declared||reviewed.current)) label='OWNER_ACCEPTED';
+  const allReleaseClosed=release.every((outcome)=>progress.outcomes?.[outcome.id]?.state==='satisfied');
+  const releaseAuthorization=releaseAcceptances.some(({entry,acceptance})=>acceptance.validator.kind==='user-decision'&&acceptance.validator.decision_type==='release-authorization'&&hasRecordedAcceptance(entry,acceptance));
+  const releaseEvidence=releaseAcceptances.some(({entry,acceptance})=>acceptance.required_maturity==='release'&&['command','artifact','authority-adapter'].includes(acceptance.validator.kind)&&hasRecordedAcceptance(entry,acceptance));
+  if (allReleaseClosed&&releaseAuthorization&&releaseEvidence&&(!external.declared||external.current)&&(!reviewed.declared||reviewed.current)&&(!owner.declared||owner.current)) label='RELEASE_READY';
+  return label;
+}
+
 export function applyRouteOutcomeEvidence(progressValue, registryValue, route, receipts, snapshot) {
   const registry = validateOutcomeRegistry(structuredClone(registryValue));
   const progress = structuredClone(progressValue);
@@ -289,7 +432,7 @@ export function applyRouteOutcomeEvidence(progressValue, registryValue, route, r
     for (const acceptanceId of newlySatisfied) {
       const checkIds=new Set(successfulMappedChecks.filter((check)=>(check.acceptance_ids??[]).includes(acceptanceId)).map((check)=>check.id));
       const prior=entry.acceptance_proofs[acceptanceId]?.evidence_ids??[];
-      entry.acceptance_proofs[acceptanceId]={kind:'route-evidence',evidence_ids:[...new Set([...prior,...receipts.filter((receipt)=>receipt.successful&&checkIds.has(receipt.check_id)).map((receipt)=>receipt.id)])],decision_receipt:null};
+      entry.acceptance_proofs[acceptanceId]={kind:'route-evidence',evidence_ids:[...new Set([...prior,...receipts.filter((receipt)=>receipt.successful&&checkIds.has(receipt.check_id)).map((receipt)=>receipt.id)])],decision_receipt:null,authority_receipt:null};
     }
     entry.missing_acceptance_ids = outcome.acceptance.map((item) => item.id).filter((id) => !entry.satisfied_acceptance_ids.includes(id));
     entry.state = entry.missing_acceptance_ids.length ? 'in-progress' : 'satisfied';
@@ -298,7 +441,7 @@ export function applyRouteOutcomeEvidence(progressValue, registryValue, route, r
     entry.last_verified_snapshot = snapshot;
   }
   progress.generation += 1;
-  progress.precise_completion_label = 'SLICE_GREEN';
+  progress.precise_completion_label = deriveRecordedCompletionLabel(registry,progress);
   progress.updated_at = new Date().toISOString();
   return validateOutcomeProgress(progress, { project_id: progress.project_id, worktree_id: progress.worktree_id }, registry);
 }

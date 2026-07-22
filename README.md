@@ -1,10 +1,12 @@
-# VibeTether 1.0.0-rc.3
+# VibeTether 1.0.0-rc.4
 
-> Even strong coding agents can drift during long-running work.
+> Make a capable coding agent pause before it guesses — then keep it aligned until the work is genuinely closed.
 
-VibeTether is a lean control kernel and Skill broker for long-running Codex and Claude Code projects. It helps a cooperating Agent preserve the approved goal, reload only applicable project truth, execute one bounded slice, select one suitable Skill without preloading an entire catalog, attach evidence to the actual Git worktree, and distrust stale operational experience.
+VibeTether is an installable control layer and Skill broker for long-running Codex and Claude Code work. It is for the painful failure mode where an Agent starts confidently from an incomplete prompt, drifts after a long session, reports one green test as a finished feature, or forgets a path that already succeeded.
 
-VibeTether does **not** replace the Agent's engineering judgment. It controls direction, authority, scope, worktree identity, evidence, and reusable procedure at the moments where drift becomes expensive.
+Start with one ordinary entry Skill. For an unclear or high-impact request, VibeTether investigates repository facts first, expands the request into a bounded Start Card, asks one consequential question at a time, and waits for the user's exact confirmation before code-writing. For clear, low-risk work it stays lightweight. It then selects one suitable specialist Skill from a cold catalog rather than making a beginner remember Skill names.
+
+VibeTether does **not** replace engineering judgment, a user decision, or a real external authority adapter. It controls direction, authority, scope, worktree identity, evidence, and reusable procedure at the moments where drift becomes expensive.
 
 ## Why it exists
 
@@ -18,14 +20,15 @@ Long tasks fail in recurring ways even when the model is capable:
 - a new Git worktree isolates code but loses or overwrites the controlling state;
 - completion is claimed from a summary rather than fresh evidence.
 
-VibeTether 1.0.0-rc.3 maps those failures to six bounded mechanisms:
+VibeTether 1.0.0-rc.4 maps those failures to seven bounded mechanisms:
 
 1. a user-owned Intent Contract and confirmed-only Truth Map;
 2. a validated Context Capsule capped at 4 KB;
 3. per-worktree runtime state and a single-writer lease outside the repository;
 4. a cold Skill catalog with a top-three shortlist and one active Provider;
 5. a deep Start Card and user-confirmed Implementation Permit for explicit high-ambiguity work;
-6. tamper-evident evidence and Experience that automatically loses trust when stale.
+6. a user-governed Outcome Contract and generated progress projection, so one green slice cannot impersonate a closed goal;
+7. tamper-evident evidence and Experience that automatically loses trust when stale.
 
 ## The 1–4–3–1 Skill model
 
@@ -38,23 +41,36 @@ VibeTether 1.0.0-rc.3 maps those failures to six bounded mechanisms:
 
 The catalog may be large. The shortlist stays small. Provider content is loaded only after selection. A large Provider can run through a worker handoff instead of entering the main Agent context.
 
-## Install from this source tree
+## Install — the short path
 
 Requirements: Node.js 20 or newer and Git for worktree-aware projects.
+
+From a checked-out source tree:
 
 ```sh
 npm install -g .
 vibetether global install --agent both --yes
+vibetether init --project . --agent both
 ```
 
-The global installation is only a dispatcher and entry Skill. It stores no project goal, Truth, Experience, or runtime state. Each project pins the VibeTether version it expects.
-
-After a `v1.0.0-rc.3` tag is published, the portable acquisition form is:
+From a verified downloaded RC archive, install the archive itself rather than the directory you happened to be in:
 
 ```sh
-npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v1.0.0-rc.3 \
+npm install -g ./vibetether-1.0.0-rc.4.tgz
+vibetether global install --agent both --yes
+vibetether init --project . --agent both
+```
+
+The last command is guided in a terminal: it asks only for the goal and success evidence that are genuinely missing. The global installation is only a dispatcher and entry Skill; it stores no project goal, Truth, Experience, or runtime state.
+
+For a published immutable commit, use the same one-project initialization flow without cloning:
+
+```sh
+npx --yes --package=https://codeload.github.com/t01089572455/vibetether/tar.gz/<verified-commit> \
   vibetether init --project . --agent both
 ```
+
+This is a one-time initializer, not a claim that a floating tag is trustworthy. Verify the immutable commit and archive digest first. RC.4 is a review candidate; use a verified package or source checkout until a signed/tagged release is published.
 
 ## Initialize a project
 
@@ -79,13 +95,15 @@ Use `--control-mode team` for a Git-tracked Contract, `local` for a machine-loca
 
 ## Small project footprint
 
-A normal tracked Contract contains seven files:
+A normal tracked Contract contains nine small files:
 
 ```text
 .vibetether/
   project.json
   intent.md
   TRUTH.md
+  outcomes.json
+  PROGRESS.md
   experience.json
   skills.lock.json
   routes.json
@@ -105,6 +123,42 @@ CLAUDE.md                              # Claude, when enabled
 
 The project does not contain runtime checkpoints, route history, Provider catalogs, or generated capability boards. These live in the operating system's state and cache directories.
 
+`PROGRESS.md` is a readable projection, not a hand-maintained source of truth. Only the designated integration worktree updates it after a verified transition. If it is missing or was hand-edited, regenerate and verify it with:
+
+```sh
+vibetether outcomes status --project . --write-progress
+vibetether doctor --project . --boundary goal --json
+```
+
+### When a requirement source has stable IDs
+
+VibeTether can prevent a green subset from impersonating the whole source only after the source universe is explicitly registered. Ask the Agent to inspect the source and propose an `.vibetether/coverage/<source>.json` sidecar that maps every stable source ID to an Outcome, an approved equivalence group, or an explicit disposition. Review that proposed mapping, then confirm the exact Outcome coverage. The resulting registry binds the source revision, expected ID count/set digest, and mapping digest; `doctor --boundary goal` reruns that audit. Do not hand-wave a spreadsheet, issue list, or PRD as “covered” without a reviewed mapping.
+
+## Completion is layered, not theatrical
+
+A green command is evidence for only the scope it actually covered. VibeTether therefore uses these exact labels:
+
+```text
+SLICE_GREEN
+GOAL_ENGINEERING_CLOSED
+EXTERNAL_EVIDENCE_VERIFIED
+REVIEW_DISPOSITION_RECORDED
+OWNER_ACCEPTED
+RELEASE_READY
+```
+
+These are ordered among the maturity gates your Contract actually declares. `SLICE_GREEN` never means every required Outcome is complete. `GOAL_ENGINEERING_CLOSED` never means a package can be released. `EXTERNAL_EVIDENCE_VERIFIED` is available only when a declared authority adapter supplies a valid receipt; the reference RC ships no fake adapter that lets an Agent self-attest an external fact. If a project does not declare an external gate, a declared review/owner gate can still be the next applicable milestone. `RELEASE_READY` additionally requires current release evidence and explicit release authorization.
+
+`PROGRESS.md` records the highest label reached by a verified transition. It is a generated ledger projection, not a freshness oracle: `doctor` rechecks the current final bytes and can lower the live verdict when evidence has gone stale.
+
+Use the matching boundary whenever the claim gets larger:
+
+```sh
+vibetether doctor --project . --boundary slice --json
+vibetether doctor --project . --boundary goal --json
+vibetether doctor --project . --boundary release --json
+```
+
 Hard budgets enforced by tests and `doctor`:
 
 - tracked Contract: at most 25 KB;
@@ -116,6 +170,20 @@ Hard budgets enforced by tests and `doctor`:
 - recalled Experience entries: at most three.
 
 ## Normal Agent loop
+
+For a normal request, do not choose a specialist manually. Tell the host Agent what you want:
+
+```text
+Use VibeTether. Fix the callback failure without changing the public API.
+```
+
+For a request that must not begin from assumptions, make the stronger intent explicit:
+
+```text
+Use vibe-tether-deep. Inspect the project facts, expand my request, ask me one consequential question at a time, and do not write code until I confirm the resolved Start Card.
+```
+
+The adaptive entry decides whether a clear low-risk slice can proceed or whether it must investigate facts, ask the user, or stop. The deep entry always requires the visible Start Card and a scoped Implementation Permit before code-write. Hosts without a mandatory hook still rely on Agent cooperation to invoke an installed Skill; VibeTether detects gaps once it is invoked, not in a thread that never enters it.
 
 Read a validated, compact context before using historical state:
 

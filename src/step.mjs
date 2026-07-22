@@ -85,7 +85,8 @@ export async function reanchorStep({project=process.cwd(),reason='Re-anchored af
   if (route?.status==='active') throw conflictError('Cannot re-anchor while a step is active.','ACTIVE_STEP');
   const current=await readCurrent(value.runtime.paths);
   current.authority_digest=value.authority.authority_digest; current.control_generation=value.context.manifest.control_generation;
-  current.updated_at=new Date().toISOString(); current.status='ready'; current.open_risks=[]; current.next_action=boundedText(reason,500,'Re-anchor reason');
+  current.updated_at=new Date().toISOString(); current.status='ready'; current.open_risks=[]; current.task_mode='adaptive';
+  current.deep_start_card_id=null; current.implementation_permit_id=null; current.next_action=boundedText(reason,500,'Re-anchor reason');
   if (route?.truth_reconciliation?.status==='blocked_reanchor_required') {
     route.truth_reconciliation={...route.truth_reconciliation,status:'reanchored',reanchored_at:current.updated_at,reanchor_reason:current.next_action};
     route.updated_at=current.updated_at;

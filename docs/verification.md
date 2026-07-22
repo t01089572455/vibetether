@@ -1,77 +1,65 @@
-# VibeTether 1.0.0-rc.3 local source verification
+# VibeTether RC.4 verification boundary
 
-This document records source-tree verification performed on **2026-07-21** before the immutable release-candidate archive is created. Exact ZIP, npm tarball, source-manifest, clean-extraction, and isolated-install results are generated beside the downloadable artifact; those external reports, not this source file, are the authority for the packaged bytes.
+This file is a verification contract, not a self-issued release certificate. A green source-tree test does not prove that the final TGZ works, and a configured CI matrix does not prove that Windows has run.
 
-## Verified local environment
+## What must be verified
 
-- Debian GNU/Linux 13
-- Linux x86_64
-- Node.js `v22.16.0`
-- npm `10.9.2`
-- Git `2.47.3`
+Run these commands against the final candidate bytes before any release recommendation:
 
-The repository contains a GitHub Actions matrix for Ubuntu and Windows with Node.js 20 and 24. A configured matrix is not a passed run. The Windows matrix and exact tagged-v0.6.3 network acquisition were **not executed successfully in this local session** and are not counted as passing evidence.
+```sh
+npm ci --ignore-scripts --no-audit --no-fund
+npm run check
+npm run test:coverage
+npm run test:compat:v063-live
+node scripts/test-package-journey.mjs
+npm pack --dry-run
+npm audit --audit-level=low
+```
 
-## Current source-tree gates
+The package journey first rejects a dirty worktree and records the exact Git commit/tree it packs. It rejects unsupported archive extension records (including unparsed PAX records), installs the exact TGZ into an isolated prefix with redirected state/cache/home, and runs installed CLIs behind an import guard that rejects source-tree modules. It exercises adaptive ambiguity blocking, Deep Permit revocation, re-anchor recovery, bounded Outcome progress, slice/goal/release distinction, uninstall conflict preservation, and offline launcher reuse.
 
-All commands below were run from the repository root.
+The live compatibility journey verifies the historical `v0.6.3` tag object, peeled commit, Git tree, and normalized source-content digest before it runs an exact historical CLI. It installs that CLI's committed lockfile with lifecycle scripts disabled and a minimal environment, then initializes Codex-only, Claude-only, and both-host fixtures before the packed candidate migrates, reads context, finishes an Outcome-controlled slice, rolls back byte inventories, and preserves a post-migration user edit. A moved tag is a hard failure; network unavailability at any remote acquisition step is reported as `not-run`, never as a pass. Failure logs, fixtures, and inventories are retained under the configured artifact directory, and CI uploads them when that gate fails.
 
-- `npm run check:syntax` — exit `0`; **65 JavaScript modules** parsed.
-- `npm test` — exit `0`; **134 passed, 0 failed, 0 skipped across 19 test files** using the deterministic serial runner.
-- `npm run test:coverage` — exit `0`; **131 tests, 130 passed, 0 failed, 1 Windows-only skip**.
-- `npm run eval` — exit `0`; fixed regression corpora passed:
-  - training: **12 cases**;
-  - held-out: **14 cases**;
-  - external-finding adversarial controlled: **34 cases**;
-  - adversarial read-only near-miss: **6 cases**.
-- `npm run audit:budgets` — exit `0`; all contract, Skill, managed-block, Context Capsule, and forbidden-project-asset budgets passed.
-- `npm run audit:release` — exit `0`; **49 verified Providers, 44 capabilities, 6 pinned community sources**.
-- `npm audit --audit-level=low` — exit `0`; **0 known vulnerabilities**.
-- `npm pack --dry-run` — exit `0`; preview contained **147 files**, approximately **319.9 kB packed / 1.1 MB unpacked**.
+## Completion evidence is layered
 
-The fixed routing corpora are regression evidence, not a measurement of general natural-language routing accuracy. The adversarial corpus incorporates prior external findings and therefore is not an unrevealed independent forward test.
+The Doctor reports one of these precise labels:
 
-## Coverage
+```text
+SLICE_GREEN
+GOAL_ENGINEERING_CLOSED
+EXTERNAL_EVIDENCE_VERIFIED
+REVIEW_DISPOSITION_RECORDED
+OWNER_ACCEPTED
+RELEASE_READY
+```
 
-The combined Node coverage run recorded:
+The report is valid only at its requested boundary. A `SLICE_GREEN` route is not a closed parent goal; a closed goal is not release-ready; an Agent cannot manufacture external authority evidence. The labels are ordered only among maturity gates declared by the project: a project without an external gate can still have a review/owner milestone, but it cannot claim external verification. `PROGRESS.md` records the last verified transition; Doctor recalculates freshness against current bytes. Tests verify that authority, user/review decision receipts, and release evidence become stale when final product bytes change.
 
-- lines: **89.29%**
-- branches: **71.89%**
-- functions: **88.02%**
+## Local versus remote evidence
 
-Coverage is supporting evidence only. It does not replace black-box migration, launcher, worktree, Deep Permit, completion-integrity, fault-recovery, or security checks.
+The repository defines four mandatory remote jobs:
 
-## Focused compatibility and integrity evidence
+```text
+ubuntu-latest  / Node 20
+ubuntu-latest  / Node 24
+windows-latest / Node 20
+windows-latest / Node 24
+```
 
-Local focused suites additionally established:
+Each must run the source checks, coverage, exact live-v0.6.3 journey, exact package journey, package preview, and audit. The remote matrix remains a release blocker until all jobs terminate successfully. Windows file-lock, case, short-path, and path-normalization behavior are not inferred from Linux tests.
 
-- Deep Start Card and Permit semantics, revocation, expiry, lease-break invalidation, and finish-time revalidation: **18/18**;
-- semantic completion evidence plus existing Evidence and Doctor regressions: **25/25**;
-- migration, upgrade, rollback, and offline launcher regressions: **21/21**;
-- worktree suite: **10 passed, 0 failed, 1 Windows-only skip**;
-- Provider activation/environment containment: **11/11**;
-- Evidence receipt/environment containment: **8/8**;
-- safety CLI/path handling: **9/9**.
+## What a final review must inspect
 
-Success Capture tests confirm that an explicit label cannot promote routine work, while a reusable candidate derives its sequence, decisive conditions, command, artifact coverage, and Evidence IDs from actual receipts.
+- the final commit and tree ID;
+- the exact TGZ/ZIP hashes and archive manifests;
+- raw exit codes and summaries for the commands above;
+- the live v0.6.3 inventories and rollback conflict report;
+- the GitHub Actions URLs for all four jobs;
+- the final diff against the delivery packet;
+- an independently scoped review of product claims, migration safety, and security boundaries.
 
-## v0.6.3 compatibility boundary
+The implementing Agent’s own test summary is self-review. It is useful evidence, but not independent approval.
 
-Local tests cover the canonical v0.6.3 Truth sections (`Host bootstrap`, `Control-plane pointers`, Confirmed/Candidate/Declined), legacy Intent metadata, CRLF host assets, Provider/profile/bundle restoration, Experience downgrade, complete `.agents`/`.claude`/`.vibetether` transaction coverage, byte-identical rollback when unchanged, and conflict-preserving rollback after a user edit.
+## Limits
 
-`scripts/test-live-v063-migration.mjs` is designed to acquire the exact immutable `v0.6.3` tag, initialize a project with that released CLI, migrate it with RC.3, read the new Contract, and verify full byte-inventory rollback. The local container could not resolve/fetch the remote source, so that live acquisition is still an external CI/reviewer gate. Hand-written or sanitized fixtures are supporting evidence, not a substitute for the live released-version path.
-
-## Provider license boundary
-
-Four redistributed community sources retain complete license text. Multica/Karpathy and Vercel have declaration-only evidence in this package; their provenance metadata is retained, but their Provider bytes are not redistributed. They require separate user-initiated import and license review.
-
-## Promotion boundary
-
-This source is a release-candidate implementation, not a final 1.0 release and not an operating-system sandbox or semantic oracle. Final promotion requires at minimum:
-
-- the actual Ubuntu/Windows Node 20/24 matrix;
-- the exact tagged-v0.6.3 live migration and rollback path;
-- independent review of the final immutable ZIP and npm tarball;
-- no newly discovered P0/P1 conformance failures.
-
-Hashes prove byte identity, not meaning. Fresh checks prove the declared path on the observed platform, not every untested host or acceptance condition. Self-review is not independent verification.
+VibeTether is not an operating-system sandbox, semantic oracle, or host-enforced daemon. Hashes prove byte identity, not product meaning. A receipt proves the recorded command or adapter result, not that every relevant test exists. Without a mandatory host hook, an Agent that never invokes VibeTether cannot be forced into its control plane.

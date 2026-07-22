@@ -22,9 +22,20 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run check
-      - run: npm run test:compat:v063-live
       - run: npm run test:coverage
+      - run: npm run test:compat:v063-live
+        env:
+          VIBETETHER_REQUIRE_LIVE_V063: '1'
+          VIBETETHER_LIVE_V063_ARTIFACT_DIR: ${{ runner.temp }}/vibetether-live-v063
+      - name: Preserve live v0.6.3 failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-v063-${{ matrix.os }}-node${{ matrix.node }}
+          path: ${{ runner.temp }}/vibetether-live-v063
+          if-no-files-found: ignore
+      - run: node scripts/test-package-journey.mjs
       - run: npm pack --dry-run
-      - run: npm audit
+      - run: npm audit --audit-level=low

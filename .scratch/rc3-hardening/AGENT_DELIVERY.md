@@ -94,10 +94,10 @@ Harden the exact RC.3 artifact on an isolated integration branch until its adapt
 
 ## Evidence
 
-- Verification commands: `npm.cmd run check`, focused `node --test` commands per slice, `npm.cmd run test:coverage`, `npm.cmd run test:compat:v063-live`, package install smoke tests, archive manifest comparison, and GitHub Actions matrix jobs.
-- Raw result summary: exact RC.3 Git tree matches `d70304a3cb5e2c8ee663c12a64d55dc2af4cbb46`; Windows `npm run check` currently fails in `init-context.test.mjs`, `safety-cli.test.mjs`, and `worktree.test.mjs`; the runner also reports zero passes because it parses only one TAP summary spelling.
-- Scope review: compare every changed path with the seven slices, inspect for writes outside isolated fixtures, verify remote `main` is unchanged, and reject unrelated refactors.
-- Artifact evidence: record final Git commit/tree, ZIP/TGZ SHA-256 values, file manifests, package contents, matrix URLs, and exact exit codes in this packet before marking it complete.
+- Verification commands required for the final clean commit: `npm.cmd ci --ignore-scripts --no-audit --no-fund --offline`; `npm.cmd run check`; `npm.cmd run test:coverage`; `npm.cmd run test:compat:v063-live`; `node scripts/test-package-journey.mjs`; `npm.cmd pack --dry-run`; `npm.cmd audit --audit-level=low`.
+- Raw result summary: pre-final exploratory results are deliberately not claimed as final evidence. The final clean-commit command outputs, package commit/tree identity, live compatibility inventory, independent-review disposition, and remote matrix URLs are collected only after the bounded delivery commit exists.
+- Scope review: Task 7 adds exact package/live migration journeys, CI enforcement, user docs, release audit coverage, and the RC4 completion/re-anchor regressions needed by the approved Goal/Outcome plan. No source changes target remote `main`, tags, a real user project, UI, daemon, database, or registry service.
+- Artifact evidence: source-tree and packed-TGZ evidence are fresh for the current implementation bytes. The final commit/tree, remote review-branch SHA, GitHub Actions URLs, and any downloadable archive hashes remain to be recorded only after commit/push and terminating remote jobs.
 
 ## Independent Review
 

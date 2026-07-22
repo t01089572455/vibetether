@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { classifyTaskText } from '../src/task-classifier.mjs';
 import { prepareDeep, grantDeepPermit, revokeDeepPermit, readDeepState } from '../src/deep.mjs';
-import { startStep, finishStep } from '../src/step.mjs';
+import { startStep, finishStep, reanchorStep, abandonStep } from '../src/step.mjs';
 import { inspectProject } from '../src/doctor.mjs';
 import { discoverContract } from '../src/contract.mjs';
 import { parseTruthMap, authoritySnapshot } from '../src/truth.mjs';
@@ -203,6 +203,19 @@ test('revoking a Deep Permit invalidates the active route, activation, evidence 
   const report = await inspectProject({ project: root, boundary: 'completion', throw_on_error: false });
   assert.equal(report.ok, false);
   assert.ok(report.issues.some(({ code }) => ['ROUTE_NOT_SATISFIED', 'BROKEN_ROUTE', 'IMPLEMENTATION_PERMIT_INVALID'].includes(code)));
+
+  await reanchorStep({ project: root, reason: 'The revoked Deep route was reviewed and the next bounded adaptive slice is safe to choose.' });
+  const recovered = await startStep({
+    project: root,
+    task_text: 'Fix one known local package fixture without changing public behavior.',
+    phase: 'EXECUTE_ONE', capability: 'implementation', slice: 'Repair one local fixture.',
+    success_evidence: ['The focused local fixture check passes.'],
+    success_checks: [testSuccessCheck('The focused local fixture check passes.')],
+    code_write: true, confirmed_by_user: true,
+    decision_reason: 'The user approved the distinct low-risk recovery slice after the revoked Deep route was re-anchored.',
+  });
+  assert.equal(recovered.route.task_mode, 'adaptive');
+  await abandonStep({ project: root, reason: 'The recovery regression deliberately stops after proving the new adaptive route can start.' });
 });
 
 test('an expired Permit cannot be used to finish an already-started Deep route', async () => {

@@ -7,7 +7,7 @@ import { finishStep, startStep } from '../src/step.mjs';
 import { canonicalJson, sha256Text } from '../src/files.mjs';
 import { discoverContract } from '../src/contract.mjs';
 import { confirmOutcomeCoverage } from '../src/outcomes.mjs';
-import { readOutcomeProgress, writeOutcomeGovernance } from '../src/outcome-progress.mjs';
+import { readOutcomeProgress, recordAuthorityAdapterAcceptance, writeOutcomeGovernance } from '../src/outcome-progress.mjs';
 import { authoritySnapshot, parseTruthMap } from '../src/truth.mjs';
 import { attachWorktree, createWorktree } from '../src/worktree.mjs';
 import { git, initProject, mainJson, routeProofOptions } from './helpers.mjs';
@@ -42,6 +42,56 @@ function releaseOutcome() {
   };
 }
 
+function releasePackageOutcome() {
+  const artifact='release-package.tgz';
+  const command=[process.execPath,'-e',`const fs=require('node:fs');if(fs.readFileSync(${JSON.stringify(artifact)},'utf8')!=='verified\\n')process.exit(7)`];
+  return {
+    id:'outcome_release_package_only',title:'Verify the exact release package',authority_sources:['truth:truth_project_direction'],
+    parent_id:null,dependencies:[],superseded_by:[],disposition:'candidate',required_at:['release'],
+    acceptance:[{id:'acceptance_release_package_only',claim:'The exact release package is verified.',evidence_kind:'command',required_maturity:'release',validator:{kind:'command',command,validator_revision:digest('release-package-only-validator-v1'),covers_paths:[artifact]}}],
+    decision_receipt:null,revision_digest:digest('outcome-release-package-only-v1'),
+  };
+}
+
+function releaseReviewOutcome() {
+  return {
+    id:'outcome_release_review',title:'Record the release review disposition',authority_sources:['truth:truth_project_direction'],
+    parent_id:null,dependencies:[],superseded_by:[],disposition:'candidate',required_at:['release'],
+    acceptance:[{id:'acceptance_release_review',claim:'An independent release review disposition is recorded.',evidence_kind:'review-decision',required_maturity:'reviewed',validator:{kind:'review-decision',decision_type:'release-review-disposition',validator_revision:digest('release-review-v1'),covers_paths:[]}}],
+    decision_receipt:null,revision_digest:digest('outcome-release-review-v1'),
+  };
+}
+
+function ownerReleaseOutcome() {
+  return {
+    id:'outcome_release_owner',title:'Record release owner acceptance',authority_sources:['truth:truth_project_direction'],
+    parent_id:null,dependencies:[],superseded_by:[],disposition:'candidate',required_at:['release'],
+    acceptance:[{id:'acceptance_release_owner',claim:'The owner accepted this exact release candidate.',evidence_kind:'user-decision',required_maturity:'owner-accepted',validator:{kind:'user-decision',decision_type:'release-authorization',validator_revision:digest('release-owner-v1'),covers_paths:[]}}],
+    decision_receipt:null,revision_digest:digest('outcome-release-owner-v1'),
+  };
+}
+
+function releaseChecklistOutcome() {
+  return {
+    id:'outcome_release_checklist',title:'Record the final release checklist disposition',authority_sources:['truth:truth_project_direction'],
+    parent_id:null,dependencies:[],superseded_by:[],disposition:'candidate',required_at:['release'],
+    acceptance:[{id:'acceptance_release_checklist',claim:'The final release checklist disposition is recorded.',evidence_kind:'user-decision',required_maturity:'release',validator:{kind:'user-decision',decision_type:'release-checklist-disposition',validator_revision:digest('release-checklist-v1'),covers_paths:[]}}],
+    decision_receipt:null,revision_digest:digest('outcome-release-checklist-v1'),
+  };
+}
+
+function partialExternalReleaseOutcome() {
+  return {
+    id:'outcome_release_external',title:'Verify an external release fact',authority_sources:['truth:truth_project_direction'],
+    parent_id:null,dependencies:[],superseded_by:[],disposition:'candidate',required_at:['release'],
+    acceptance:[
+      {id:'acceptance_release_external',claim:'The declared external authority verified the release fact.',evidence_kind:'external',required_maturity:'external',validator:{kind:'authority-adapter',adapter:'fixture_authority',validator_revision:digest('external-authority-v1'),covers_paths:[]}},
+      {id:'acceptance_release_external_checklist',claim:'The final external release checklist is recorded.',evidence_kind:'user-decision',required_maturity:'release',validator:{kind:'user-decision',decision_type:'external-release-checklist',validator_revision:digest('external-release-checklist-v1'),covers_paths:[]}},
+    ],
+    decision_receipt:null,revision_digest:digest('outcome-release-external-v1'),
+  };
+}
+
 function reviewOutcome() {
   return {
     id:'outcome_review',title:'Record the required review disposition',authority_sources:['truth:truth_project_direction'],
@@ -65,6 +115,13 @@ async function govern(root, outcomes) {
     '--user-message-locator', 'user-message:confirm-complete-goal-coverage',
     '--reason', 'The user confirmed the declared Outcome set as the complete goal boundary.', '--yes',
   ]);
+}
+
+async function progressFor(root) {
+  const context=await discoverContract(root);
+  const authority=await authoritySnapshot(context.executionRoot,parseTruthMap(context.truthSource),context.intentSource);
+  const runtime=await attachWorktree(context,authority.authority_digest);
+  return {context,authority,runtime,progress:await readOutcomeProgress(runtime.paths,context.outcomes,{persist:false})};
 }
 
 function check(value, acceptanceId, artifact, command = value.acceptance[0].validator.command) {
@@ -167,6 +224,84 @@ test('release requires both current package evidence and an explicit user-ground
   report=await inspectProject({project:root,boundary:'release',throw_on_error:false});
   assert.equal(report.ok,false);
   assert.ok(report.completion.unproven_maturity.some((item)=>item.acceptance_id==='acceptance_release_authorization'));
+});
+
+test('release Doctor exposes reviewed and owner-accepted milestones without promoting an unfinished release checklist to release ready', async () => {
+  const {root}=await initProject('rc4-release-milestone-labels');
+  const goal=outcome('outcome_goal','acceptance_goal','goal-result.txt');
+  const review=releaseReviewOutcome();
+  const owner=ownerReleaseOutcome();
+  const releasePackage=releasePackageOutcome();
+  const checklist=releaseChecklistOutcome();
+  await govern(root,[goal,review,owner,releasePackage,checklist]);
+  await satisfy(root,goal,'acceptance_goal','goal-result.txt');
+  await satisfy(root,releasePackage,'acceptance_release_package_only','release-package.tgz');
+
+  await mainJson([
+    'outcomes','acceptance','record','--project',root,'--id','acceptance_release_review',
+    '--independence-level','independent','--user-message-locator','review-message:release-review-disposition',
+    '--reason','An independent reviewer recorded the release review disposition for this exact candidate.','--yes',
+  ]);
+  let report=await inspectProject({project:root,boundary:'release',throw_on_error:false});
+  assert.equal(report.ok,false);
+  assert.equal(report.completion.label,'REVIEW_DISPOSITION_RECORDED');
+  assert.equal((await progressFor(root)).progress.precise_completion_label,'REVIEW_DISPOSITION_RECORDED');
+  assert.ok(report.completion.remaining_acceptance_ids.includes('acceptance_release_owner'));
+  assert.ok(report.completion.remaining_acceptance_ids.includes('acceptance_release_checklist'));
+
+  await mainJson([
+    'outcomes','acceptance','record','--project',root,'--id','acceptance_release_owner',
+    '--user-message-locator','user-message:accept-exact-release-candidate',
+    '--reason','The owner accepted this exact release candidate pending the final release checklist disposition.','--yes',
+  ]);
+  report=await inspectProject({project:root,boundary:'release',throw_on_error:false});
+  assert.equal(report.ok,false);
+  assert.equal(report.completion.label,'OWNER_ACCEPTED');
+  assert.equal((await progressFor(root)).progress.precise_completion_label,'OWNER_ACCEPTED');
+  assert.deepEqual(report.completion.remaining_acceptance_ids,['acceptance_release_checklist']);
+
+  await mainJson([
+    'outcomes','acceptance','record','--project',root,'--id','acceptance_release_checklist',
+    '--user-message-locator','user-message:record-release-checklist-disposition',
+    '--reason','The owner recorded the remaining release checklist disposition for this exact candidate.','--yes',
+  ]);
+  report=await inspectProject({project:root,boundary:'release',throw_on_error:false});
+  assert.equal(report.ok,true);
+  assert.equal(report.completion.label,'RELEASE_READY');
+  assert.equal((await progressFor(root)).progress.precise_completion_label,'RELEASE_READY');
+});
+
+test('a declared authority adapter can record a sealed external receipt, while the ordinary CLI cannot forge it', async () => {
+  const {root}=await initProject('rc4-authority-adapter-receipt');
+  const goal=outcome('outcome_goal','acceptance_goal','goal-result.txt');
+  const external=partialExternalReleaseOutcome();
+  await govern(root,[goal,external]);
+  await satisfy(root,goal,'acceptance_goal','goal-result.txt');
+  const {context,authority,runtime}=await progressFor(root);
+  await recordAuthorityAdapterAcceptance(context,runtime.paths,context.outcomes,'acceptance_release_external',{
+    authority_digest:authority.authority_digest,
+    adapter_result:{
+      adapter:'fixture_authority',
+      claim_scope:'fixture_release_revision',
+      evidence_locator:'fixture://authority/release-revision/1',
+      evidence_digest:digest('fixture-external-evidence-v1'),
+      verdict:'PASS',
+    },
+  });
+  let report=await inspectProject({project:root,boundary:'release',throw_on_error:false});
+  assert.equal(report.completion.label,'EXTERNAL_EVIDENCE_VERIFIED');
+  assert.equal((await progressFor(root)).progress.precise_completion_label,'EXTERNAL_EVIDENCE_VERIFIED');
+  await assert.rejects(
+    mainJson(['outcomes','acceptance','record','--project',root,'--id','acceptance_release_external','--user-message-locator','user-message:attempt-to-forge-external-proof','--reason','This ordinary CLI path must not be able to manufacture an external authority receipt.','--yes']),
+    (error)=>error.code==='ACCEPTANCE_DECISION_NOT_APPLICABLE',
+  );
+
+  const progress=(await progressFor(root)).progress;
+  const receipt=progress.outcomes[external.id].acceptance_proofs.acceptance_release_external.authority_receipt;
+  await writeFile(path.join(runtime.paths.authority_receipts,`${receipt.id}.json`),'{}\n');
+  report=await inspectProject({project:root,boundary:'release',throw_on_error:false});
+  assert.notEqual(report.completion.label,'EXTERNAL_EVIDENCE_VERIFIED');
+  assert.ok(report.completion.unproven_maturity.some((item)=>item.acceptance_id==='acceptance_release_external'));
 });
 
 test('goal closure blocks changed coverage and a missing generated projection', async () => {

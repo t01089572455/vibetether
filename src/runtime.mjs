@@ -41,6 +41,7 @@ export function runtimePaths(context, identity = null) {
     journal: path.join(worktree, 'journal.ndjson'),
     evidence: path.join(worktree, 'evidence'),
     decisions: path.join(worktree, 'decisions'),
+    authority_receipts: path.join(worktree, 'authority-receipts'),
     repository_evidence: path.join(repository, 'evidence'),
     activations: path.join(worktree, 'activations'),
     experience_health: path.join(worktree, 'experience-health.json'),
@@ -102,7 +103,7 @@ export function validateCurrent(current) {
 
 export async function ensureRuntime(context, identity, authorityDigest) {
   const paths = runtimePaths(context, identity);
-  await Promise.all([paths.worktree, paths.evidence, paths.repository_evidence, paths.activations, paths.quarantine, paths.handoffs].map((directory) => mkdir(directory,{recursive:true})));
+  await Promise.all([paths.worktree, paths.evidence, paths.repository_evidence, paths.activations, paths.quarantine, paths.handoffs, paths.authority_receipts].map((directory) => mkdir(directory,{recursive:true})));
   let current;
   try { current = validateCurrent(await readJsonFile(paths.current,'Runtime checkpoint')); }
   catch (error) {

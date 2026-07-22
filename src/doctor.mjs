@@ -61,6 +61,17 @@ async function currentAcceptanceProof(context,runtime,entry,acceptance,authority
     if (!now||!snapshotsMatchIgnoringPaths(receipt.execution_snapshot,now,[context.manifest.progress_projection])) return {ok:false,reason:`${validator.kind}-final-bytes-changed`};
     return {ok:true,decision_receipt_id:proof.decision_receipt.id};
   }
+  if (validator.kind==='authority-adapter') {
+    const receipt=proof?.authority_receipt;
+    if (proof?.kind!=='authority-adapter'||receipt?.adapter!==validator.adapter||receipt?.verdict!=='PASS'||receipt.authority_digest!==authorityDigest) return {ok:false,reason:'authority-adapter-receipt-missing-or-stale'};
+    try {
+      const sealed=await readReceipt(path.join(runtime.paths.authority_receipts,`${receipt.id}.json`),'Authority adapter receipt');
+      if (canonicalJson(sealed)!==canonicalJson(receipt)) return {ok:false,reason:'authority-adapter-receipt-mismatch'};
+    } catch { return {ok:false,reason:'authority-adapter-receipt-missing-or-tampered'}; }
+    const now=await executionSnapshot(context.executionRoot).catch(()=>null);
+    if (!now||!snapshotsMatchIgnoringPaths(receipt.execution_snapshot,now,[context.manifest.progress_projection])) return {ok:false,reason:'authority-adapter-final-bytes-changed'};
+    return {ok:true,authority_receipt_id:receipt.id};
+  }
   if (!['command','artifact'].includes(validator.kind)) return {ok:false,reason:`${validator.kind}-receipt-missing`};
   if (proof?.kind!=='route-evidence') return {ok:false,reason:'acceptance-route-proof-missing'};
   for (const evidenceId of proof.evidence_ids) {
@@ -364,7 +375,7 @@ export async function inspectProject(options={}) {
           issues.push(error('OUTCOME_DEPENDENCY_UNSATISFIED',`Outcome ${outcome.id} depends on unsatisfied Outcome ${dependencyId}.`));
         }
       }
-      if (entry?.state==='satisfied') for (const acceptance of outcome.acceptance) {
+      for (const acceptance of outcome.acceptance.filter((item)=>entry?.satisfied_acceptance_ids?.includes(item.id))) {
         const proof=await currentAcceptanceProof(context,runtime,entry,acceptance,authority?.authority_digest,skillsDigest);
         if (!proof.ok) {
           remainingOutcomes.add(outcome.id); remainingAcceptance.add(acceptance.id);
@@ -411,6 +422,19 @@ export async function inspectProject(options={}) {
       remainingAcceptanceIds=[...evaluated.remainingAcceptance].sort();
       const releaseAcceptances=evaluated.required.flatMap((outcome)=>outcome.acceptance.map((acceptance)=>({outcome,acceptance,entry:outcomeProgress.outcomes[outcome.id]})));
       const unprovenIds=new Set(unprovenMaturity.map((item)=>item.acceptance_id));
+      const milestone=(requiredMaturity)=>{
+        const declared=releaseAcceptances.filter(({acceptance})=>acceptance.required_maturity===requiredMaturity);
+        return {
+          declared:declared.length>0,
+          current:declared.length>0&&declared.every(({acceptance,entry})=>entry?.satisfied_acceptance_ids?.includes(acceptance.id)&&!unprovenIds.has(acceptance.id)),
+        };
+      };
+      const external=milestone('external');
+      const reviewed=milestone('reviewed');
+      const ownerAccepted=milestone('owner-accepted');
+      if (goalOk&&external.declared&&external.current) label='EXTERNAL_EVIDENCE_VERIFIED';
+      if (goalOk&&reviewed.declared&&(!external.declared||external.current)&&reviewed.current) label='REVIEW_DISPOSITION_RECORDED';
+      if (goalOk&&ownerAccepted.declared&&(!external.declared||external.current)&&(!reviewed.declared||reviewed.current)&&ownerAccepted.current) label='OWNER_ACCEPTED';
       const authorization=releaseAcceptances.find(({acceptance,entry})=>acceptance.validator.kind==='user-decision'&&acceptance.validator.decision_type==='release-authorization'&&entry?.satisfied_acceptance_ids?.includes(acceptance.id)&&!unprovenIds.has(acceptance.id));
       if (!authorization) issues.push(error('RELEASE_AUTHORIZATION_REQUIRED','Release completion requires an explicit user-grounded release-authorization acceptance receipt.'));
       const packageEvidence=releaseAcceptances.find(({acceptance,entry})=>acceptance.required_maturity==='release'&&['command','artifact','authority-adapter'].includes(acceptance.validator.kind)&&entry?.satisfied_acceptance_ids?.includes(acceptance.id)&&!unprovenIds.has(acceptance.id));
