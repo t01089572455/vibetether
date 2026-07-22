@@ -298,12 +298,16 @@
       ],
       "fallback": "vibetether-built-in-design",
       "required_outputs": [
-        "visual_direction",
+        "product_ux_contract",
+        "reference_intake",
+        "design_contract",
+        "design_tokens",
         "golden_screen",
+        "golden_screen_approval",
         "state_matrix"
       ],
       "exit_evidence": [
-        "One representative visual direction or golden screen is approved."
+        "Reference intake and the product UX and design contracts are explicit before one representative golden screen is approved."
       ]
     },
     {
@@ -313,12 +317,28 @@
       ],
       "fallback": "vibetether-built-in-implementation",
       "required_outputs": [
-        "implemented_states",
+        "implemented_one_state",
+        "render_compare",
         "accessibility_evidence",
         "responsive_evidence"
       ],
       "exit_evidence": [
-        "Required states work at declared viewports and accessibility checks pass."
+        "Only one owner-approved state is implemented and rendered for comparison before functional and visual acceptance."
+      ]
+    },
+    {
+      "id": "frontend-propagation",
+      "phases": [
+        "EXECUTE_ONE"
+      ],
+      "fallback": "vibetether-built-in-implementation",
+      "required_outputs": [
+        "locked_design_system",
+        "propagated_states",
+        "capability_preservation_evidence"
+      ],
+      "exit_evidence": [
+        "The golden screen plus separate current functional and visual acceptances are locked before propagation."
       ]
     },
     {

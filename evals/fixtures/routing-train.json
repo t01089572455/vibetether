@@ -1,0 +1,12 @@
+[
+  {
+    "text": "Redesign the checkout UI from the supplied reference screenshot.",
+    "provider": "anthropic-frontend-design",
+    "needsUserDecision": true
+  },
+  {
+    "text": "Use these visual references to redesign the account settings interface.",
+    "provider": "anthropic-frontend-design",
+    "needsUserDecision": true
+  }
+]

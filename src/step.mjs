@@ -19,6 +19,7 @@ import { activateSkill, removeActivation } from './skills.mjs';
 import { executionSnapshot, snapshotsMatch } from './git.mjs';
 import { writeProjectJson } from './files.mjs';
 import { classifyTaskText } from './task-classifier.mjs';
+import { assertUiAcceptanceGate, assertUiOutcomeContract } from './ui-control.mjs';
 import { consumeDeepPermit, invalidateDeepPermitState, validateDeepPermit } from './deep.mjs';
 import { loadOutcomeRegistry, outcomeRegistryDigest } from './outcomes.mjs';
 import {
@@ -375,11 +376,17 @@ export async function startStep(options={}) {
   }
   const successChecks=normalizeSuccessChecks(options.success_checks,successEvidence,{phase:routePhase,codeWrite:permissions.code_write,approvedPaths});
   const consequential=permissions.code_write||permissions.external_write||permissions.network||EVIDENCE_REQUIRED_PHASES.has(routePhase);
+  const uiContract=assertUiOutcomeContract(value.outcomes,options.outcome_ids??[],capability);
   const outcomeBinding=bindRouteOutcomes(value.outcomes,options.outcome_ids??[],successChecks,{consequential});
   const outcomeProgress=await readOutcomeProgress(value.runtime.paths,value.outcomes);
   const blockedOutcomes=outcomeBinding.outcome_ids.filter((id)=>outcomeProgress.outcomes[id]?.state==='blocked');
   if (blockedOutcomes.length) throw conflictError(`Outcome validators changed without an approved positive/negative migration mapping: ${blockedOutcomes.join(', ')}`,'VALIDATOR_MIGRATION_REQUIRED');
   await verifyProgressProjection(value.context,value.outcomes,outcomeProgress);
+  const skillsDigest=skillsLockDigest(value.context.skills);
+  await assertUiAcceptanceGate({
+    contract:uiContract,context:value.context,runtime:value.runtime,progress:outcomeProgress,
+    authorityDigest:value.authority.authority_digest,skillsDigest,
+  });
   const permitEnvelope={task_text:taskText,phase:routePhase,capability,provider_id:options.provider??null,scope_paths:approvedPaths,permissions,success_evidence:successEvidence,success_checks:successChecks};
   if (deepRequired) deepState=await validateDeepPermit(value.context,value.runtime,value.authority,{required:true,slice,envelope:permitEnvelope});
   const routeId=`route-${randomUUID()}`;
@@ -393,7 +400,7 @@ export async function startStep(options={}) {
     if (deepRequired) {
       deepState=await validateDeepPermit(value.context,value.runtime,value.authority,{required:true,slice,envelope:{...permitEnvelope,provider_id:broker.selected.id}});
     }
-    const skillsDigest=skillsLockDigest(value.context.skills); const executionStart=await executionSnapshot(value.context.executionRoot);
+    const executionStart=await executionSnapshot(value.context.executionRoot);
     const route={schema_version:1,id:routeId,generation:1,status:'active',phase:routePhase,capability,task_text:taskText,slice,approved_paths:approvedPaths,success_evidence:successEvidence,success_checks:successChecks,signals,permissions,classification,task_mode:deepRequired?'deep':'adaptive',start_card_id:deepState?.start_card?.id??null,implementation_permit_id:deepState?.permit?.id??null,user_decision_confirmed:options.confirmed_by_user===true||Boolean(deepState),user_decision_reason:userDecisionReason,required_outputs:broker.required_outputs,exit_evidence:broker.exit_evidence,output_contract:null,governance_writes:[],authority_start:value.authority.authority_digest,authority_snapshot:value.authority,skills_digest:skillsDigest,provider:broker.selected,shortlist:broker.shortlist,activation_id:null,execution_start:executionStart,execution_end:null,evidence_ids:[],truth_reconciliation:{status:'pending',candidate_path:null,reason:null},...outcomeBinding,created_at:new Date().toISOString(),updated_at:new Date().toISOString(),abandonment_reason:null};
     activation=await activateSkill(value.context,value.runtime.paths,{...route,selected:broker.selected}); route.activation_id=activation.activation_id;
     const next={...current,goal:value.intent.goal,phase:routePhase,slice,authority_digest:value.authority.authority_digest,control_generation:value.context.manifest.control_generation,route_instance_id:routeId,task_mode:route.task_mode,deep_start_card_id:route.start_card_id,implementation_permit_id:route.implementation_permit_id,outcome_ids:route.outcome_ids,outcome_registry_digest:route.registry_digest,next_action:`Execute only this slice: ${slice}`,open_risks:[],evidence_ids:[],updated_at:new Date().toISOString(),status:'active'};

@@ -32,6 +32,12 @@ const RULES = [
     reason: 'The request asks to structure approved work into verifiable slices.',
   },
   {
+    phase: 'DESIGN', capability: 'frontend-product-design',
+    pattern: /(?=.*\b(?:redesign|design|ux|user experience|interface|ui|frontend|visual|reference|screenshot)\b)(?=.*\b(?:ui|interface|screen|page|frontend|visual|reference|screenshot)\b)|(?:重新设计|设计|参考|截图).{0,40}(?:界面|页面|前端)|(?:界面|页面|前端).{0,40}(?:重新设计|设计|参考|截图)/u,
+    signals: ['frontend-product-design', 'user-visible-ui'],
+    reason: 'The request requires a user-approved product UX and visual direction before frontend implementation.',
+  },
+  {
     phase: 'DESIGN', capability: 'product-design',
     pattern: /\b(?:redesign|design direction|ux|user experience|interface direction|visual direction)\b|重新设计|设计方向|用户体验|视觉方向|界面方向/u,
     signals: ['product-design', 'user-visible-ui'],
@@ -139,7 +145,7 @@ export function classifyTaskText(text, { intentStatus = 'confirmed', currentPhas
     return {
       phase: structural && rule.phase === 'EXECUTE_ONE' ? 'DISCOVER' : rule.phase,
       capability: structural && rule.phase === 'EXECUTE_ONE' ? 'requirements-clarification' : rule.capability,
-      signals: [...new Set([...rule.signals, ...impactSignals, ...clarificationSignals, ...(structural ? ['directional-decision'] : [])].map(normalizeSignal))],
+      signals: [...new Set([...rule.signals, ...impactSignals, ...clarificationSignals, ...(structural && rule.capability !== 'frontend-product-design' ? ['directional-decision'] : [])].map(normalizeSignal))],
       mode: structural || ['PLAN', 'EXECUTE_ONE', 'DIAGNOSE'].includes(rule.phase) ? 'controlled' : 'observation',
       deep_requested: false,
       needs_user_decision: structural && !(rule.phase === 'SHIP' && EXPLICIT_APPROVAL.test(lowered)),

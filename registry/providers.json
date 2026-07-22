@@ -2234,7 +2234,7 @@
       "version": "1.0.0-rc.3",
       "source": "vibetether",
       "license": "MIT",
-      "fingerprint": "872c111c1a4867b08d0b4c6a2d01783234bc1887b972eb3e6966318aaa43bee6",
+      "fingerprint": "afddbd60a0fb0928aa21e6589f7e3434107cc155e75b8a1b6365114ec4797de5",
       "capabilities": [
         "product-design"
       ],
@@ -2261,7 +2261,7 @@
         "external_write": false,
         "code_write": false
       },
-      "context_bytes": 446,
+      "context_bytes": 730,
       "quality": {
         "trigger_precision": 1,
         "trigger_recall": 1,
@@ -2271,7 +2271,7 @@
       "description": "Present bounded alternatives and trade-offs without propagating an unapproved direction.",
       "path": "registry/builtins/vibetether-built-in-design",
       "workflow_role": "primary",
-      "object_hash": "872c111c1a4867b08d0b4c6a2d01783234bc1887b972eb3e6966318aaa43bee6",
+      "object_hash": "afddbd60a0fb0928aa21e6589f7e3434107cc155e75b8a1b6365114ec4797de5",
       "resources": [],
       "scripts": []
     },
@@ -2329,9 +2329,10 @@
       "version": "1.0.0-rc.3",
       "source": "vibetether",
       "license": "MIT",
-      "fingerprint": "d4561ebc58245cd7af65f6eb223ff432bce5bb905347ec53cc43be14bf5bbdf8",
+      "fingerprint": "304039bb5eb0f98eee786e84267b08015e524fa500c992487c268ec073db7595",
       "capabilities": [
-        "implementation"
+        "implementation",
+        "frontend-propagation"
       ],
       "phases": [
         "EXECUTE_ONE"
@@ -2339,7 +2340,8 @@
       "positive_triggers": [
         "new-behavior",
         "bug-fix",
-        "refactor"
+        "refactor",
+        "ui-propagation"
       ],
       "negative_triggers": [],
       "hosts": [
@@ -2356,7 +2358,7 @@
         "external_write": false,
         "code_write": true
       },
-      "context_bytes": 426,
+      "context_bytes": 685,
       "quality": {
         "trigger_precision": 1,
         "trigger_recall": 1,
@@ -2366,7 +2368,7 @@
       "description": "Make the smallest reversible change that satisfies the approved slice.",
       "path": "registry/builtins/vibetether-built-in-implementation",
       "workflow_role": "primary",
-      "object_hash": "d4561ebc58245cd7af65f6eb223ff432bce5bb905347ec53cc43be14bf5bbdf8",
+      "object_hash": "304039bb5eb0f98eee786e84267b08015e524fa500c992487c268ec073db7595",
       "resources": [],
       "scripts": []
     },
@@ -2685,7 +2687,7 @@
       "version": "1.0.0-rc.3",
       "source": "vibetether",
       "license": "MIT",
-      "fingerprint": "88cf7ce41825193ccc35a4fb4be77545f95211b954ce1ecb80a0fc1d67d62ab6",
+      "fingerprint": "c7f7b0c091853853ea641ec5c3fe6a85593f35e37a073c6ee21e6de68413e781",
       "capabilities": [
         "verification"
       ],
@@ -2712,7 +2714,7 @@
         "external_write": false,
         "code_write": false
       },
-      "context_bytes": 442,
+      "context_bytes": 670,
       "quality": {
         "trigger_precision": 1,
         "trigger_recall": 1,
@@ -2722,7 +2724,7 @@
       "description": "Use fresh commands or artifacts and distinguish proxies from requested outcomes.",
       "path": "registry/builtins/vibetether-built-in-verification",
       "workflow_role": "primary",
-      "object_hash": "88cf7ce41825193ccc35a4fb4be77545f95211b954ce1ecb80a0fc1d67d62ab6",
+      "object_hash": "c7f7b0c091853853ea641ec5c3fe6a85593f35e37a073c6ee21e6de68413e781",
       "resources": [],
       "scripts": []
     }

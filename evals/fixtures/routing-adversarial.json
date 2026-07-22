@@ -1,0 +1,12 @@
+[
+  {
+    "text": "Redesign the event-sourcing data model.",
+    "provider": "superpowers-brainstorming",
+    "needsUserDecision": true
+  },
+  {
+    "text": "Use the screenshot only as a reference and redesign the billing UI.",
+    "provider": "anthropic-frontend-design",
+    "needsUserDecision": true
+  }
+]

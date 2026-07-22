@@ -12,6 +12,7 @@ import { brokerSkills } from './skill-broker.mjs';
 import { loadProviderStats, readRoute } from './runtime.mjs';
 import { readSkillResource } from './skills.mjs';
 import { classifyTaskText } from './task-classifier.mjs';
+import { uiCapabilityContext } from './ui-control.mjs';
 import { readDeepState, validateDeepPermit } from './deep.mjs';
 import { loadOutcomeRegistry, outcomeStatus } from './outcomes.mjs';
 import { outcomeProgressSummary, readOutcomeProgress } from './outcome-progress.mjs';
@@ -166,6 +167,7 @@ export async function buildContext(options={}) {
     truth:truthHandles,
     truth_summary:{total:applicable.length,returned:truthHandles.length,omitted:Math.max(0,applicable.length-truthHandles.length),continuation:applicable.length>truthHandles.length?'Use stable Truth handles or pass narrower --path filters.':null},
     skill:{selected:skill.selected.id,confidence:skill.confidence,shortlist:skill.shortlist,overlays:skill.overlays,required_outputs:skill.required_outputs,exit_evidence:skill.exit_evidence},
+    ui:uiCapabilityContext(capability),
     experience:experience.map((item)=>({...item,handles:item.artifacts.map((_,position)=>`experience:${item.id}:${position}`)})),
     outcomes,
     raw_state_policy:'Do not read raw runtime, provider catalogs, unselected Skills, or unselected experience.',

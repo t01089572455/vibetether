@@ -1,0 +1,12 @@
+[
+  {
+    "text": "根据这张参考截图重新设计结账界面。",
+    "provider": "anthropic-frontend-design",
+    "needsUserDecision": true
+  },
+  {
+    "text": "重新设计移动端个人资料页面，并先让我确认视觉方向。",
+    "provider": "anthropic-frontend-design",
+    "needsUserDecision": true
+  }
+]

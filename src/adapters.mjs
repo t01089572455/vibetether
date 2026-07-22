@@ -2,7 +2,18 @@ import { MANAGED_END, MANAGED_START } from './constants.mjs';
 import { conflictError } from './errors.mjs';
 import { normalizePortableText, portableTextEqual } from './files.mjs';
 
-export const MANAGED_BODY = `Use the \`vibe-tether\` Skill at task entry, after compaction or resume, before a consequential decision, and before completion or handoff.\n\nRun \`vibetether context --boundary <boundary> --json\` before reading VibeTether state. Follow only its confirmed truth handles, current slice, blockers, selected provider, and fresh applicable experience.\n\nDo not read raw VibeTether runtime state, provider catalogs, unselected Skills, or unselected experience. For an explicit deep request or unresolved direction, use the \`vibe-tether-deep\` Skill and do not write product code until its Start Card has a user-confirmed Implementation Permit. Do not alter project direction or activate project truth without the required user confirmation.`;
+export const REENTRY_BOUNDARIES = Object.freeze([
+  { id: 'task-entry', phrase: 'task entry' },
+  { id: 'phase-slice-change', phrase: 'phase or slice change' },
+  { id: 'consequential-decision', phrase: 'consequential decision' },
+  { id: 'compaction-resume', phrase: 'compaction or resume' },
+  { id: 'handoff', phrase: 'handoff' },
+  { id: 'repeated-failure', phrase: 'repeated failure' },
+  { id: 'merge', phrase: 'merge' },
+  { id: 'completion-like-boundary', phrase: 'completion-like boundary' },
+]);
+
+export const MANAGED_BODY = `Use the \`vibe-tether\` Skill and re-enter at task entry; after any phase or slice change, compaction or resume, handoff, repeated failure, or merge; and before a consequential decision or completion-like boundary.\n\nRun \`vibetether context --boundary <boundary> --json\` before reading VibeTether state. Follow only confirmed Truth handles, the current slice, blockers, selected Provider, and fresh applicable Experience.\n\nDo not read raw runtime state, Provider catalogs, unselected Skills, or unselected Experience. For an explicit Deep request or unresolved direction, use \`vibe-tether-deep\`; do not write product code until its Start Card has a user-confirmed Implementation Permit. Do not alter project direction or activate project Truth without user confirmation.\n\nThis instruction is advisory and depends on Agent cooperation; it cannot control an Agent that never invokes the Skill or CLI.`;
 
 export const ADAPTERS = {
   codex: { instruction: 'AGENTS.md', skill: '.agents/skills/vibe-tether/SKILL.md', deepSkill: '.agents/skills/vibe-tether-deep/SKILL.md', userSkillRoot: '.codex/skills' },

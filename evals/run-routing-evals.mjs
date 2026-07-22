@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFile } from 'node:fs/promises';
 import { loadProviderRegistry } from '../src/provider-registry.mjs';
 import { createSkillsLock } from '../src/contract.mjs';
 import { brokerSkills } from '../src/skill-broker.mjs';
@@ -7,6 +8,7 @@ import { classifyTaskText } from '../src/task-classifier.mjs';
 const registry=await loadProviderRegistry();
 const lock=createSkillsLock({packs:['standard','extended','web','production']});
 const base={agent:'codex',permissions:{network:false,external_write:false,code_write:true}};
+const loadFixture=async(name)=>JSON.parse(await readFile(new URL(`./fixtures/${name}`,import.meta.url),'utf8'));
 
 const train=[
   {text:'The service crashes intermittently; diagnose the root cause before changing code.',provider:'superpowers-systematic-debugging'},
@@ -15,13 +17,15 @@ const train=[
   {text:'把这个已批准功能拆成小而可验证的实施计划。',provider:'superpowers-writing-plans'},
   {text:'Use test-first development for this new behavior.',provider:'superpowers-test-driven-development'},
   {text:'先写失败测试，再实现这个新功能。',provider:'superpowers-test-driven-development'},
-  {text:'Explore alternatives for the new user experience and visual direction.',provider:'superpowers-brainstorming'},
+  {text:'Explore alternatives for the new user experience and visual direction.',provider:'anthropic-frontend-design',needsUserDecision:true},
   {text:'帮我做一个现代一点的后台。',provider:'mattpocock-grilling'},
   {text:'Fix this known small typo in the parser.',provider:'vibetether-built-in-implementation',overlay:'vibetether-built-in-surgical-change-policy'},
   {text:'Review the current code diff for correctness.',provider:'vibetether-built-in-review'},
   {text:'Verify that the implementation actually works.',provider:'vibetether-built-in-verification'},
   {text:'Prepare the approved release for publication.',provider:'vibetether-built-in-release'},
 ];
+
+train.push(...await loadFixture('routing-train.json'));
 
 const heldOut=[
   {text:'A flaky test only fails on CI; reproduce and find the cause.',provider:'superpowers-systematic-debugging'},
@@ -33,12 +37,14 @@ const heldOut=[
   {text:'Please use deep mode, verify the facts, and wait for my confirmation before coding.',provider:'vibetether-built-in-alignment',needsUserDecision:true,deep:true},
   {text:'请规划这个多阶段改动，每一步都要有验证方式。',provider:'superpowers-writing-plans'},
   {text:'Implement the regression test first, then make it pass.',provider:'superpowers-test-driven-development'},
-  {text:'We need a deliberate UX direction before touching the frontend.',provider:'superpowers-brainstorming'},
+  {text:'We need a deliberate UX direction before touching the frontend.',provider:'anthropic-frontend-design',needsUserDecision:true},
   {text:'Build me a customer portal, but I have not decided the user flow yet.',provider:'mattpocock-grilling'},
   {text:'Refactor this local helper without changing public behavior.',provider:'vibetether-built-in-implementation',overlay:'vibetether-built-in-surgical-change-policy'},
   {text:'审查这次改动是否符合需求。',provider:'vibetether-built-in-review'},
   {text:'部署已经批准的版本。',provider:'vibetether-built-in-release'},
 ];
+
+heldOut.push(...await loadFixture('routing-heldout.json'));
 
 const adversarialControlled=[
   {text:'Deploy the service and then show me the logs.',provider:'vibetether-built-in-release',needsUserDecision:true},
@@ -64,6 +70,8 @@ const adversarialControlled=[
   {text:'In src/export.ts, add a CSV delimiter option without changing the public API and make export.test.ts pass.',provider:'vibetether-built-in-implementation'},
   {text:'在 src/export.ts 中增加 CSV 分隔符选项，不改变公开 API，并让 export.test.ts 通过。',provider:'vibetether-built-in-implementation'},
 ];
+adversarialControlled.push(...await loadFixture('routing-adversarial.json'));
+
 const adversarialObservation=[
   'Explain how the current SSO flow works without changing code.','Find where Stripe is configured; do not modify anything.',
   'List the GraphQL entry points only.','解释当前单点登录流程，不要修改代码。','定位 Stripe 配置文件，只读。','列出 GraphQL 入口，不做修改。',
