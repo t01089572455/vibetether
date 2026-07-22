@@ -95,15 +95,19 @@ Harden the exact RC.3 artifact on an isolated integration branch until its adapt
 ## Evidence
 
 - Verification commands required for the final clean commit: `npm.cmd ci --ignore-scripts --no-audit --no-fund --offline`; `npm.cmd run check`; `npm.cmd run test:coverage`; `npm.cmd run test:compat:v063-live`; `node scripts/test-package-journey.mjs`; `npm.cmd pack --dry-run`; `npm.cmd audit --audit-level=low`.
-- Raw result summary: pre-final exploratory results are deliberately not claimed as final evidence. The final clean-commit command outputs, package commit/tree identity, live compatibility inventory, independent-review disposition, and remote matrix URLs are collected only after the bounded delivery commit exists.
+- Final local candidate: commit `a71851e98a0b2c00130796a3370c6f5dd86771d2`, tree `327f7d5c4cdae94a0e910d1e11ab5805a9db20fa`.
+- Final local results: offline `npm ci` exited 0; `npm run check` exited 0 with 85 syntax-audited JavaScript modules and 213 passed / 0 failed tests across 32 files; `npm run test:coverage` exited 0 with 92.82% line, 72.66% branch, and 89.05% function coverage; `npm run test:compat:v063-live` exited 0 against exact v0.6.3 commit `9097a0d7014740f592132f50bc41d203b0b80ee5` for Codex, Claude, and both, including CRLF and post-migration-edit rollback preservation; `npm pack --dry-run` and `npm audit --audit-level=low` exited 0.
+- Exact package journey: `node scripts/test-package-journey.mjs --json` exited 0 from the clean final source worktree. It produced package SHA-256 `533b0b7400ce49e2c57a716e58b7a2d695d7176e519ccae70d2c7d5431d76fc1`, installed only the TGZ into an isolated prefix, guarded 26 Node invocations against source-tree imports, and verified goal blocking/closure, release authorization blocking, Deep revocation, offline launcher reuse, upgrade preview, modified-contract uninstall protection, and archive safety.
+- Scope review: `git diff --check $(git merge-base origin/main HEAD)..HEAD` exited 0. Immutable upstream Provider content remains fingerprint-checked and is exempted from Git whitespace normalization through the explicit `.gitattributes` rule; `node scripts/audit-release.mjs` exited 0 after that review finding was corrected.
+- Remaining external evidence: the remote review-branch SHA and Ubuntu/Windows × Node 20/24 matrix URLs remain pending until the branch is pushed. They are release evidence, not substituted by the local results above.
 - Scope review: Task 7 adds exact package/live migration journeys, CI enforcement, user docs, release audit coverage, and the RC4 completion/re-anchor regressions needed by the approved Goal/Outcome plan. No source changes target remote `main`, tags, a real user project, UI, daemon, database, or registry service.
-- Artifact evidence: source-tree and packed-TGZ evidence are fresh for the current implementation bytes. The final commit/tree, remote review-branch SHA, GitHub Actions URLs, and any downloadable archive hashes remain to be recorded only after commit/push and terminating remote jobs.
+- Artifact evidence: source-tree and packed-TGZ evidence are fresh for the final local implementation bytes. Remote review-branch and matrix evidence remain intentionally pending.
 
 ## Independent Review
 
 - Review inputs: user goal and constraints, authority sources, this packet, exact RC.3 baseline artifact, final diff, focused regression tests, raw package journeys, compatibility inventory, and CI results.
-- Verdict: pending; current state is implementation-authorized on an isolated branch and release-blocked.
-- Independence limitations: the current reviewer is also implementing fixes, so its checks are self-review. A later clean-context review must be labeled independent only if it did not generate the implementation and receives the raw evidence rather than the implementation narrative alone.
+- Verdict: clean-context read-only review is **GO_TO_REVIEW_BRANCH** for commit `a71851e98a0b2c00130796a3370c6f5dd86771d2`; it found no remaining P0/P1. The final review specifically verified that caller-supplied external-adapter `PASS` data now fails closed with `AUTHORITY_ADAPTER_UNAVAILABLE`, cannot retain `EXTERNAL_EVIDENCE_VERIFIED`, and does not satisfy release evidence.
+- Independence limitations: the reviewer was a separate read-only Agent and did not generate the implementation, but this is not a third-party security audit, a real external authority adapter review, or a substitute for terminating remote CI. Formal release remains blocked.
 
 ## Experience Feedback
 
