@@ -25,6 +25,8 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run check
       - run: npm run test:coverage
+      - run: npm run audit:stage0
+      - run: npm run test:stage0-evidence
       - run: npm run test:compat:v063-live
         env:
           VIBETETHER_REQUIRE_LIVE_V063: '1'
@@ -36,6 +38,6 @@ jobs:
           name: live-v063-${{ matrix.os }}-node${{ matrix.node }}
           path: ${{ runner.temp }}/vibetether-live-v063
           if-no-files-found: ignore
-      - run: node scripts/test-package-journey.mjs
+      - run: npm run test:stage0-package
       - run: npm pack --dry-run
       - run: npm audit --audit-level=low
