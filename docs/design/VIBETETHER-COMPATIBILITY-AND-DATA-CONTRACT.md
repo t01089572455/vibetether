@@ -1,7 +1,7 @@
 # VibeTether Compatibility and Data Contract
 
-Status: release-candidate design contract  
-Decision owner: project user  
+Status: release-candidate design contract
+Decision owner: project user
 Compatibility baseline: installed VibeTether 0.6.x project control planes
 
 ## Compatibility definition

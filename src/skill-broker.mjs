@@ -84,7 +84,7 @@ export function brokerSkills(registry, request, lock, routes = null, stats = {})
     }
     candidates.push({ provider: fallback, score: 0, reasons: ['built-in-fallback'] });
   }
-  return result(capability, normalized, lock, candidates, matchedRoutes, overlays);  
+  return result(capability, normalized, lock, candidates, matchedRoutes, overlays);
 }
 
 function result(capability, request, lock, candidates, matchedRoutes = [], overlays = []) {

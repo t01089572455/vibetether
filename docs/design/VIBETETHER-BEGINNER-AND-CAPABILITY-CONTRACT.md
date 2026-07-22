@@ -1,7 +1,7 @@
 # VibeTether Beginner and Capability Contract
 
-Status: release-candidate design contract  
-Decision owner: project user  
+Status: release-candidate design contract
+Decision owner: project user
 Implementation target: VibeTether 1.0 release-candidate line
 
 ## Product promise
