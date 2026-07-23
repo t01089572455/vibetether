@@ -78,7 +78,12 @@ function validReservedAcceptance(acceptance) {
   const validator = acceptance.validator ?? {};
   if (acceptance.evidence_kind !== validator.kind || !schema.kinds.includes(validator.kind)) return false;
   if (schema.decision_type !== null && validator.decision_type !== schema.decision_type) return false;
-  if (validator.kind === 'command') return Array.isArray(validator.command) && validator.command.length > 0;
+  if (validator.kind === 'command') {
+    if (!Array.isArray(validator.command) || validator.command.length === 0) return false;
+    if (acceptance.id === UI_ACCEPTANCE_IDS.functional
+        && (!Array.isArray(validator.covers_paths) || validator.covers_paths.length === 0)) return false;
+    return true;
+  }
   if (validator.kind === 'artifact') return typeof validator.path === 'string' && validator.path.length > 0;
   return true;
 }

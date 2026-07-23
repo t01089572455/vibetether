@@ -443,6 +443,16 @@ test('S0-R03: reserved UI acceptance IDs reject caller-selected validator semant
   );
 });
 
+test('S0-R03: functional acceptance rejects command validators with empty product coverage', async () => {
+  const malformed = uiOutcome();
+  malformed.acceptance.find((item) => item.id === FUNCTIONAL).validator.covers_paths = [];
+  const fixture = await governedUiFixture('stage0-ui-functional-empty-coverage', malformed);
+  await assert.rejects(
+    startUiRoute(fixture),
+    (error) => error?.code === 'UI_OUTCOME_CONTRACT_INVALID',
+  );
+});
+
 test('S0-R03: propagation gate rejects every incomplete acceptance combination', async () => {
   const cases = [
     ['none', []],
@@ -470,6 +480,18 @@ test('S0-R03: propagation gate rejects a stale golden decision after final produ
   await assert.rejects(
     startUiRoute(fixture, 'frontend-engineering'),
     (error) => error?.code === 'UI_ACCEPTANCE_REQUIRED' && error.missing_acceptance_ids?.includes(GOLDEN),
+  );
+});
+
+test('S0-R03: propagation gate rejects stale functional evidence after covered product bytes change', async () => {
+  const fixture = await governedUiFixture('stage0-ui-stale-functional');
+  await satisfyFunctional(fixture);
+  await writeFile(path.join(fixture.root, 'ui-state.txt'), 'changed after functional acceptance\n');
+  await recordDecision(fixture, GOLDEN);
+  await recordDecision(fixture, VISUAL);
+  await assert.rejects(
+    startUiRoute(fixture),
+    (error) => error?.code === 'UI_ACCEPTANCE_REQUIRED' && error.missing_acceptance_ids?.includes(FUNCTIONAL),
   );
 });
 
