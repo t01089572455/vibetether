@@ -32,6 +32,13 @@ const UI_CAPABILITY_ACCEPTANCES = Object.freeze({
   'frontend-propagation': [UI_ACCEPTANCE_IDS.golden, UI_ACCEPTANCE_IDS.functional, UI_ACCEPTANCE_IDS.visual],
 });
 
+const UI_CAPABILITIES = new Set(Object.keys(UI_CAPABILITY_ACCEPTANCES));
+const RESERVED_UI_ACCEPTANCES = Object.freeze({
+  [UI_ACCEPTANCE_IDS.golden]: Object.freeze({ kinds: ['user-decision'], decision_type: 'stage0-ui-golden' }),
+  [UI_ACCEPTANCE_IDS.functional]: Object.freeze({ kinds: ['command', 'artifact'], decision_type: null }),
+  [UI_ACCEPTANCE_IDS.visual]: Object.freeze({ kinds: ['review-decision'], decision_type: 'ui-visual-review' }),
+});
+
 export function uiCapabilityContext(capability) {
   const required = UI_CAPABILITY_ACCEPTANCES[capability];
   if (!required) return null;
@@ -50,6 +57,32 @@ function uiError(message, code, missingAcceptanceIds) {
   return error;
 }
 
+export function assertUiCapabilityClassification(capability, classification) {
+  const classifiedCapability = classification?.capability;
+  const classifiedUi = UI_CAPABILITIES.has(classifiedCapability)
+    || classification?.signals?.includes('user-visible-ui')
+    || classification?.signals?.some((signal) => String(signal).startsWith('frontend-'));
+  if (classifiedUi && capability !== classifiedCapability) {
+    throw uiError(
+      `Task classification ${classifiedCapability ?? 'user-visible-ui'} cannot be weakened to ${capability}. Select the applicable frontend capability and its UI Outcome contract.`,
+      'UI_CAPABILITY_MISMATCH',
+      [],
+    );
+  }
+  return { classified_ui: classifiedUi, capability };
+}
+
+function validReservedAcceptance(acceptance) {
+  const schema = RESERVED_UI_ACCEPTANCES[acceptance.id];
+  if (!schema) return true;
+  const validator = acceptance.validator ?? {};
+  if (acceptance.evidence_kind !== validator.kind || !schema.kinds.includes(validator.kind)) return false;
+  if (schema.decision_type !== null && validator.decision_type !== schema.decision_type) return false;
+  if (validator.kind === 'command') return Array.isArray(validator.command) && validator.command.length > 0;
+  if (validator.kind === 'artifact') return typeof validator.path === 'string' && validator.path.length > 0;
+  return true;
+}
+
 export function assertUiOutcomeContract(registry, outcomeIds = [], capability) {
   if (!['frontend-engineering', 'frontend-propagation'].includes(capability)) return null;
   const required = UI_CAPABILITY_ACCEPTANCES[capability];
@@ -65,10 +98,20 @@ export function assertUiOutcomeContract(registry, outcomeIds = [], capability) {
     .filter(Boolean);
   if (selected.length !== outcomeIds.length) return null;
   const owners = new Map();
+  const invalid = new Set();
   for (const outcome of selected) {
     for (const acceptance of outcome.acceptance ?? []) {
-      owners.set(acceptance.id, { outcome_id: outcome.id, acceptance });
+      if (!Object.hasOwn(RESERVED_UI_ACCEPTANCES, acceptance.id)) continue;
+      if (owners.has(acceptance.id) || !validReservedAcceptance(acceptance)) invalid.add(acceptance.id);
+      owners.set(acceptance.id, { outcome_id: outcome.id, outcome_revision_digest: outcome.revision_digest, acceptance });
     }
+  }
+  if (invalid.size) {
+    throw uiError(
+      `Reserved UI acceptance IDs have invalid or duplicate semantics: ${[...invalid].join(', ')}.`,
+      'UI_OUTCOME_CONTRACT_INVALID',
+      [...invalid],
+    );
   }
   const missing = required.filter((id) => !owners.has(id));
   if (missing.length) {
@@ -81,11 +124,16 @@ export function assertUiOutcomeContract(registry, outcomeIds = [], capability) {
   return { capability, required_acceptance_ids: [...required], owners };
 }
 
-async function decisionProofCurrent({ context, runtime, proof, acceptance, authorityDigest, currentSnapshot }) {
+async function decisionProofCurrent({ context, runtime, progress, proof, owner, acceptance, authorityDigest, currentSnapshot }) {
   const receipt = proof?.decision_receipt;
   if (proof?.kind !== acceptance.validator.kind
       || receipt?.decision_type !== acceptance.validator.decision_type
+      || receipt?.acceptance_id !== acceptance.id
+      || receipt?.outcome_id !== owner.outcome_id
+      || receipt?.outcome_revision_digest !== owner.outcome_revision_digest
+      || receipt?.registry_digest !== progress.registry_digest
       || receipt?.authority_digest !== authorityDigest) return false;
+  if (acceptance.validator.kind === 'review-decision' && !['peer', 'independent'].includes(receipt.independence_level)) return false;
   try {
     const sealed = await readReceipt(path.join(runtime.paths.decisions, `${receipt.id}.json`), 'UI acceptance decision receipt');
     if (canonicalJson(sealed) !== canonicalJson(receipt)) return false;
@@ -137,7 +185,7 @@ async function acceptanceCurrent(options, owner, currentSnapshot) {
       || !entry.satisfied_acceptance_ids?.includes(acceptance.id)) return false;
   const proof = entry.acceptance_proofs?.[acceptance.id];
   if (['user-decision', 'review-decision'].includes(acceptance.validator.kind)) {
-    return decisionProofCurrent({ ...options, proof, acceptance, currentSnapshot });
+    return decisionProofCurrent({ ...options, proof, owner, acceptance, currentSnapshot });
   }
   if (['command', 'artifact'].includes(acceptance.validator.kind)) {
     return routeProofCurrent({ ...options, proof, acceptance });
@@ -150,8 +198,21 @@ export async function assertUiAcceptanceGate(options) {
   if (!contract) return null;
   const currentSnapshot = await executionSnapshot(options.context.executionRoot);
   const missing = [];
+  const usedProofs = new Set();
   for (const id of contract.required_acceptance_ids) {
-    if (!await acceptanceCurrent(options, contract.owners.get(id), currentSnapshot)) missing.push(id);
+    const owner = contract.owners.get(id);
+    if (!await acceptanceCurrent(options, owner, currentSnapshot)) {
+      missing.push(id);
+      continue;
+    }
+    const proof = options.progress.outcomes?.[owner.outcome_id]?.acceptance_proofs?.[id];
+    const proofIds = proof?.kind === 'route-evidence'
+      ? (proof.evidence_ids ?? []).map((value) => `evidence:${value}`)
+      : [`decision:${proof?.decision_receipt?.id}`];
+    if (proofIds.some((value) => usedProofs.has(value))) {
+      throw uiError(`A UI acceptance proof cannot satisfy multiple reserved axes: ${id}.`, 'UI_ACCEPTANCE_PROOF_REUSED', [id]);
+    }
+    for (const value of proofIds) usedProofs.add(value);
   }
   if (missing.length) {
     throw uiError(

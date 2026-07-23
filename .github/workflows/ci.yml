@@ -23,7 +23,8 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - run: npm run check
+      - name: Run Stage 0 gates
+        run: npm run check
       - run: npm run test:coverage
       - run: npm run audit:stage0
       - run: npm run test:stage0-evidence
@@ -39,5 +40,7 @@ jobs:
           path: ${{ runner.temp }}/vibetether-live-v063
           if-no-files-found: ignore
       - run: npm run test:stage0-package
+      - name: Record exact package digest
+        run: npm run record:stage0-package-digest
       - run: npm pack --dry-run
       - run: npm audit --audit-level=low

@@ -100,7 +100,7 @@ test('context resource reads enforce offset and maximum-size bounds',async()=>{
   await assert.rejects(mainJson(['context','read',handle,'--project',root,'--offset','-1']),/offset/i);
 });
 
-test('global dispatcher discovers the pinned version from an external local Contract', async()=>{
+test('global dispatcher discovers the pinned version but never executes an unverified cache-miss package', async()=>{
   const f=await fixture('dispatcher-local');
   await mainJson(['init','--project',f.root,'--agent','codex','--control-mode','local','--goal','Local dispatcher goal','--success-evidence','Dispatcher uses pinned version','--confirmed','--yes']);
   const context=await discoverContract(f.root);
@@ -121,7 +121,7 @@ test('global dispatcher discovers the pinned version from an external local Cont
   }
   const {spawnSync}=await import('node:child_process');
   const result=spawnSync(process.execPath,[dispatcher,'--version'],{cwd:f.root,encoding:'utf8',env});
-  assert.equal(result.status,0,result.stderr);
-  const args=await readFile(argsFile,'utf8');
-  assert.match(args,/--package=https:\/\/codeload\.github\.com\/t01089572455\/vibetether\/tar\.gz\/refs\/tags\/v9\.8\.7/);
+  assert.equal(result.status,127,result.stderr);
+  assert.match(result.stderr,/no verified local runtime cache.*9\.8\.7/is);
+  await assert.rejects(readFile(argsFile,'utf8'),/ENOENT/);
 });

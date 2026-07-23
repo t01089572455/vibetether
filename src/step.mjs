@@ -19,7 +19,7 @@ import { activateSkill, removeActivation } from './skills.mjs';
 import { executionSnapshot, snapshotsMatch } from './git.mjs';
 import { writeProjectJson } from './files.mjs';
 import { classifyTaskText } from './task-classifier.mjs';
-import { assertUiAcceptanceGate, assertUiOutcomeContract } from './ui-control.mjs';
+import { assertUiAcceptanceGate, assertUiCapabilityClassification, assertUiOutcomeContract } from './ui-control.mjs';
 import { consumeDeepPermit, invalidateDeepPermitState, validateDeepPermit } from './deep.mjs';
 import { loadOutcomeRegistry, outcomeRegistryDigest } from './outcomes.mjs';
 import {
@@ -355,6 +355,7 @@ export async function startStep(options={}) {
   }
   if (current.authority_digest!==value.authority.authority_digest||current.control_generation!==value.context.manifest.control_generation) throw conflictError('Current checkpoint is stale; run `vibetether step reanchor` after reviewing the authority change.','AUTHORITY_CHANGED');
   const routePhase=phase(options.phase);
+  const permissions={network:options.network===true,external_write:options.external_write===true,code_write:options.code_write===true};
   const capability=boundedText(options.capability,128,'Capability');
   const slice=boundedText(options.slice,1000,'Step slice');
   const taskText=options.task_text===undefined||options.task_text===null ? slice : boundedText(options.task_text,2000,'Task text');
@@ -364,9 +365,14 @@ export async function startStep(options={}) {
   const inferredScope=normalizeScopePaths((options.success_checks??[]).flatMap((check)=>check?.covers_paths??[]));
   const approvedPaths=explicitScope.length?explicitScope:inferredScope;
   const signals=[...new Set((options.signals??[]).map((item)=>normalizeSignal(boundedText(item,256,'Step signal'))).filter(Boolean))];
-  const classification=options.classification??classifyTaskText(taskText,{intentStatus:value.intent.status,currentPhase:current.phase});
+  const observedIntent=taskText===slice?taskText:`${taskText} ${slice}`;
+  const observedClassification=classifyTaskText(observedIntent,{
+    intentStatus:value.intent.status,currentPhase:current.phase,scopePaths:approvedPaths,
+    requestedPhase:routePhase,codeWrite:permissions.code_write,
+  });
+  const classification=observedClassification;
+  assertUiCapabilityClassification(capability, observedClassification);
   const deepRequired=options.deep===true||classification.deep_requested===true||current.task_mode==='deep';
-  const permissions={network:options.network===true,external_write:options.external_write===true,code_write:options.code_write===true};
   if (routePhase==='EXECUTE_ONE'&&permissions.code_write!==true) throw conflictError('EXECUTE_ONE requires explicit code-write permission.','PERMISSION_REQUIRED');
   let deepState=await validateDeepPermit(value.context,value.runtime,value.authority,{required:deepRequired,slice:deepRequired?slice:null});
   let userDecisionReason = deepState?.permit?.reason ?? null;

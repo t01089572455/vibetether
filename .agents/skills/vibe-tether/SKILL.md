@@ -5,7 +5,7 @@ description: Use at task entry, after compaction or resume, before consequential
 
 # VibeTether
 
-Keep the Agent aligned to user-owned intent, confirmed Truth, governed Outcomes, and fresh evidence. Re-enter at task entry, every phase or slice change, compaction, resume, handoff, repeated failure, merge, and completion-like boundary.
+Keep the Agent aligned to user-owned intent, confirmed Truth, governed Outcomes, and fresh evidence. Re-enter at task entry, every phase or slice change, compaction or resume, handoff, repeated failure, merge, before a consequential decision, and at a completion-like boundary.
 
 Run `vibetether context --boundary <boundary> --json` first. Read the returned handles only; do not scan raw runtime state, unselected Skills, or unrelated history.
 
@@ -15,6 +15,8 @@ Run `vibetether context --boundary <boundary> --json` first. Read the returned h
 - **Deep:** use `vibe-tether-deep` before coding when intent is ambiguous or product behavior, UI direction, architecture, data, security, permissions, migration, external write, deployment, publication, or release scope is unresolved. A file name, test target, or confident inference is not approval.
 
 For consequential work, select **one Primary Provider** from the returned shortlist, start a controlled step, and close it with fresh evidence. A provider is a method, never authority: the user owns Intent, Truth confirmation, Outcome coverage, acceptance decisions, and release authorization.
+
+For user-visible UI direction, keep one ordered contract: product UX, reference intake, design contract and tokens, owner-approved golden screen, one implemented state, render/compare, separate functional and visual acceptance, then lock and propagate. VibeTether-controlled frontend routes enforce the governed acceptance IDs; an uninvoked host remains outside that hard gate.
 
 ## Completion is layered
 

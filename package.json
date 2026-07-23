@@ -30,8 +30,9 @@
     "verify:stage0-evidence": "node scripts/verify-stage0-evidence.mjs",
     "test:stage0-evidence": "node --test test/stage0-evidence-manifest.test.mjs",
     "test:stage0-package": "node --test test/rc4-package-journey.test.mjs test/stage0-package-capabilities.test.mjs test/stage0-package-contract.test.mjs",
+    "record:stage0-package-digest": "node scripts/record-stage0-package-digest.mjs",
     "check:syntax": "node scripts/check-syntax.mjs",
-    "check": "npm run check:syntax && npm test && npm run eval && npm run audit:budgets && npm run audit:release",
+    "check": "npm run check:syntax && npm test && npm run eval && npm run audit:budgets && npm run audit:release && npm run audit:stage0",
     "test:compat:v063-live": "node scripts/test-live-v063-migration.mjs"
   },
   "engines": {

@@ -1,8 +1,8 @@
 import { VERSION } from './constants.mjs';
 
-export function officialPackage(version) {
-  if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version)) throw new Error('Invalid VibeTether version.');
-  return `https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v${version}`;
+export function officialPackage(commit) {
+  if (!/^[a-f0-9]{40}$/i.test(commit)) throw new Error('VibeTether acquisition requires an immutable 40-character commit.');
+  return `https://codeload.github.com/t01089572455/vibetether/tar.gz/${commit.toLowerCase()}`;
 }
 
 function runtimePrelude() {
@@ -54,29 +54,9 @@ function runCached(entry, args) {
   if (result.error) { process.stderr.write('VibeTether could not start the verified local runtime cache.\\n'); process.exit(127); }
   process.exit(typeof result.status === 'number' ? result.status : 1);
 }
-function runPortablePackage(version, args) {
-  if (process.env.VIBETETHER_OFFLINE === '1') {
-    process.stderr.write('VibeTether has no verified local runtime cache for this version and offline mode forbids network acquisition. Run the matching installer or upgrade command first.\\n');
-    process.exit(127);
-  }
-  const packageSpec = process.env.VIBETETHER_CLI_PACKAGE || \`https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v\${version}\`;
-  const commandArgs = ['--yes', \`--package=\${packageSpec}\`, 'vibetether', ...args];
-  let executable = 'npx';
-  let spawnArgs = commandArgs;
-  if (process.platform === 'win32') {
-    const candidates = [
-      process.env.npm_execpath ? path.join(path.dirname(process.env.npm_execpath), 'npx-cli.js') : null,
-      path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npx-cli.js'),
-      path.resolve(path.dirname(process.execPath), '..', 'lib', 'node_modules', 'npm', 'bin', 'npx-cli.js'),
-    ].filter(Boolean);
-    const npxCli = candidates.find((candidate) => existsSync(candidate));
-    if (!npxCli) { process.stderr.write('VibeTether requires Node.js with npm/npx available.\\n'); process.exit(127); }
-    executable = process.execPath;
-    spawnArgs = [npxCli, ...commandArgs];
-  }
-  const result = spawnSync(executable, spawnArgs, { stdio: 'inherit', shell: false, windowsHide: true });
-  if (result.error) { process.stderr.write('VibeTether could not start the pinned package.\\n'); process.exit(127); }
-  process.exit(typeof result.status === 'number' ? result.status : 1);
+function missingVerifiedRuntime(version) {
+  process.stderr.write(\`VibeTether has no verified local runtime cache for version \${version}. Run an installer or upgrade command from an immutable commit and verified digest first.\\n\`);
+  process.exit(127);
 }
 `;
 }
@@ -99,7 +79,7 @@ try {
 }
 const cached = cachedRuntime(version);
 if (cached) runCached(cached, process.argv.slice(2));
-runPortablePackage(version, process.argv.slice(2));
+missingVerifiedRuntime(version);
 `;
 }
 
@@ -171,6 +151,6 @@ if (manifestPath) {
 }
 const cached = cachedRuntime(version);
 if (cached) runCached(cached, process.argv.slice(2));
-runPortablePackage(version, process.argv.slice(2));
+missingVerifiedRuntime(version);
 `;
 }

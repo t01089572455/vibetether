@@ -2,6 +2,28 @@ import { normalizeSignal } from './files.mjs';
 
 const RULES = [
   {
+    phase: 'EXECUTE_ONE', capability: 'frontend-propagation',
+    pattern: /\b(?:propagate|roll out|apply|extend|carry)\b/u,
+    userVisibleUi: true,
+    signals: ['frontend-propagation', 'user-visible-ui'],
+    reason: 'The request propagates an accepted UI state and requires the locked UI acceptance contract.',
+  },
+  {
+    phase: 'EXECUTE_ONE', capability: 'frontend-engineering',
+    pattern: /\b(?:implement|build|wire|change|update|modify|edit|refactor|fix|repair|one state)\b/u,
+    userVisibleUi: true,
+    hostUiCodeWrite: true,
+    signals: ['frontend-engineering', 'user-visible-ui'],
+    reason: 'The request implements one bounded UI state under the approved golden direction.',
+  },
+  {
+    phase: 'VERIFY', capability: 'browser-verification',
+    pattern: /\b(?:verify|validate|render|compare|visual regression|browser (?:verification|verify|test|testing))\b/u,
+    userVisibleUi: true,
+    signals: ['browser-verification', 'user-visible-ui'],
+    reason: 'The request verifies a rendered UI state against its accepted visual contract.',
+  },
+  {
     phase: 'EXECUTE_ONE', capability: 'tdd',
     pattern: /\b(?:test[- ]first|tdd|red green|regression test first)\b|测试先行|先写(?:失败|回归)?测试/u,
     signals: ['test-first', 'new-behavior'],
@@ -72,13 +94,26 @@ const MIGRATION_ACTION = /\b(?:run|apply|execute|perform|start)\s+(?:the\s+|an?\
 const DESTRUCTIVE_ACTION = /\b(?:delete|drop|purge|destroy|truncate|wipe)\b|删除|清空|销毁|永久移除/u;
 const EXPLICIT_APPROVAL = /\b(?:approved|user[- ]approved|confirmed by the user|already confirmed)\b|已经批准|已批准|用户已确认|用户确认过/u;
 
+const EXPLICIT_UI_CONTEXT = /\b(?:ui|user interface|interface|screen|frontend|web(?:site|page|app)|browser|css|stylesheet|button|modal|dialog|navbar|sidebar|form)\b/u;
+const UI_PRESENTATION_CONTEXT = /\b(?:visual(?: state)?|design system|styles?|styling|layout|spacing|theme|animation|motion|typography|responsive|breakpoint|component)\b/u;
+const USER_SURFACE_CONTEXT = /\b(?:checkout|login|sign[ -]?in|account settings|dashboard|landing page|profile|navigation|nav|menu|header|footer|field|control|widget|card|panel|toast|tooltip|breadcrumb|tab|drawer|popover|carousel|hero)\b/u;
+const UI_SCOPE_PATH = /(?:^|\/)(?:frontend|ui|components?|pages?|screens?|styles?|views?|templates?)(?:\/|$)|\.(?:css|scss|sass|less|styl|jsx|tsx|vue|svelte|html?)$/u;
+
+function hasUserVisibleUiContext(source, scopePaths) {
+  if (EXPLICIT_UI_CONTEXT.test(source)) return true;
+  if (UI_PRESENTATION_CONTEXT.test(source) && USER_SURFACE_CONTEXT.test(source)) return true;
+  return (Array.isArray(scopePaths) ? scopePaths : []).some((item) => UI_SCOPE_PATH.test(String(item ?? '').replaceAll('\\', '/').toLowerCase()));
+}
+
 function directionalCandidate(source) {
   return source
     .replace(/\bwithout\s+(?:changing|modifying|altering)\s+(?:the\s+)?(?:public\s+api|public\s+behavior|architecture|database\s+schema)\b/gu, '')
     .replace(/不(?:改变|修改|调整)(?:公开|公共)?\s*(?:api|接口|行为|架构|数据库结构)/gu, '');
 }
 
-export function classifyTaskText(text, { intentStatus = 'confirmed', currentPhase = 'DISCOVER' } = {}) {
+export function classifyTaskText(text, {
+  intentStatus = 'confirmed', currentPhase = 'DISCOVER', scopePaths = [], requestedPhase = null, codeWrite = false,
+} = {}) {
   const source = String(text ?? '').trim();
   const lowered = source.toLowerCase();
   const deepRequested = DEEP.test(lowered) && !DEEP_NEGATED.test(lowered);
@@ -87,6 +122,7 @@ export function classifyTaskText(text, { intentStatus = 'confirmed', currentPhas
     .replace(/\b(?:do not|don't|without)\s+(?:change|modify|edit|write)(?:\s+anything)?\b/gu, '')
     .replace(/(?:不要修改|不做修改|不要改|无需修改)/gu, '');
   const directionCandidate = directionalCandidate(lowered);
+  const userVisibleUi = hasUserVisibleUiContext(lowered, scopePaths);
   const deployAction = DEPLOY_ACTION.test(lowered);
   const publicationAction = PUBLICATION_ACTION.test(lowered);
   const migrationAction = MIGRATION_ACTION.test(lowered);
@@ -133,7 +169,9 @@ export function classifyTaskText(text, { intentStatus = 'confirmed', currentPhas
     };
   }
   for (const rule of RULES) {
-    if (!rule.pattern.test(lowered)) continue;
+    if (rule.userVisibleUi === true && !userVisibleUi) continue;
+    const hostUiCodeWrite = rule.hostUiCodeWrite === true && codeWrite === true && requestedPhase === 'EXECUTE_ONE';
+    if (!rule.pattern.test(lowered) && !hostUiCodeWrite) continue;
     const unboundedImplementation = rule.phase === 'EXECUTE_ONE'
       && rule.capability === 'implementation'
       && !SPECIFIC.test(lowered)

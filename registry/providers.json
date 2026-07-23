@@ -2231,7 +2231,7 @@
       "id": "vibetether-built-in-design",
       "channel": "stable",
       "builtin": true,
-      "version": "1.0.0-rc.3",
+      "version": "1.0.0-rc.4",
       "source": "vibetether",
       "license": "MIT",
       "fingerprint": "afddbd60a0fb0928aa21e6589f7e3434107cc155e75b8a1b6365114ec4797de5",
@@ -2266,7 +2266,7 @@
         "trigger_precision": 1,
         "trigger_recall": 1,
         "output_gain": 0.01,
-        "evaluated_at": "2026-07-20"
+        "evaluated_at": "2026-07-22T00:00:00.000Z"
       },
       "description": "Present bounded alternatives and trade-offs without propagating an unapproved direction.",
       "path": "registry/builtins/vibetether-built-in-design",
@@ -2326,7 +2326,7 @@
       "id": "vibetether-built-in-implementation",
       "channel": "stable",
       "builtin": true,
-      "version": "1.0.0-rc.3",
+      "version": "1.0.0-rc.4",
       "source": "vibetether",
       "license": "MIT",
       "fingerprint": "304039bb5eb0f98eee786e84267b08015e524fa500c992487c268ec073db7595",
@@ -2363,7 +2363,7 @@
         "trigger_precision": 1,
         "trigger_recall": 1,
         "output_gain": 0.01,
-        "evaluated_at": "2026-07-20"
+        "evaluated_at": "2026-07-22T00:00:00.000Z"
       },
       "description": "Make the smallest reversible change that satisfies the approved slice.",
       "path": "registry/builtins/vibetether-built-in-implementation",
@@ -2684,7 +2684,7 @@
       "id": "vibetether-built-in-verification",
       "channel": "stable",
       "builtin": true,
-      "version": "1.0.0-rc.3",
+      "version": "1.0.0-rc.4",
       "source": "vibetether",
       "license": "MIT",
       "fingerprint": "c7f7b0c091853853ea641ec5c3fe6a85593f35e37a073c6ee21e6de68413e781",
@@ -2719,7 +2719,7 @@
         "trigger_precision": 1,
         "trigger_recall": 1,
         "output_gain": 0.01,
-        "evaluated_at": "2026-07-20"
+        "evaluated_at": "2026-07-22T00:00:00.000Z"
       },
       "description": "Use fresh commands or artifacts and distinguish proxies from requested outcomes.",
       "path": "registry/builtins/vibetether-built-in-verification",

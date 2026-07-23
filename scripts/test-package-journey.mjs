@@ -669,17 +669,32 @@ async function main() {
     };
     await Promise.all([packDirectory, prefix, project, home, environment.TEMP].map((target) => mkdir(target, { recursive: true })));
 
-    const packed = runNpm(['pack', '--json', '--ignore-scripts', '--pack-destination', packDirectory], {
-      cwd: sourceRoot, env: environment, label: 'pack exact source commit',
-    });
-    const metadata = JSON.parse(packed.stdout);
-    if (!Array.isArray(metadata) || metadata.length !== 1 || typeof metadata[0]?.filename !== 'string') throw new Error('npm pack did not return one package filename.');
-    const tgz = path.join(packDirectory, metadata[0].filename);
+    const suppliedTgz = process.env.VIBETETHER_STAGE0_CANDIDATE_TGZ;
+    let tgz;
+    let acquisition;
+    if (suppliedTgz) {
+      const suppliedPath = path.resolve(suppliedTgz);
+      if (!existsSync(suppliedPath)) throw new Error(`The supplied Stage 0 candidate TGZ does not exist: ${suppliedPath}`);
+      const suppliedBytes = await readFile(suppliedPath);
+      tgz = path.join(packDirectory, 'provided-stage0-candidate.tgz');
+      await writeFile(tgz, suppliedBytes, { flag: 'wx' });
+      acquisition = 'provided-exact-stage0-tgz';
+    } else {
+      const packed = runNpm(['pack', '--json', '--ignore-scripts', '--pack-destination', packDirectory], {
+        cwd: sourceRoot, env: environment, label: 'pack exact source commit',
+      });
+      const metadata = JSON.parse(packed.stdout);
+      if (!Array.isArray(metadata) || metadata.length !== 1 || typeof metadata[0]?.filename !== 'string') throw new Error('npm pack did not return one package filename.');
+      tgz = path.join(packDirectory, metadata[0].filename);
+      acquisition = 'clean-source-pack';
+    }
     const archive = await inspectTgz(tgz);
+    archive.acquisition = acquisition;
 
     runNpm(['install', '--ignore-scripts', '--no-audit', '--no-fund', '--offline', '--prefix', prefix, tgz], {
       cwd: base, env: environment, label: 'install exact TGZ into isolated prefix',
     });
+    if (sha256(await readFile(tgz)) !== archive.sha256) throw new Error('The private Stage 0 TGZ snapshot changed while npm installed it.');
     const installedCli = path.join(prefix, 'node_modules', 'vibetether', 'bin', 'vibetether.mjs');
     const installedRoot = path.join(prefix, 'node_modules', 'vibetether');
     const installedCliStat = await stat(installedCli);

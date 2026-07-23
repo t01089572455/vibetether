@@ -68,10 +68,14 @@ test('non-interactive init without direction creates a safe draft instead of inv
   assert.ok(capsule.readiness.blockers.some((item)=>item.code==='INTENT_UNCONFIRMED'));
 });
 
-test('project launcher is pinned to a validated official release tag',async()=>{
-  assert.equal(officialPackage('1.0.0-rc.3'),'https://codeload.github.com/t01089572455/vibetether/tar.gz/refs/tags/v1.0.0-rc.3');
-  assert.throws(()=>officialPackage('../main'),/Invalid/);
-  assert.match(renderProjectLauncher('1.0.0-rc.3'),/refs\/tags\/v\$\{version\}/);
+test('project launcher accepts only immutable acquisition and fails closed without a verified cache',async()=>{
+  const commit='a'.repeat(40);
+  assert.equal(officialPackage(commit),`https://codeload.github.com/t01089572455/vibetether/tar.gz/${commit}`);
+  assert.throws(()=>officialPackage('1.0.0-rc.3'),/immutable|commit/i);
+  assert.throws(()=>officialPackage('../main'),/immutable|commit/i);
+  const source=renderProjectLauncher('1.0.0-rc.4');
+  assert.doesNotMatch(source,/refs\/tags|runPortablePackage|\bnpx\b|VIBETETHER_CLI_PACKAGE/);
+  assert.match(source,/no verified local runtime cache/i);
 });
 
 test('local-mode dry run does not create an external Contract directory',async()=>{

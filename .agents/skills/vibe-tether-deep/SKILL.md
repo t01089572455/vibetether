@@ -7,7 +7,7 @@ description: Prepare and govern high-ambiguity or high-impact coding work before
 
 Use Deep when coding from a guess would create expensive rework. The goal is not a larger plan; it is a user-confirmed, bounded implementation permit.
 
-1. At task entry, compaction, resume, or a direction change, run `vibetether context --task "<request>" --boundary task-entry --json`.
+1. At task entry and after any phase or slice change, compaction or resume, handoff, repeated failure, or merge—and before a consequential decision or completion-like boundary—run `vibetether context --task "<request>" --boundary task-entry --json`.
 2. Read applicable confirmed Truth and inspect discoverable facts. Do not ask the user for facts the repository or an authority can answer, and do not write product code.
 3. Prepare the smallest complete Start Card: goal, exact slice, scope, permissions, facts, assumptions, user-owned decisions, success evidence, executable checks, and a counterexample challenge.
 4. Ask exactly one unresolved user decision at a time, with a recommendation and impact. Wait for the answer; never choose a product, visual, architectural, security, data, or release direction on the user's behalf.

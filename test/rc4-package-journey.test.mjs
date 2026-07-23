@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { validateStage0PackageReport } from '../scripts/test-stage0-package-contract.mjs';
+import { installedPackageFixture } from './stage0-package-helpers.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const journey = path.join(root, 'scripts', 'test-package-journey.mjs');
@@ -13,6 +15,8 @@ const journey = path.join(root, 'scripts', 'test-package-journey.mjs');
 test('the package journey gives packed code a minimal execution environment', async () => {
   const source = await readFile(journey, 'utf8');
   assert.match(source, /function minimalEnvironment\(/);
+  assert.match(source, /VIBETETHER_STAGE0_CANDIDATE_TGZ/);
+  assert.match(source, /private Stage 0 TGZ snapshot changed while npm installed it/i);
   assert.doesNotMatch(source, /env:\s*\{\s*\.\.\.process\.env\s*,\s*\.\.\.env\s*\}/);
 });
 
@@ -33,12 +37,18 @@ test('S0-R05: exact-package hygiene rejects a deliberately dirty disposable sour
   assert.match(result.stderr, new RegExp(clone.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
 });
 
-test('the exact packed TGZ survives the complete isolated Stage 0 package journey', { timeout: 300_000 }, async () => {
+test('the exact packed TGZ survives the complete isolated Stage 0 package journey', { timeout: 300_000 }, async (t) => {
+  const exact = await installedPackageFixture('journey-supplied-tgz');
+  t.after(exact.cleanup);
   const result = spawnSync(process.execPath, [journey, '--json'], {
     cwd: root,
     encoding: 'utf8',
     windowsHide: true,
-    env: { ...process.env, VIBETETHER_PACKAGE_JOURNEY_TEST: '1' },
+    env: {
+      ...process.env,
+      VIBETETHER_PACKAGE_JOURNEY_TEST: '1',
+      VIBETETHER_STAGE0_CANDIDATE_TGZ: exact.tgz,
+    },
     maxBuffer: 16 * 1024 * 1024,
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -53,6 +63,8 @@ test('the exact packed TGZ survives the complete isolated Stage 0 package journe
   assert.ok(report.archive.files.includes('package/bin/vibetether.mjs'));
   assert.ok(report.archive.files.includes('package/registry/capabilities.json'));
   assert.equal(report.archive.sha256, report.install.tgz_sha256);
+  assert.equal(report.archive.sha256, createHash('sha256').update(await readFile(exact.tgz)).digest('hex'));
+  assert.equal(report.archive.acquisition, 'provided-exact-stage0-tgz');
   assert.equal(report.runtime.node, process.version);
   assert.equal(report.runtime.platform, process.platform);
   assert.equal(report.runtime.arch, process.arch);
@@ -87,4 +99,5 @@ test('the exact packed TGZ survives the complete isolated Stage 0 package journe
   assert.equal(report.cleanup.base_removed, true);
   assert.ok(Array.isArray(report.commands) && report.commands.length > 10);
   assert.equal(validateStage0PackageReport(report).ok, true);
+  process.stdout.write(`VIBETETHER_STAGE0_PACKAGE_JOURNEY_SHA256=${report.archive.sha256}\n`);
 });

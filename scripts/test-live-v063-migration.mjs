@@ -258,18 +258,52 @@ async function prepareCandidate(base, environment) {
   const pack = path.join(base, 'candidate-pack');
   const prefix = path.join(base, 'candidate-prefix');
   await Promise.all([pack, prefix].map((target) => mkdir(target, { recursive: true })));
-  const packed = runNpm(['pack', '--json', '--ignore-scripts', '--pack-destination', pack], {
-    cwd: sourceRoot, env: environment, label: 'pack candidate for live v0.6.3 migration',
-  });
-  const metadata = JSON.parse(packed.stdout);
-  if (!Array.isArray(metadata) || metadata.length !== 1 || typeof metadata[0]?.filename !== 'string') throw new Error('Candidate npm pack did not produce one TGZ.');
-  const tgz = path.join(pack, metadata[0].filename);
+  const readIdentity = () => {
+    const commit = runGit(sourceRoot, ['rev-parse', 'HEAD'], environment).stdout.trim();
+    const tree = runGit(sourceRoot, ['rev-parse', 'HEAD^{tree}'], environment).stdout.trim();
+    const root = path.resolve(runGit(sourceRoot, ['rev-parse', '--show-toplevel'], environment).stdout.trim());
+    const committedAt = new Date(runGit(sourceRoot, ['show', '-s', '--format=%cI', 'HEAD'], environment).stdout.trim()).toISOString();
+    const clean = runGit(sourceRoot, ['status', '--porcelain=v1'], environment).stdout.trim() === '';
+    return { repository: root, commit, tree, committed_at: committedAt, clean };
+  };
+  const before = readIdentity();
+  if (!before.clean) throw new Error('Candidate repository is dirty before live v0.6.3 migration evidence.');
+  let tgz;
+  let acquisition;
+  const supplied = process.env.VIBETETHER_STAGE0_CANDIDATE_TGZ;
+  if (supplied) {
+    tgz = path.resolve(supplied);
+    if (!existsSync(tgz)) throw new Error('VIBETETHER_STAGE0_CANDIDATE_TGZ does not exist.');
+    acquisition = 'provided-exact-stage0-tgz';
+  } else {
+    const packed = runNpm(['pack', '--json', '--ignore-scripts', '--pack-destination', pack], {
+      cwd: sourceRoot, env: environment, label: 'pack candidate for live v0.6.3 migration',
+    });
+    const metadata = JSON.parse(packed.stdout);
+    if (!Array.isArray(metadata) || metadata.length !== 1 || typeof metadata[0]?.filename !== 'string') throw new Error('Candidate npm pack did not produce one TGZ.');
+    tgz = path.join(pack, metadata[0].filename);
+    acquisition = 'clean-source-pack';
+  }
+  const tgzSha256 = sha256(await readFile(tgz));
   runNpm(['install', '--ignore-scripts', '--no-audit', '--no-fund', '--offline', '--prefix', prefix, tgz], {
     cwd: base, env: environment, label: 'install candidate TGZ for live v0.6.3 migration',
   });
   const installedCli = path.join(prefix, 'node_modules', 'vibetether', 'bin', 'vibetether.mjs');
   if (!existsSync(installedCli)) throw new Error('Candidate TGZ installation does not contain vibetether.mjs.');
-  return { installedCli, tgz_sha256: sha256(await readFile(tgz)) };
+  const after = readIdentity();
+  if (!after.clean || before.repository !== after.repository || before.commit !== after.commit || before.tree !== after.tree
+      || before.committed_at !== after.committed_at) throw new Error('Candidate Git identity changed while preparing live v0.6.3 evidence.');
+  return {
+    installedCli,
+    repository: before.repository,
+    commit: before.commit,
+    tree: before.tree,
+    committed_at: before.committed_at,
+    clean_before: before.clean,
+    clean_after: after.clean,
+    tgz_sha256: tgzSha256,
+    acquisition,
+  };
 }
 
 async function preparePinnedLegacy(base, environment) {
@@ -403,14 +437,24 @@ async function main() {
     const fixtures = [];
     for (const agent of ['codex', 'claude', 'both']) fixtures.push(await oneFixture(base, candidate.installedCli, legacy.cli, agent, environment));
     report={
-      status: 'pass', ok: true, tag, resolved_commit: resolved.commit, legacy:{...LEGACY_V063,...legacy},
+      schema_version: 1, status: 'pass', ok: true, tag, resolved_commit: resolved.commit, legacy:{...LEGACY_V063,...legacy},
+      candidate: {
+        repository: candidate.repository,
+        commit: candidate.commit,
+        tree: candidate.tree,
+        committed_at: candidate.committed_at,
+        clean_before: candidate.clean_before,
+        clean_after: candidate.clean_after,
+        tgz_sha256: candidate.tgz_sha256,
+        acquisition: candidate.acquisition,
+      },
       candidate_tgz_sha256: candidate.tgz_sha256, fixtures, commands,
     };
     return report;
   } catch (error) {
     const network=error?.code==='NETWORK_UNAVAILABLE'||isNetworkFailure(String(error?.message??''));
     report={
-      status:network?'not-run':'fail',ok:false,tag,repository,legacy:LEGACY_V063,
+      schema_version:1,status:network?'not-run':'fail',ok:false,tag,repository,legacy:LEGACY_V063,
       reason:network?'network-or-remote-unavailable':error?.code??'LIVE_V063_FAILED',
       failure:{code:error?.code??null,message:String(error?.message??error)},artifact_dir:base,commands,
     };
