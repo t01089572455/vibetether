@@ -502,7 +502,7 @@ async function exerciseCustomRoutes(installedCli, base, env) {
   };
   const ui = runJsonCli(installedCli, project, env, [
     'step', 'start', '--project', project, '--phase', 'EXECUTE_ONE', '--capability', 'frontend-propagation',
-    '--task', 'Attempt to weaken installed UI propagation.', '--slice', 'Attempt only the refused UI route.',
+    '--task', 'Propagate the installed UI state through the attempted weakening route.', '--slice', 'Propagate only the refused UI route.',
     '--path', 'ui.txt', '--success-evidence', uiCheck.claim, '--success-check-json', JSON.stringify(uiCheck),
     '--signal', 'attempted-ui-weakening', '--code-write', '--confirmed-by-user',
     '--decision-reason', 'The fixture user confirms this exact refused route.',

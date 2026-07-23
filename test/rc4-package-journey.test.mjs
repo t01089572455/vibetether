@@ -17,6 +17,7 @@ test('the package journey gives packed code a minimal execution environment', as
   assert.match(source, /function minimalEnvironment\(/);
   assert.match(source, /VIBETETHER_STAGE0_CANDIDATE_TGZ/);
   assert.match(source, /private Stage 0 TGZ snapshot changed while npm installed it/i);
+  assert.match(source, /--task', 'Propagate the installed UI state through the attempted weakening route\.'/);
   assert.doesNotMatch(source, /env:\s*\{\s*\.\.\.process\.env\s*,\s*\.\.\.env\s*\}/);
 });
 
