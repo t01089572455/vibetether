@@ -1,0 +1,24 @@
+name: Export review snapshot
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: repository-snapshot
+          path: |
+            .
+            !.git/**
+          include-hidden-files: true
+          retention-days: 1
